@@ -103,6 +103,8 @@ def get_prop(page, name, kind):
         return "".join(p.get("plain_text", "") for p in parts)
     if kind == "relation":
         return [r["id"] for r in prop.get("relation", [])]
+    if kind == "url":
+        return prop.get("url")
     if kind == "rollup":
         rollup = prop.get("rollup", {})
         rtype = rollup.get("type")

@@ -5,26 +5,26 @@
 
 | | |
 |---|---|
-| **Status** | Template — Pilot開始時に記入を始める |
+| **Status** | Active — Day 1実施済み（2026-07-12） |
 | **使い方** | [Pilot Operation Guide](./Pilot-Operation-Guide.md)の手順に沿って、毎日6項目をチェックし、気づきをOperation Logとして記入する |
 
 ---
 
-## Day 1（日付：____________）
+## Day 1（日付：2026-07-12）
 
-- [ ] Morning Brief（`daily_briefing.py`実行・確認）
-- [ ] Research（Source Monitor確認・Research起票）
-- [ ] Article（記事1本以上起筆）
-- [ ] Translation（`check_translation_gaps.py`実行・翻訳実施）
-- [ ] Review（5観点レビュー・`enforce_publish_gate.py`実行）
-- [ ] SNS Draft（SNS Queueへ手動でDraft作成）
+- [x] Morning Brief（`daily_briefing.py`実行・確認）
+- [x] Research（`research_assistant.py`でテーマ「在留カード更新」を実行）
+- [x] Article（`article_assistant.py`でDraft Scaffoldを生成、本文はAI Operatorが執筆）
+- [ ] Translation（本日はResearch〜Article Draftまでの範囲のため未実施）
+- [ ] Review（同上、未実施）
+- [ ] SNS Draft（同上、未実施）
 
 **Operation Log（気づき・改善点）**
 
-- うまく自動化できたこと：
-- 手作業でカバーした箇所：
-- 詰まったこと・エラー：
-- AI Editorial Brainとの乖離：
+- うまく自動化できたこと：Morning Brief、Source Library／Law Update／既存Research／既存記事との重複確認はすべて実データで正常に自動化できた。エラーは1件も発生しなかった
+- 手作業でカバーした箇所：Research SummaryとArticle本文そのものの執筆はAI Operator（Claude）が代行。`research_assistant.py`／`article_assistant.py`はコンテキスト収集とメタデータ推奨（Update Level等）のみを担当し、生成AIの呼び出しは行っていない
+- 詰まったこと・エラー：なし。ただしURLプロパティの読み取りで`get_prop`に`url`種別が未実装だったバグを1件発見・修正済み（`notion_api.py`）
+- AI Editorial Brainとの乖離：`article_assistant.py`はCategoryから推奨Update Levelを自動判定したが、これはAI-Agent-Architecture.mdで想定していたEditor-in-Chiefの役割（Priority決定）の一部。今後Editor-in-Chief専用スクリプトとして切り出すか検討の余地あり
 
 ---
 
