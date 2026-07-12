@@ -92,16 +92,21 @@ Version 2・3で新規に必要となる6DB（Language Master／Region Master／
 
 **新規DBは追加しない。** 既存10DB・Automation Scripts・[AI Editorial Brain](./AI-Editorial-Brain.md)の設計をそのまま使う。
 
-**日次で実施する6項目**（詳細は[Pilot Operation Guide](./Pilot-Operation-Guide.md)）
+**日次で実施する9工程**（Phase B3.6〜B3.10の実装により、当初計画の6項目からフル自動生成＋3段レビューへ拡張。詳細は[Pilot Operation Guide](./Pilot-Operation-Guide.md)・[Automation Scripts](./Automation-Scripts.md)）
 
-1. Morning Brief（`daily_briefing.py` ＋ Editorial Calendar Daily View）
-2. Research（Source Monitor監視・`sync_source_monitor_to_research.py`）
-3. Article（Writer相当の起筆）
-4. Translation（`check_translation_gaps.py`による検知＋翻訳実施）
-5. Review（5観点レビュー＋`enforce_publish_gate.py`によるゲート確認）
-6. SNS Draft（現時点は手動。自動Draft生成スクリプトは未実装）
+1. Morning Brief（`daily_briefing.py`）
+2. Research（`sync_source_monitor_to_research.py`。採否判断のみ人間）
+3. Article Draft（`generate_article_pipeline.py`、実Claude API）
+4. Article Review（`reviewer_agent.py`、5観点スコアリング）
+5. Translation（`generate_article_pipeline.py`と同時生成）
+6. Translation Review（`translation_quality_reviewer.py`、5観点スコアリング）
+7. SNS Draft（`generate_article_pipeline.py`と同時生成、Instagram/Threads/X）
+8. SNS Review（`sns_quality_reviewer.py`、5観点スコアリング）
+9. Publish Gate Check（`enforce_publish_gate.py`）
 
 **Operation Log**：日々の気づき・改善点は、新規DBではなく[Operation Checklist](./Operation-Checklist.md)内に直接記録する（7日分のテンプレートを用意）。
+
+**Day 1実施済み（2026-07-13）**：フル9工程を実データ・実APIで実行し、全工程成功。詳細は[Operation Checklist](./Operation-Checklist.md)を参照。
 
 **完了条件**：7日間分のOperation Checklistが記入され、最終日に振り返り（何が自動化できたか、何が依然手作業か、Version 4着手前に直すべき設計上の不備は何か）が行われること。
 
