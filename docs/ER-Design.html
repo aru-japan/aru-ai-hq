@@ -1,0 +1,840 @@
+<title>ARu HQ データベース設計書 v1</title>
+<style>
+  :root {
+    --accent: #2d4a73;      /* 藍色 / "Japan Blue" */
+    --accent-soft: #6f8fae;
+    --accent-tint: #e7edf3;
+    --ink: #1a2027;
+    --ink-soft: #4b5a68;
+    --ink-faint: #8391a0;
+    --paper: #eef0ee;
+    --paper-raised: #ffffff;
+    --rule: rgba(26,32,39,0.13);
+    --ok: #4f7a5c;          /* 若竹色 */
+    --ok-tint: #e5eee6;
+    --warn: #a9793f;        /* 承色寄り */
+    --warn-tint: #f3ead9;
+    --crit: #a8484c;        /* 紅色 */
+    --crit-tint: #f4e4e4;
+    --shadow: 0 1px 2px rgba(26,32,39,0.06), 0 8px 24px rgba(26,32,39,0.05);
+  }
+
+  :root[data-theme="dark"] {
+    --accent: #7fa2c9;
+    --accent-soft: #4d6a8a;
+    --accent-tint: #1c2733;
+    --ink: #e8ebee;
+    --ink-soft: #aab4bf;
+    --ink-faint: #6d7885;
+    --paper: #13171c;
+    --paper-raised: #1a2027;
+    --rule: rgba(232,235,238,0.12);
+    --ok: #86ab90;
+    --ok-tint: #1c2620;
+    --warn: #c9a468;
+    --warn-tint: #2a2318;
+    --crit: #d17d80;
+    --crit-tint: #2b1c1d;
+    --shadow: 0 1px 2px rgba(0,0,0,0.3), 0 8px 24px rgba(0,0,0,0.35);
+  }
+
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --accent: #7fa2c9;
+      --accent-soft: #4d6a8a;
+      --accent-tint: #1c2733;
+      --ink: #e8ebee;
+      --ink-soft: #aab4bf;
+      --ink-faint: #6d7885;
+      --paper: #13171c;
+      --paper-raised: #1a2027;
+      --rule: rgba(232,235,238,0.12);
+      --ok: #86ab90;
+      --ok-tint: #1c2620;
+      --warn: #c9a468;
+      --warn-tint: #2a2318;
+      --crit: #d17d80;
+      --crit-tint: #2b1c1d;
+      --shadow: 0 1px 2px rgba(0,0,0,0.3), 0 8px 24px rgba(0,0,0,0.35);
+    }
+  }
+
+  * { box-sizing: border-box; }
+
+  body {
+    background: var(--paper);
+    color: var(--ink);
+    font-family: -apple-system, "Hiragino Sans", "Yu Gothic", "Segoe UI", system-ui, sans-serif;
+    line-height: 1.7;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  .doc {
+    max-width: 860px;
+    margin: 0 auto;
+    padding: 3rem 1.5rem 6rem;
+  }
+
+  header.masthead {
+    border-bottom: 2px solid var(--ink);
+    padding-bottom: 1.5rem;
+    margin-bottom: 2.5rem;
+  }
+
+  .eyebrow {
+    font-family: ui-monospace, "SF Mono", Menlo, monospace;
+    font-size: 0.78rem;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--accent);
+    margin: 0 0 0.6rem;
+  }
+
+  h1.title {
+    font-family: Georgia, "Iowan Old Style", "Hiragino Mincho ProN", serif;
+    font-size: clamp(1.7rem, 4vw, 2.5rem);
+    font-weight: 600;
+    letter-spacing: -0.01em;
+    text-wrap: balance;
+    margin: 0 0 0.75rem;
+    color: var(--ink);
+  }
+
+  .meta-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 1.25rem;
+    font-size: 0.85rem;
+    color: var(--ink-soft);
+  }
+
+  .meta-row dt {
+    font-family: ui-monospace, "SF Mono", Menlo, monospace;
+    font-size: 0.72rem;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: var(--ink-faint);
+    display: inline;
+    margin-right: 0.4em;
+  }
+  .meta-row dd { display: inline; margin: 0; }
+
+  nav.toc {
+    background: var(--paper-raised);
+    border: 1px solid var(--rule);
+    border-radius: 6px;
+    padding: 1.1rem 1.3rem;
+    margin-bottom: 3rem;
+    box-shadow: var(--shadow);
+  }
+  nav.toc .toc-label {
+    font-family: ui-monospace, "SF Mono", Menlo, monospace;
+    font-size: 0.72rem;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: var(--ink-faint);
+    margin: 0 0 0.6rem;
+  }
+  nav.toc ol {
+    columns: 2;
+    column-gap: 2rem;
+    margin: 0;
+    padding-left: 1.1rem;
+    font-size: 0.9rem;
+  }
+  nav.toc li { margin-bottom: 0.35rem; break-inside: avoid; }
+  nav.toc a { color: var(--ink-soft); text-decoration: none; border-bottom: 1px dotted var(--rule); }
+  nav.toc a:hover { color: var(--accent); border-bottom-color: var(--accent); }
+
+  section { margin-bottom: 3.25rem; scroll-margin-top: 1.5rem; }
+
+  h2.section-title {
+    font-family: Georgia, "Iowan Old Style", "Hiragino Mincho ProN", serif;
+    font-size: 1.5rem;
+    font-weight: 600;
+    margin: 0 0 1rem;
+    padding-bottom: 0.6rem;
+    border-bottom: 1px solid var(--rule);
+    text-wrap: balance;
+  }
+
+  h3.sub-title {
+    font-size: 1.05rem;
+    font-weight: 700;
+    margin: 2rem 0 0.5rem;
+    color: var(--ink);
+  }
+
+  p { margin: 0 0 1rem; max-width: 68ch; }
+  p.lead { font-size: 1.05rem; color: var(--ink-soft); }
+
+  .callout {
+    background: var(--accent-tint);
+    border-left: 3px solid var(--accent);
+    padding: 0.9rem 1.1rem;
+    border-radius: 0 6px 6px 0;
+    font-size: 0.92rem;
+    color: var(--ink);
+    margin: 1.25rem 0;
+  }
+  .callout strong { color: var(--accent); }
+
+  /* --- pipeline diagram --- */
+  .flow-wrap { overflow-x: auto; padding-bottom: 0.5rem; }
+  .flow {
+    display: flex;
+    align-items: stretch;
+    gap: 0.6rem;
+    min-width: 640px;
+    margin: 1.5rem 0 1rem;
+  }
+  .flow-stage {
+    display: flex;
+    flex-direction: column;
+    gap: 0.4rem;
+    justify-content: center;
+    min-width: 118px;
+  }
+  .flow-node {
+    background: var(--paper-raised);
+    border: 1px solid var(--rule);
+    border-radius: 6px;
+    padding: 0.65rem 0.7rem;
+    font-size: 0.82rem;
+    font-weight: 600;
+    text-align: center;
+    box-shadow: var(--shadow);
+  }
+  .flow-node.core {
+    background: var(--accent);
+    color: #fff;
+    border-color: var(--accent);
+    font-size: 0.95rem;
+    padding: 1rem 0.8rem;
+  }
+  .flow-arrow {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--accent-soft);
+    font-size: 1.3rem;
+    min-width: 1.5rem;
+  }
+  .flow-caption {
+    font-family: ui-monospace, "SF Mono", Menlo, monospace;
+    font-size: 0.68rem;
+    color: var(--ink-faint);
+    text-align: center;
+    margin-top: 0.3rem;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+  }
+
+  .support-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+    gap: 0.7rem;
+    margin-top: 1.2rem;
+  }
+  .support-chip {
+    background: var(--paper-raised);
+    border: 1px dashed var(--rule);
+    border-radius: 6px;
+    padding: 0.7rem 0.8rem;
+    font-size: 0.8rem;
+  }
+  .support-chip .chip-name { font-weight: 700; display: block; margin-bottom: 0.15rem; }
+  .support-chip .chip-role { color: var(--ink-soft); font-size: 0.76rem; }
+
+  /* --- db catalog cards --- */
+  .db-card {
+    background: var(--paper-raised);
+    border: 1px solid var(--rule);
+    border-radius: 8px;
+    padding: 1.3rem 1.4rem;
+    margin-bottom: 1.4rem;
+    box-shadow: var(--shadow);
+  }
+  .db-card-head {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 1rem;
+    flex-wrap: wrap;
+    margin-bottom: 0.5rem;
+  }
+  .db-name {
+    font-size: 1.1rem;
+    font-weight: 700;
+    color: var(--ink);
+  }
+  .db-name .en {
+    font-family: ui-monospace, "SF Mono", Menlo, monospace;
+    font-size: 0.72rem;
+    color: var(--ink-faint);
+    font-weight: 400;
+    margin-left: 0.5em;
+  }
+  .db-tag {
+    font-family: ui-monospace, "SF Mono", Menlo, monospace;
+    font-size: 0.68rem;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    padding: 0.2rem 0.55rem;
+    border-radius: 999px;
+    white-space: nowrap;
+  }
+  .db-tag.pipeline { background: var(--accent-tint); color: var(--accent); }
+  .db-tag.engine { background: var(--warn-tint); color: var(--warn); }
+  .db-tag.people { background: var(--ok-tint); color: var(--ok); }
+  .db-tag.report { background: var(--rule); color: var(--ink-soft); }
+  .db-tag.ref { background: transparent; color: var(--ink-faint); border: 1px solid var(--rule); }
+
+  .changelog {
+    background: transparent;
+    border: 1px solid var(--rule);
+    border-radius: 6px;
+    padding: 0.8rem 1.1rem;
+    font-size: 0.84rem;
+    color: var(--ink-soft);
+    margin-bottom: 2rem;
+  }
+  .changelog .tag {
+    font-family: ui-monospace, "SF Mono", Menlo, monospace;
+    font-size: 0.68rem;
+    color: var(--accent);
+    margin-right: 0.5em;
+  }
+
+  .db-role { color: var(--ink-soft); font-size: 0.92rem; margin-bottom: 0.9rem; }
+
+  .table-wrap { overflow-x: auto; }
+  table.props {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.84rem;
+  }
+  table.props th {
+    text-align: left;
+    font-family: ui-monospace, "SF Mono", Menlo, monospace;
+    font-size: 0.68rem;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: var(--ink-faint);
+    border-bottom: 1px solid var(--rule);
+    padding: 0.4rem 0.7rem 0.4rem 0;
+  }
+  table.props td {
+    padding: 0.5rem 0.7rem 0.5rem 0;
+    border-bottom: 1px solid var(--rule);
+    vertical-align: top;
+    color: var(--ink);
+  }
+  table.props tr:last-child td { border-bottom: none; }
+  table.props td.field {
+    font-family: ui-monospace, "SF Mono", Menlo, monospace;
+    font-size: 0.78rem;
+    color: var(--accent);
+    white-space: nowrap;
+  }
+  table.props td.rel {
+    color: var(--ink-soft);
+    font-size: 0.8rem;
+  }
+
+  .rel-list {
+    margin-top: 0.9rem;
+    font-size: 0.82rem;
+  }
+  .rel-list .rel-label {
+    font-family: ui-monospace, "SF Mono", Menlo, monospace;
+    font-size: 0.68rem;
+    text-transform: uppercase;
+    color: var(--ink-faint);
+    letter-spacing: 0.05em;
+  }
+
+  table.relmap {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.85rem;
+  }
+  table.relmap th {
+    text-align: left;
+    font-family: ui-monospace, "SF Mono", Menlo, monospace;
+    font-size: 0.68rem;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: var(--ink-faint);
+    border-bottom: 2px solid var(--ink);
+    padding: 0.5rem 0.8rem 0.5rem 0;
+  }
+  table.relmap td {
+    padding: 0.55rem 0.8rem 0.55rem 0;
+    border-bottom: 1px solid var(--rule);
+  }
+  table.relmap td.arrow { color: var(--accent-soft); font-family: ui-monospace, monospace; white-space: nowrap; }
+  table.relmap td.card {
+    font-family: ui-monospace, "SF Mono", Menlo, monospace;
+    font-size: 0.72rem;
+    color: var(--ink-faint);
+    white-space: nowrap;
+  }
+
+  ul.notes { padding-left: 1.2rem; font-size: 0.94rem; }
+  ul.notes li { margin-bottom: 0.7rem; max-width: 66ch; }
+
+  ol.steps {
+    list-style: none;
+    counter-reset: step;
+    padding-left: 0;
+    margin: 1.25rem 0 1.75rem;
+    display: flex;
+    flex-direction: column;
+    gap: 0.9rem;
+  }
+  ol.steps li {
+    counter-increment: step;
+    display: flex;
+    gap: 0.9rem;
+    align-items: flex-start;
+  }
+  ol.steps li::before {
+    content: counter(step);
+    font-family: ui-monospace, "SF Mono", Menlo, monospace;
+    font-size: 0.75rem;
+    font-weight: 700;
+    color: var(--accent);
+    background: var(--accent-tint);
+    border-radius: 999px;
+    width: 1.6rem;
+    height: 1.6rem;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    margin-top: 0.1rem;
+  }
+  ol.steps li .step-body { font-size: 0.92rem; max-width: 60ch; }
+  ol.steps li .step-body strong { color: var(--ink); }
+
+  .level-tag {
+    font-family: ui-monospace, "SF Mono", Menlo, monospace;
+    font-weight: 700;
+    font-size: 0.78rem;
+    padding: 0.15rem 0.5rem;
+    border-radius: 4px;
+    white-space: nowrap;
+  }
+  .level-tag.l1 { background: var(--ok-tint); color: var(--ok); }
+  .level-tag.l2 { background: var(--warn-tint); color: var(--warn); }
+  .level-tag.l3 { background: var(--crit-tint); color: var(--crit); }
+
+  .open-q {
+    background: var(--warn-tint);
+    border: 1px solid var(--rule);
+    border-left: 3px solid var(--warn);
+    border-radius: 0 6px 6px 0;
+    padding: 1rem 1.2rem;
+    font-size: 0.9rem;
+  }
+  .open-q li { margin-bottom: 0.5rem; }
+
+  footer.doc-foot {
+    margin-top: 3.5rem;
+    padding-top: 1.2rem;
+    border-top: 1px solid var(--rule);
+    font-size: 0.78rem;
+    color: var(--ink-faint);
+    font-family: ui-monospace, "SF Mono", Menlo, monospace;
+  }
+
+  @media (max-width: 600px) {
+    nav.toc ol { columns: 1; }
+    .flow { flex-direction: column; min-width: 0; }
+    .flow-arrow { transform: rotate(90deg); }
+  }
+</style>
+
+<div class="doc">
+
+  <header class="masthead">
+    <p class="eyebrow">ARu HQ — System Architecture Document</p>
+    <h1 class="title">データベース設計書 v1.2<br>ER Level Design</h1>
+    <dl class="meta-row">
+      <div><dt>Status</dt><dd>Draft — 未確定事項あり</dd></div>
+      <div><dt>Date</dt><dd>2026-07-12</dd></div>
+      <div><dt>Author</dt><dd>Rei（編集長）× System Architect</dd></div>
+      <div><dt>Scope</dt><dd>記事DB + 11支援DB</dd></div>
+    </dl>
+  </header>
+
+  <div class="changelog"><span class="tag">v1.1</span>翻訳構造を「言語ごとに記事レコードを複製」する方式から、<strong>Article（日本語マスター）1 : N Translation</strong> の親子構造へ変更。対応12言語を確定し、20言語以上への拡張に備えて <strong>Language Master</strong> DBを新設。</div>
+  <div class="changelog"><span class="tag">v1.2</span>内容の性質に応じて公開フローを3段階（<strong>Update Level 1〜3</strong>）に分岐。Translationにレベル・AI翻訳状況・人によるレビュー状況・公開承認・変更点要約などの項目を追加。Article側の「Source Record」を実DB仕様に合わせて3つの個別Relationへ分割し、Law Updateに重要度判定用の項目を追加。n8n連携を見据えた自動化ワークフローの章を新設。</div>
+
+  <nav class="toc">
+    <p class="toc-label">目次</p>
+    <ol>
+      <li><a href="#policy">設計方針</a></li>
+      <li><a href="#flow">全体構成図</a></li>
+      <li><a href="#core">記事DB（コア）</a></li>
+      <li><a href="#catalog">支援DBカタログ</a></li>
+      <li><a href="#relmap">リレーションマップ</a></li>
+      <li><a href="#workflow">自動化ワークフロー</a></li>
+      <li><a href="#scale">拡張性メモ</a></li>
+      <li><a href="#open">未確定事項</a></li>
+    </ol>
+  </nav>
+
+  <section id="policy">
+    <h2 class="section-title">1. 設計方針</h2>
+    <p class="lead">法改正も、イベントも、日本文化も、旅行情報も — 公開される時点ではすべて「記事」という一つの型に収斂する。</p>
+    <p>取材・翻訳・SNS展開・人的レビューといった<strong>編集部の裏側の作業</strong>は、それぞれ専門構造を持つ独立したデータベースが担う。両者はリレーションで接続され、「記事」だけが唯一の公開レイヤーとなる。</p>
+    <div class="callout">
+      <strong>原則：</strong> 記事DBは1つ。支援DBは役割ごとに分ける。すべての支援DBは、直接または間接に記事DBへ接続する。ダッシュボードだけが例外で、他の全DBを読み取るだけの「報告レイヤー」。
+    </div>
+  </section>
+
+  <section id="flow">
+    <h2 class="section-title">2. 全体構成図</h2>
+    <p>中核となるのは、情報源から記事が生まれ、翻訳され、SNSへ展開されるまでの一本のパイプライン。</p>
+
+    <div class="flow-wrap">
+      <div class="flow">
+        <div class="flow-stage">
+          <div class="flow-node">Source Library</div>
+          <div class="flow-node">Law Update</div>
+          <div class="flow-node">Event Calendar</div>
+          <div class="flow-caption">入力層</div>
+        </div>
+        <div class="flow-arrow">→</div>
+        <div class="flow-stage">
+          <div class="flow-node">Research</div>
+          <div class="flow-caption">AIリサーチ</div>
+        </div>
+        <div class="flow-arrow">→</div>
+        <div class="flow-stage">
+          <div class="flow-node core">記事<br>Article（日本語マスター）</div>
+          <div class="flow-caption">唯一の公開DB・親</div>
+        </div>
+        <div class="flow-arrow" style="font-size:0.85rem;font-family:ui-monospace,monospace;">1 : N →</div>
+        <div class="flow-stage">
+          <div class="flow-node">Translation<br><span style="font-weight:400;font-size:0.75em;">（言語ごとに子レコード）</span></div>
+          <div class="flow-caption">多言語化</div>
+        </div>
+        <div class="flow-arrow">→</div>
+        <div class="flow-stage">
+          <div class="flow-node">SNS Queue</div>
+          <div class="flow-caption">配信</div>
+        </div>
+      </div>
+    </div>
+
+    <p>この一本の流れを、6つの支援システムが横断的に支える。</p>
+
+    <div class="support-grid">
+      <div class="support-chip"><span class="chip-name">Language Master</span><span class="chip-role">対応言語の一覧・拡張の起点</span></div>
+      <div class="support-chip"><span class="chip-name">Mentor</span><span class="chip-role">専門家による監修・確認</span></div>
+      <div class="support-chip"><span class="chip-name">AI Agents</span><span class="chip-role">役割別AI担当の台帳</span></div>
+      <div class="support-chip"><span class="chip-name">Prompt Library</span><span class="chip-role">AIの指示書を版管理</span></div>
+      <div class="support-chip"><span class="chip-name">Automation</span><span class="chip-role">n8n等の自動化フロー定義</span></div>
+      <div class="support-chip"><span class="chip-name">Dashboard</span><span class="chip-role">全DBのロールアップ集計</span></div>
+    </div>
+  </section>
+
+  <section id="core">
+    <h2 class="section-title">3. 記事DB（コア・唯一の公開DB・日本語マスター）</h2>
+    <div class="db-card">
+      <div class="db-card-head">
+        <div class="db-name">Article <span class="en">記事（日本語マスター）</span></div>
+        <span class="db-tag pipeline">Public / Core / Parent</span>
+      </div>
+      <p class="db-role">法改正・イベント・日本文化・旅行情報・生活情報・ニュース — すべてのカテゴリがここに集約される唯一の公開コンテンツDB。<strong>レコードは常に日本語1本のみ</strong>。他言語は複製せず、子DBのTranslationが1記事につきN件ぶら下がる構造にする。</p>
+      <div class="table-wrap">
+        <table class="props">
+          <tr><th>プロパティ</th><th>型</th><th>説明</th></tr>
+          <tr><td class="field">Title</td><td>Text</td><td>記事タイトル（日本語）</td></tr>
+          <tr><td class="field">Category</td><td>Select</td><td>法律・制度／イベント／日本文化／旅行情報／生活情報／ニュース／トレンド</td></tr>
+          <tr><td class="field">Target Audience</td><td>Multi-select</td><td>旅行者／在留外国人／留学生／技能実習・特定技能／移住希望者／企業／自治体／日本語学校</td></tr>
+          <tr><td class="field">Body</td><td>Rich Text</td><td>本文（日本語）</td></tr>
+          <tr><td class="field">Master Status</td><td>Select</td><td>Draft → AI Draft → Human Review → Approved → Published → Archived（日本語本体の進行状況）</td></tr>
+          <tr><td class="field">Publish Date / Update Date</td><td>Date</td><td>日本語版の公開日・更新日。<strong>Update Dateの変化がTranslation側の「要再翻訳」判定の起点</strong></td></tr>
+          <tr><td class="field">Source Research</td><td class="rel">Relation → Research</td><td>出典（イベント・観光・文化など一般カテゴリの場合）</td></tr>
+          <tr><td class="field">Source Law Update</td><td class="rel">Relation → Law Update</td><td>出典（法律・制度カテゴリの場合）</td></tr>
+          <tr><td class="field">Source Event</td><td class="rel">Relation → Event Calendar</td><td>出典（イベント情報カテゴリの場合）</td></tr>
+          <tr><td class="field">Law Significance</td><td class="rel">Rollup ← Source Law Update.Significance</td><td>紐づくLaw Updateが「重要な変更」かどうかを引き継ぐ</td></tr>
+          <tr><td class="field">Update Level</td><td class="rel">Formula</td><td>Category（＋Law Significance）から自動算出。1＝自動公開／2＝要人的承認／3＝重要更新（優先レビュー）</td></tr>
+          <tr><td class="field">Reviewed By</td><td class="rel">Relation → Mentor</td><td>日本語版を監修したメンター（任意）</td></tr>
+          <tr><td class="field">Translations</td><td class="rel">Relation → Translation（1 : N）</td><td>この記事にぶら下がる各言語の翻訳レコード</td></tr>
+          <tr><td class="field">Languages Published</td><td class="rel">Rollup</td><td>Translationのうち Publish Status = 公開 の件数（多言語カバレッジの一覧性）</td></tr>
+        </table>
+      </div>
+      <div class="callout" style="margin-top:1rem;"><strong>Update Levelの算出ロジック（提案）：</strong> Category が「イベント／観光情報／飲食店情報／日本文化／季節情報／旅行記事」→ Level 1。Category が「法律・制度／行政手続き／ビザ／税金／年金／保険／医療／教育制度／労働関係」→ Level 2。ただし Law Significance = Major の場合は Level 3 に格上げ。</div>
+    </div>
+  </section>
+
+  <section id="catalog">
+    <h2 class="section-title">4. 支援DBカタログ</h2>
+
+    <h3 class="sub-title">パイプライン系（記事の生成フローに直結）</h3>
+
+    <div class="db-card">
+      <div class="db-card-head"><div class="db-name">Research <span class="en">AIリサーチ</span></div><span class="db-tag pipeline">Pipeline</span></div>
+      <p class="db-role">記事化される前の生データ置き場。AIがニュース・自治体情報・SNSトレンドを収集する段階。</p>
+      <div class="table-wrap"><table class="props">
+        <tr><th>プロパティ</th><th>説明</th></tr>
+        <tr><td class="field">Topic / Category</td><td class="rel">対象テーマと記事カテゴリ候補</td></tr>
+        <tr><td class="field">Priority</td><td class="rel">High / Med / Low</td></tr>
+        <tr><td class="field">Status</td><td class="rel">New → Reviewing → Converted / Rejected</td></tr>
+        <tr><td class="field">Summary / Raw Notes</td><td class="rel">要約と原文メモ</td></tr>
+      </table></div>
+      <div class="rel-list"><span class="rel-label">Relations</span> → Source Library（多対多）／→ AI Agents（担当）／→ Article.Source Research（変換後、1対1）</div>
+    </div>
+
+    <div class="db-card">
+      <div class="db-card-head"><div class="db-name">Source Library <span class="en">情報源</span></div><span class="db-tag pipeline">Pipeline</span></div>
+      <p class="db-role">信頼できる情報源のマスターリスト。政府・自治体・報道・学術・SNSアカウントなど。</p>
+      <div class="table-wrap"><table class="props">
+        <tr><th>プロパティ</th><th>説明</th></tr>
+        <tr><td class="field">Source Name / URL</td><td class="rel">出典名・リンク</td></tr>
+        <tr><td class="field">Type</td><td class="rel">政府／自治体／ニュース／学術／SNS／コミュニティ</td></tr>
+        <tr><td class="field">Reliability</td><td class="rel">信頼度スコア（1–5）</td></tr>
+        <tr><td class="field">Last Checked</td><td class="rel">最終確認日</td></tr>
+      </table></div>
+      <div class="rel-list"><span class="rel-label">Relations</span> → Research／→ Law Update／→ Event Calendar（すべて1対多）</div>
+    </div>
+
+    <div class="db-card">
+      <div class="db-card-head"><div class="db-name">Law Update <span class="en">法改正</span></div><span class="db-tag pipeline">Pipeline</span></div>
+      <p class="db-role">法律・制度変更の専用トラッカー。記事DBだけでは足りない専門項目（施行日・管轄）を保持する。</p>
+      <div class="table-wrap"><table class="props">
+        <tr><th>プロパティ</th><th>説明</th></tr>
+        <tr><td class="field">Law Name / Governing Body</td><td class="rel">法律名・所管庁</td></tr>
+        <tr><td class="field">Jurisdiction</td><td class="rel">国／都道府県／市区町村</td></tr>
+        <tr><td class="field">Effective Date</td><td class="rel">施行日</td></tr>
+        <tr><td class="field">Impact Scope</td><td class="rel">影響を受ける対象者（Multi-select）</td></tr>
+        <tr><td class="field">Significance</td><td class="rel">Minor／Major — Majorの場合、紐づくArticleがUpdate Level 3（重要更新）に自動で格上げされる</td></tr>
+        <tr><td class="field">Status</td><td class="rel">Monitoring → Confirmed → Article Published</td></tr>
+      </table></div>
+      <div class="rel-list"><span class="rel-label">Relations</span> → Source Library／→ Article.Source Law Update／→ Mentor（行政書士による確認）</div>
+    </div>
+
+    <div class="db-card">
+      <div class="db-card-head"><div class="db-name">Event Calendar <span class="en">イベント情報</span></div><span class="db-tag pipeline">Pipeline</span></div>
+      <p class="db-role">祭り・フードフェス・蚤の市・地域イベントの専用DB。日付や場所など記事DBにない構造化項目を持つ。</p>
+      <div class="table-wrap"><table class="props">
+        <tr><th>プロパティ</th><th>説明</th></tr>
+        <tr><td class="field">Type</td><td class="rel">祭り／フードフェス／蚤の市／文化イベント／自治体イベント</td></tr>
+        <tr><td class="field">Prefecture / City / Venue</td><td class="rel">開催地</td></tr>
+        <tr><td class="field">Date Start / End</td><td class="rel">開催期間</td></tr>
+        <tr><td class="field">Recurring</td><td class="rel">毎年開催か（Yes/No）</td></tr>
+      </table></div>
+      <div class="rel-list"><span class="rel-label">Relations</span> → Source Library／→ Article.Source Event</div>
+    </div>
+
+    <div class="db-card">
+      <div class="db-card-head"><div class="db-name">Language Master <span class="en">言語マスタ</span></div><span class="db-tag ref">Reference</span></div>
+      <p class="db-role">対応言語の一覧。新しい言語を追加するときは、このDBに1行足すだけでよく、Article／Translationのスキーマ変更は発生しない設計にする。</p>
+      <div class="table-wrap"><table class="props">
+        <tr><th>プロパティ</th><th>説明</th></tr>
+        <tr><td class="field">Language Code</td><td class="rel">ja（基準）／en／zh-CN／zh-TW／ko／vi／id／es／tl／ne／pt／th …（追加可）</td></tr>
+        <tr><td class="field">Language Name</td><td class="rel">表示名（日本語表記・現地語表記）</td></tr>
+        <tr><td class="field">Status</td><td class="rel">Active／Planned／Paused — 「対応予定だがまだ翻訳開始していない」言語も先に登録できる</td></tr>
+        <tr><td class="field">Default Translator</td><td class="rel">Relation → AI Agents（既定の翻訳担当エージェント）</td></tr>
+        <tr><td class="field">Default Reviewer</td><td class="rel">Relation → Mentor（既定のレビュー担当、任意）</td></tr>
+      </table></div>
+      <div class="rel-list"><span class="rel-label">Relations</span> → Translation（1対多、どの言語のレコードかを分類）／→ AI Agents／→ Mentor</div>
+    </div>
+
+    <div class="db-card">
+      <div class="db-card-head"><div class="db-name">Translation <span class="en">翻訳（子）</span></div><span class="db-tag pipeline">Pipeline / Child</span></div>
+      <p class="db-role">Articleの子DB。1つのArticleに対し、対応言語の数だけTranslationレコードが並ぶ（1 : N）。翻訳本文・進行状況・公開状況はすべてここで完結し、Article側は日本語のまま変わらない。公開の慎重さはUpdate Levelによって3段階に分岐する。</p>
+      <div class="table-wrap"><table class="props">
+        <tr><th>プロパティ</th><th>説明</th></tr>
+        <tr><td class="field">Parent Article</td><td class="rel">親記事（Relation → Article、必須）</td></tr>
+        <tr><td class="field">Language</td><td class="rel">対象言語（Relation → Language Master）</td></tr>
+        <tr><td class="field">Translated Title / Body</td><td class="rel">翻訳タイトル・本文</td></tr>
+        <tr><td class="field">Update Level</td><td class="rel">Rollup ← Parent Article.Update Level（1／2／3）。以下の各項目のふるまいを決める軸</td></tr>
+        <tr><td class="field">AI Translation Status</td><td class="rel">Not Started → Queued → In Progress → Done</td></tr>
+        <tr><td class="field">Human Review Status</td><td class="rel">Not Required（Level 1）／Pending → In Review → Reviewed（Level 2・3）</td></tr>
+        <tr><td class="field">Publish Approval</td><td class="rel">Not Required（Level 1）／Pending → Approved／Rejected（Level 2・3で必須のゲート）</td></tr>
+        <tr><td class="field">Reviewer</td><td class="rel">Relation → Mentor（Level 2は担当メンター、Level 3は編集長または専門メンター）</td></tr>
+        <tr><td class="field">Approved Date</td><td class="rel">Publish Approvalが承認された日時</td></tr>
+        <tr><td class="field">Source Updated At</td><td class="rel">Rollup — 親Articleの Update Date をそのまま参照</td></tr>
+        <tr><td class="field">Last Source Check</td><td class="rel">Automationがこのレコードを最後に親記事と突き合わせた日時</td></tr>
+        <tr><td class="field">Needs Re-Translation</td><td class="rel">Formula — Source Updated At が Last Source Check より新しければ Yes。<strong>これにより日本語記事の更新時、古い言語のTranslationレコードだけを再翻訳対象として拾える</strong></td></tr>
+        <tr><td class="field">Change Summary</td><td class="rel">AIが生成する変更点要約（変更箇所・変更前・変更後・影響範囲）。特にLevel 3でレビュー依頼と合わせて通知される</td></tr>
+        <tr><td class="field">Publish Status</td><td class="rel">公開状況（App非公開／App公開、SNS未投稿／投稿済み）— Publish Approvalが通って初めて「App公開」に変わる</td></tr>
+      </table></div>
+      <div class="rel-list"><span class="rel-label">Relations</span> → Article（多対1、親）／→ Language Master（多対1）／→ Mentor（レビュー・承認）／→ AI Agents（翻訳実行）</div>
+    </div>
+
+    <div class="db-card">
+      <div class="db-card-head"><div class="db-name">SNS Queue <span class="en">SNS投稿管理</span></div><span class="db-tag pipeline">Pipeline</span></div>
+      <p class="db-role">Instagram／Threads／Xへの展開を一元管理する配信キュー。日本語投稿はArticleから、他言語投稿はTranslationから、それぞれ紐づける。</p>
+      <div class="table-wrap"><table class="props">
+        <tr><th>プロパティ</th><th>説明</th></tr>
+        <tr><td class="field">Source Article (JA)</td><td class="rel">日本語投稿の場合のみ設定（Relation → Article）</td></tr>
+        <tr><td class="field">Source Translation</td><td class="rel">他言語投稿の場合のみ設定（Relation → Translation）</td></tr>
+        <tr><td class="field">Platform</td><td class="rel">Instagram／Threads／X（Multi-select）</td></tr>
+        <tr><td class="field">Post Copy / Hashtags</td><td class="rel">投稿文・タグ</td></tr>
+        <tr><td class="field">Scheduled Date / Status</td><td class="rel">予約日・Draft/Scheduled/Posted/Failed</td></tr>
+      </table></div>
+      <div class="rel-list"><span class="rel-label">Relations</span> → Article（多対1、日本語）／→ Translation（多対1、他言語）／→ AI Agents（SNS担当）</div>
+    </div>
+
+    <h3 class="sub-title">エンジンルーム系（編集部の運転席）</h3>
+
+    <div class="db-card">
+      <div class="db-card-head"><div class="db-name">AI Agents <span class="en">AI担当</span></div><span class="db-tag engine">Engine Room</span></div>
+      <p class="db-role">「AI編集部」を構成する担当台帳。リサーチ／執筆／翻訳／SNS／SEO／品質チェックの役割ごとに責任範囲を明確化する。</p>
+      <div class="table-wrap"><table class="props">
+        <tr><th>プロパティ</th><th>説明</th></tr>
+        <tr><td class="field">Agent Name</td><td class="rel">Research／Writer／Translator／SNS／SEO／QC</td></tr>
+        <tr><td class="field">Model</td><td class="rel">Claude／GPT等、使用モデル</td></tr>
+        <tr><td class="field">Status</td><td class="rel">Active／Testing／Disabled</td></tr>
+      </table></div>
+      <div class="rel-list"><span class="rel-label">Relations</span> → Prompt Library／→ Automation／→ Research・Translation・SNS Queue（実行担当）</div>
+    </div>
+
+    <div class="db-card">
+      <div class="db-card-head"><div class="db-name">Prompt Library <span class="en">プロンプト</span></div><span class="db-tag engine">Engine Room</span></div>
+      <p class="db-role">各AI Agentが使う指示書の版管理。同じ役割でもプロンプトを継続的に改善していくための土台。</p>
+      <div class="table-wrap"><table class="props">
+        <tr><th>プロパティ</th><th>説明</th></tr>
+        <tr><td class="field">Purpose</td><td class="rel">Research／Writing／Translation／SNS／SEO／QC</td></tr>
+        <tr><td class="field">Version / Last Updated</td><td class="rel">版番号・更新日</td></tr>
+        <tr><td class="field">Performance Notes</td><td class="rel">その版の成果メモ</td></tr>
+      </table></div>
+      <div class="rel-list"><span class="rel-label">Relations</span> → AI Agents（1対多）</div>
+    </div>
+
+    <div class="db-card">
+      <div class="db-card-head"><div class="db-name">Automation <span class="en">自動化</span></div><span class="db-tag engine">Engine Room</span></div>
+      <p class="db-role">n8n等のワークフロー定義と実行ログ。「どのDBの変化が何を引き起こすか」を記録する。</p>
+      <div class="table-wrap"><table class="props">
+        <tr><th>プロパティ</th><th>説明</th></tr>
+        <tr><td class="field">Trigger</td><td class="rel">Schedule／Webhook／Manual</td></tr>
+        <tr><td class="field">Input DB / Output DB</td><td class="rel">読み書き対象のDB</td></tr>
+        <tr><td class="field">Status</td><td class="rel">Active／Paused／Error</td></tr>
+        <tr><td class="field">Last Run / Next Run / Error Log</td><td class="rel">実行履歴</td></tr>
+      </table></div>
+      <div class="rel-list"><span class="rel-label">Relations</span> → AI Agents／全DBを論理的に横断（トリガー元・出力先）</div>
+    </div>
+
+    <h3 class="sub-title">人・信頼系</h3>
+
+    <div class="db-card">
+      <div class="db-card-head"><div class="db-name">Mentor <span class="en">メンター</span></div><span class="db-tag people">People</span></div>
+      <p class="db-role">人によるサポート体制。専門分野別に登録し、記事監修や将来のユーザー相談対応に紐づく。</p>
+      <div class="table-wrap"><table class="props">
+        <tr><th>プロパティ</th><th>説明</th></tr>
+        <tr><td class="field">Specialty</td><td class="rel">元教員／日本語教師／外国籍支援経験者／行政書士／企業担当／医療関係者</td></tr>
+        <tr><td class="field">Languages Spoken / Availability</td><td class="rel">対応言語・稼働状況</td></tr>
+        <tr><td class="field">Status</td><td class="rel">Active／Onboarding／Inactive</td></tr>
+      </table></div>
+      <div class="rel-list"><span class="rel-label">Relations</span> → Article（日本語監修者）／→ Law Update（行政書士確認）／→ Translation（言語レビュー担当）</div>
+    </div>
+
+    <h3 class="sub-title">報告系（読み取り専用）</h3>
+
+    <div class="db-card">
+      <div class="db-card-head"><div class="db-name">Dashboard <span class="en">ダッシュボード</span></div><span class="db-tag report">Reporting</span></div>
+      <p class="db-role">他の全DBのロールアップを集約する報告レイヤー。独立した入力DBというより「見るためのビュー」に近い。</p>
+      <div class="table-wrap"><table class="props">
+        <tr><th>プロパティ</th><th>説明</th></tr>
+        <tr><td class="field">Metric Type</td><td class="rel">公開記事数/日、言語別内訳、SNSエンゲージメント、メンター稼働率、オートメーションエラー率</td></tr>
+        <tr><td class="field">Period / Value / Target</td><td class="rel">集計期間・実績・目標値</td></tr>
+      </table></div>
+      <div class="rel-list"><span class="rel-label">Relations</span> ← 全DB（Rollup／Formula、書き込みは発生しない）</div>
+    </div>
+  </section>
+
+  <section id="relmap">
+    <h2 class="section-title">5. リレーションマップ</h2>
+    <div class="table-wrap">
+      <table class="relmap">
+        <tr><th>起点</th><th></th><th>接続先</th><th>種別</th><th>意味</th></tr>
+        <tr><td>Source Library</td><td class="arrow">→</td><td>Research</td><td class="card">1 : N</td><td>1つの情報源が複数のリサーチに使われる</td></tr>
+        <tr><td>Research</td><td class="arrow">→</td><td>Article.Source Research</td><td class="card">1 : 1</td><td>採用されたリサーチが記事化される</td></tr>
+        <tr><td>Law Update</td><td class="arrow">→</td><td>Article.Source Law Update</td><td class="card">1 : N</td><td>法改正情報が記事の出典になる。Significance=MajorはUpdate Level 3に波及</td></tr>
+        <tr><td>Event Calendar</td><td class="arrow">→</td><td>Article.Source Event</td><td class="card">1 : N</td><td>イベント情報が記事の出典になる</td></tr>
+        <tr><td>Article</td><td class="arrow">→</td><td>Translation</td><td class="card">1 : N</td><td>日本語マスター1件に対し、対応言語ぶんのTranslation子レコードが並ぶ。Update LevelもRollupで継承される</td></tr>
+        <tr><td>Language Master</td><td class="arrow">→</td><td>Translation</td><td class="card">1 : N</td><td>各Translationがどの言語かを分類。新言語追加はここに1行足すだけ</td></tr>
+        <tr><td>Article</td><td class="arrow">→</td><td>SNS Queue</td><td class="card">1 : N</td><td>日本語版のSNS投稿</td></tr>
+        <tr><td>Translation</td><td class="arrow">→</td><td>SNS Queue</td><td class="card">1 : N</td><td>各言語版のSNS投稿（多言語アカウント展開）</td></tr>
+        <tr><td>Mentor</td><td class="arrow">→</td><td>Article / Law Update / Translation</td><td class="card">N : N</td><td>日本語監修・行政書士確認・翻訳レビュー・公開承認</td></tr>
+        <tr><td>AI Agents</td><td class="arrow">→</td><td>Prompt Library / Automation</td><td class="card">1 : N</td><td>担当ごとの指示書と自動化フロー</td></tr>
+        <tr><td>Automation</td><td class="arrow">⇄</td><td>全DB</td><td class="card">Log</td><td>トリガー元・出力先として横断参照（例：Article.Update Date変化→各Translation.Needs Re-Translation再計算）</td></tr>
+        <tr><td>Dashboard</td><td class="arrow">←</td><td>全DB</td><td class="card">Rollup</td><td>読み取り専用の集計</td></tr>
+      </table>
+    </div>
+  </section>
+
+  <section id="workflow">
+    <h2 class="section-title">6. 自動化ワークフロー（n8n連携を見据えて）</h2>
+    <p>Source更新からTranslation生成・公開までを一本のパイプラインとして自動化する。人が介在するかどうかの分岐点は、Update Levelの1点に集約される。</p>
+
+    <ol class="steps">
+      <li><span class="step-body"><strong>Source更新検知</strong> — Source Library内の政府サイト・自治体RSS・ニュースAPIの変化を、Automationが定期的にチェックする。</span></li>
+      <li><span class="step-body"><strong>Research更新</strong> — 変化が検知されたSourceをもとに、AI（Research Agent）がResearchレコードを新規作成、または既存レコードを更新する。</span></li>
+      <li><span class="step-body"><strong>Article更新</strong> — 採用されたResearchから、AI（Writer Agent）が日本語Articleを生成・更新する。既存記事の更新では Update Date が変わり、紐づく全Translationの Needs Re-Translation が自動的に再評価される。</span></li>
+      <li><span class="step-body"><strong>Update Level判定</strong> — CategoryとLaw Significanceから Update Level（1／2／3）が自動算出される。</span></li>
+      <li><span class="step-body"><strong>Translation自動生成</strong> — Needs Re-Translation = Yes の各Translationに対し、AI（Translator Agent）が翻訳を実行し、AI Translation Status を Done にする。</span></li>
+      <li><span class="step-body"><strong>レベル別の公開フロー</strong> — 下表の通り分岐する。</span></li>
+      <li><span class="step-body"><strong>SNS展開</strong> — Publish Status が「公開」になったArticle／TranslationをSNS Queueへ自動登録し、AI（SNS Agent）が投稿文を生成する。</span></li>
+    </ol>
+
+    <div class="table-wrap">
+      <table class="props">
+        <tr><th>Level</th><th>対象カテゴリ</th><th>人のレビュー</th><th>公開承認</th><th>通知</th></tr>
+        <tr>
+          <td><span class="level-tag l1">Level 1</span></td>
+          <td>イベント情報／観光情報／飲食店情報／文化紹介／季節情報／旅行記事</td>
+          <td class="rel">不要</td>
+          <td class="rel">不要（自動公開）</td>
+          <td class="rel">なし</td>
+        </tr>
+        <tr>
+          <td><span class="level-tag l2">Level 2</span></td>
+          <td>法律／行政手続き／ビザ／税金／年金／保険／医療／教育制度／労働関係</td>
+          <td class="rel">必要（担当Reviewer）</td>
+          <td class="rel">必要</td>
+          <td class="rel">Reviewerへレビュー依頼通知</td>
+        </tr>
+        <tr>
+          <td><span class="level-tag l3">Level 3</span></td>
+          <td>上記のうち Law Update.Significance = Major な重要更新</td>
+          <td class="rel">必要（編集長／専門メンター・優先）</td>
+          <td class="rel">必要（Approved Dateを記録）</td>
+          <td class="rel">Change Summary添付の優先通知</td>
+        </tr>
+      </table>
+    </div>
+  </section>
+
+  <section id="scale">
+    <h2 class="section-title">7. 拡張性メモ（数万記事・多言語・企業向け展開）</h2>
+    <ul class="notes">
+      <li><strong>Notionの限界を織り込む。</strong> Notion DBは数千〜1万件を超えるあたりからRelation/Rollupの表示速度が落ちる。「数万件の記事」規模になった段階で、Article／Translationの実データはPostgres／Supabase等へ移し、Notionは編集部の作業画面（API経由のビュー）として残す2段階移行を前提に設計しておくと、10年後の作り直しを避けられる。特にTranslationは12言語×記事数で最も件数が膨らむDBになる点に注意。</li>
+      <li><strong>Language Masterが20言語以上への拡張を支える。</strong> 言語をArticle/TranslationのSelect肢として直接埋め込まず、独立DBにしたことで、新言語追加は「1行足すだけ」になり、スキーマ変更・過去データの一括移行が発生しない。</li>
+      <li><strong>Tenant（テナント）概念を今のうちに仕込む。</strong> 将来の企業向け展開に備え、ArticleとMentor DBに「Tenant / Client」フィールドを最初から用意しておく。後から追加すると全レコードの移行作業が発生するため、空でよいので今から列だけ確保する。</li>
+      <li><strong>Needs Re-Translationが「翻訳の負債化」を防ぐ。</strong> 日本語記事を更新しても翻訳側が自動では変わらない設計だと、時間とともに「古い翻訳」が静かに蓄積する。Article.Update DateとTranslation.Last Source Checkの差分で「要再翻訳」を自動検知する仕組みを、Automationの最優先ワークフローの一つとして早期に組む価値がある。</li>
+      <li><strong>Update Levelの算出はArticle側で一度だけ行う。</strong> Category（＋Law Significance）から算出し、Translationは常にRollupで受け取るだけにする。レベル判定ロジックを複数箇所に重複させないための設計上の一貫性。</li>
+      <li><strong>Status列はAutomationのトリガーキーになる。</strong> Article.Master Status、Translation.AI Translation Status／Human Review Status／Publish Approvalは、n8nが「次に何をするか」を判断する軸になる。ステータス名は今後変更しにくいので、早い段階で確定させたい。</li>
+    </ul>
+  </section>
+
+  <section id="open">
+    <h2 class="section-title">8. 未確定事項（今後ひとつずつ確認）</h2>
+    <ul class="open-q">
+      <li>Update Levelの算出ロジック（Category区分＋Law Update.Significanceによる格上げ）がこの設計の想定通りでよいか</li>
+      <li>Master StatusとTranslation関連Statusの正式なステージ名・数</li>
+      <li>Mentorとアプリ内「AI相談／メンター相談」機能の連携方法</li>
+      <li>企業向け展開時のデータ分離レベル（DB単位か、フィールド単位か）</li>
+    </ul>
+  </section>
+
+  <footer class="doc-foot">ARu HQ / Decode Japan — Database Design Doc v1.2 — 2026-07-12</footer>
+
+</div>
