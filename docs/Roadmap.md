@@ -83,7 +83,30 @@ Version 2・3で新規に必要となる6DB（Language Master／Region Master／
 
 ---
 
+## Version 3.5 — Pilot Operation
+
+**目的**：AI編集部（AI Editorial Brain＋既存10DB＋Automation Scripts）を、実際に**7日間運用**して検証する。設計・自動化が揃っただけでは「動く」とは言えない。実運用を経て初めてVersion 4（Enterprise）への準備が整ったと判断する。
+
+**新規DBは追加しない。** 既存10DB・Automation Scripts・[AI Editorial Brain](./AI-Editorial-Brain.md)の設計をそのまま使う。
+
+**日次で実施する6項目**（詳細は[Pilot Operation Guide](./Pilot-Operation-Guide.md)）
+
+1. Morning Brief（`daily_briefing.py` ＋ Editorial Calendar Daily View）
+2. Research（Source Monitor監視・`sync_source_monitor_to_research.py`）
+3. Article（Writer相当の起筆）
+4. Translation（`check_translation_gaps.py`による検知＋翻訳実施）
+5. Review（5観点レビュー＋`enforce_publish_gate.py`によるゲート確認）
+6. SNS Draft（現時点は手動。自動Draft生成スクリプトは未実装）
+
+**Operation Log**：日々の気づき・改善点は、新規DBではなく[Operation Checklist](./Operation-Checklist.md)内に直接記録する（7日分のテンプレートを用意）。
+
+**完了条件**：7日間分のOperation Checklistが記入され、最終日に振り返り（何が自動化できたか、何が依然手作業か、Version 4着手前に直すべき設計上の不備は何か）が行われること。
+
+---
+
 ## Version 4 — Enterprise
+
+**前提条件：Version 3.5 Pilot Operation（7日間の実運用）が完了していること。** 設計上動くはずのものが、実際の運用でも動くと確認できるまで、企業・自治体向けへは拡張しない。
 
 **目的**：個人利用者向けサービスから、企業・自治体・日本語学校向けプラットフォームへ拡張する。
 
@@ -111,7 +134,7 @@ Version 2・3で新規に必要となる6DB（Language Master／Region Master／
 
 ## 現在地
 
-**Version 1・2・3は完了（一部Deferred）。Version 4（Enterprise）は、コード実装ではなく対外的な意思決定・契約行為を含むため、着手前に方針確認が必要。**
+**Version 1・2・3は完了（一部Deferred）。Version 3.5（Pilot Operation：7日間の実運用）に着手する。Version 4（Enterprise）はPilot Operation完了後、かつ対外的な意思決定・契約行為を伴うため、着手前に別途方針確認が必要。**
 
 ---
 

@@ -21,6 +21,8 @@ ARu HQ（AI編集部）の運営思想・設計・実装を1つにまとめた�
 | [AI Agent Workflow](docs/AI-Agent-Workflow.md) | 6 Agent間の処理手順・エスカレーション条件 |
 | [AI Editorial Brain](docs/AI-Editorial-Brain.md) | Version 2.0の総括構想。AI編集部の全体像とガバナンス境界 |
 | [Automation Scripts](docs/Automation-Scripts.md) | Version 3で実装した6つの自動化スクリプトの一覧と実行方法 |
+| [Pilot Operation Guide](docs/Pilot-Operation-Guide.md) | Version 3.5：AI編集部を7日間実運用するための手順 |
+| [Operation Checklist](docs/Operation-Checklist.md) | 7日間分の日次チェックリスト＋Operation Log記入欄 |
 
 ## 実装
 
@@ -31,4 +33,4 @@ ARu HQ（AI編集部）の運営思想・設計・実装を1つにまとめた�
 
 ## 現在地
 
-Roadmap Version 1・2・3は完了（一部Deferred）。Version 4（Enterprise）は着手前に方針確認が必要。詳細は [Roadmap](docs/Roadmap.md) を参照。
+Roadmap Version 1・2・3は完了（一部Deferred）。Version 3.5（Pilot Operation：7日間実運用）に着手中。Version 4（Enterprise）はPilot完了後、別途方針確認のうえ着手する。詳細は [Roadmap](docs/Roadmap.md) を参照。
