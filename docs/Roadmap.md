@@ -1,13 +1,21 @@
-<title>ARu Studio Roadmap v1</title>
+<title>ARu Studio Roadmap v2</title>
 
 # ARu Studio Roadmap
-### Version 1
+### Version 2
 
 | | |
 |---|---|
 | **Status** | Active |
 | **Date** | 2026-07-12 |
 | **位置づけ** | ARu Constitution §19 Future Expansion Policyを、実際のバージョン計画に落とし込んだもの |
+
+---
+
+## 実装順序の最適化について（重要）
+
+Version 2・3で新規に必要となる6DB（Language Master／Region Master／Mentor／AI Agents／Prompt Library／Automation）は、**目標から削除しない。実装順序のみを変更し、`Deferred（実装保留）`として扱う。**
+
+方針：まず**新規DBを追加せず、既存10DB（Articles／Research／Translation／Source Library／Editorial Calendar／Experience Intelligence／Source Monitor／Law Update／Event Calendar／SNS Queue）を最大限活用したPython自動化**を完成させる。実運用でDeferred項目の必要性が実際に確認できた段階で、個別に再評価・実装する。
 
 ---
 
@@ -22,36 +30,45 @@
 - View（Daily／Weekly／Review／Archive）／Article・Research・Translation Template
 - ARu Studio Operating Manual（日次・週次・月次・緊急対応・法改正対応の手順）
 
-この時点では、Gap検出・翻訳の再検知・情報源の変化監視などはすべて**Rei自身の手動運用**で回っている。
-
 ---
 
-## Version 2 — AI Intelligence（次に着手）
+## Version 2 — AI Intelligence（完了。一部Deferred）
 
 **目的**：ARuが「今何が起きているか」「何が足りないか」を自ら認識できるようにする。
 
-- **Experience Intelligence**（Knowledge Gap Engine／Opportunity Intelligence）
-- Source Monitor（情報源の変化を自動検知）
-- Law Update／Event Calendar／SNS Queue
-- Language Master／Region Master（Knowledge Graphの言語軸・地域軸）
-- Mentor（専門メンター台帳）
-- Dashboard（Today's Opportunities／Knowledge Gaps／Critical Updates等の集約）
+**実装済み**
 
-このバージョンの終わりには、「知る」ことは自動化されるが、「実行」はまだ人とAIの手作業が中心。
+- **Experience Intelligence**（Knowledge Gap Engine／Opportunity Intelligence）
+- Source Monitor（情報源の変化を検知するDB構造）
+- Law Update／Event Calendar／SNS Queue
+- Dashboard（ホーム画面ページ＋View手動設定ガイド）
+- AI Editorial Brain設計（AI-Agent-Architecture／AI-Agent-Workflow／AI-Editorial-Brain）
+
+**Deferred（実装保留）**
+
+| DB | 理由 | 再評価のきっかけ |
+|---|---|---|
+| Language Master | 現状11言語をSelectで運用中、実害なし | 20言語以上への拡張時、または表記ゆれが実運用で問題化した時 |
+| Region Master | 現状Locationを自由テキストで運用中 | 地域別ダッシュボード・自治体連携が実際に必要になった時 |
+| Mentor | 現状、専門家レビューは都度手配（Operating Manual§7参照） | メンターの人数が増え、個別手配が非効率になった時 |
 
 ---
 
-## Version 3 — AI Automation
+## Version 3 — AI Automation（進行中：実装順序を変更）
 
-**目的**：n8n・GitHub Actions・Claude Code／各種AI APIを接続し、「知る」から「実行する」までを自動化する。
+**目的**：既存10DBを最大限活用し、Python自動化スクリプトで「知る」から「実行する」までを実現する。n8n専用のAutomation DBやAI Agents DBが無くても、実際に動く自動化を先に作る。
 
-- AI Agents／Prompt Library／Automation DBの本稼働（9つのAI Agentが実際にタスクを実行）
-- n8n：Source変化検知→Research起票→Article下書き→Translation自動生成の一連を自動化
-- Needs Re-Translationの自動検知・自動再翻訳トリガー
-- SNS自動投稿（Update Level 2/3のPublish Approvalゲートを維持したまま）
-- Audit Logの自動記録（Constitution §18）
+**実装方針の変更**
 
-このバージョンで、Mission「AIが調査・執筆・翻訳・SNSを担当し、人は最終確認だけを行う」体制が技術的に完成する。
+| 当初計画 | 変更後 |
+|---|---|
+| AI Agents／Prompt Library／Automation DBの本稼働 | **Deferred**。実体はPythonスクリプト（`notion-build/automation/`）として実装し、DB化は実運用で必要性が確認できてから |
+| n8nによる自動化 | まずPythonスクリプトで同等のロジックを実装（将来n8nへ移植可能な設計） |
+| Needs Re-Translationの自動検知 | Pythonスクリプトで実装 |
+| SNS自動投稿 | Publish Approvalゲートを維持したまま、Draft作成までを自動化（実投稿は引き続き人間が最終確認） |
+| Audit Logの自動記録 | DB化はDeferred。当面はGitコミット履歴とスクリプトの実行ログで代替 |
+
+このバージョンで、Mission「AIが調査・執筆・翻訳・SNSを担当し、人は最終確認だけを行う」の**技術的な骨格**を、新規DBなしで実現する。
 
 ---
 
@@ -83,8 +100,8 @@
 
 ## 現在地
 
-**Version 1は完了。Version 2（Experience Intelligence：Knowledge Gap Engine + Opportunity Intelligence）に着手する。**
+**Version 1・Version 2は完了（一部Deferred）。Version 3（Pythonによる自動化スクリプト実装）に着手する。**
 
 ---
 
-*ARu HQ / Decode Japan — ARu Studio Roadmap v1 — 2026-07-12*
+*ARu HQ / Decode Japan — ARu Studio Roadmap v2 — 2026-07-12*
