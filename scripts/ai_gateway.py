@@ -109,22 +109,26 @@ def pick_provider(env, requested=None):
     )
 
 
-def summarize(text, provider=None, target_chars=200):
+def complete(prompt, provider=None, max_tokens=1500):
+    """General-purpose text generation. Returns (provider_name, text)."""
     env = load_env(ENV_PATH)
     provider_name, api_key = pick_provider(env, provider)
 
+    if provider_name == "claude":
+        result = call_claude(api_key, prompt, max_tokens=max_tokens)
+    else:
+        result = call_openai(api_key, prompt, max_tokens=max_tokens)
+
+    return provider_name, result
+
+
+def summarize(text, provider=None, target_chars=200):
     prompt = (
         f"以下の文章を、日本語で{target_chars}文字程度に要約してください。"
         f"前置きや「要約します」等の言葉は不要で、要約の本文だけを出力してください。\n\n"
         f"---\n{text}\n---"
     )
-
-    if provider_name == "claude":
-        result = call_claude(api_key, prompt, max_tokens=target_chars * 2)
-    else:
-        result = call_openai(api_key, prompt, max_tokens=target_chars * 2)
-
-    return provider_name, result
+    return complete(prompt, provider=provider, max_tokens=target_chars * 2)
 
 
 def main():

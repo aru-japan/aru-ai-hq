@@ -5,7 +5,7 @@
 
 | | |
 |---|---|
-| **Status** | Active — 6スクリプト実装・実データでテスト済み |
+| **Status** | Active — Notion自動化9スクリプト＋AI Gateway実装・実データ／実API（Claude）でテスト済み |
 | **Date** | 2026-07-12 |
 | **位置づけ** | [AI Agent Workflow](./AI-Agent-Workflow.md)に定めた処理を、新規DB（AI Agents／Prompt Library／Automation）を追加せず、既存10DBに対するPythonスクリプトとして実装したもの |
 | **場所** | `notion-build/automation/` |
@@ -78,14 +78,30 @@ python3 article_assistant.py --topic "在留カード更新" --keyword "在留" 
 python3 scripts/ai_gateway.py --input "要約したい文章..."
 ```
 
-**現状の制約（正直な報告）**：CLAUDE_API_KEY・OPENAI_API_KEYはまだ`.env`に未設定のため、実際のAPI呼び出しはまだ検証できていない。エラーハンドリング（キー未設定時に分かりやすいエラーメッセージで終了すること）は確認済み：
+**動作確認済み（実API呼び出し）**：CLAUDE_API_KEYが設定され、実際にClaude APIを呼び出して要約を生成できることを確認した。
 
-```
-$ python3 scripts/ai_gateway.py --input "..."
-ERROR: Neither CLAUDE_API_KEY nor OPENAI_API_KEY is set in notion-build/.env. Add one of them to use the AI Gateway.
-```
+---
 
-いずれかのキーが設定され次第、200文字要約の実動作を確認する。
+## Phase B3.7：Research→Article→Translation→SNSの自動生成パイプライン
+
+**場所**：`notion-build/automation/generate_article_pipeline.py`
+
+**内容**：AI Gateway（実際のClaude API呼び出し）を使い、以下を1回の実行で行う。
+
+1. Research（Status=Converted）を1件取得
+2. Claude APIで記事本文を生成し、Articlesへ保存（Status=**AI Draft**、Update Level=2、Source Researchでリンク、AI Generated=true、Human Reviewed=false）
+3. Claude APIで英訳を生成し、Translationへ保存（AI Translation Status=Done、Localization Status=Translated、Human Review Status=**Pending**、Publish Approval=**Pending**、Publish Status=Not Published）
+4. Instagram／Threads／X向けにClaude APIでそれぞれ異なるトーンの投稿文を生成し、SNS Queueへ保存（すべてStatus=**Draft**）
+
+**ガバナンス**：生成された5件（Article／Translation／SNS×3）はすべて**未公開・未承認の状態**で保存される。Update Level 2のため、Human Reviewed・Publish Approvalが完了するまで、どのAgentも公開状態に進めることはできない（ARu Constitution §9・§13、`enforce_publish_gate.py`が担保）。
+
+**テスト結果（実データ・実API）**：「在留カード更新」のResearchから、Article 1件・Translation(EN) 1件・SNS Queue 3件（Instagram/Threads/X）を実際に生成・保存。全件Claude API（`claude-haiku-4-5-20251001`）による生成。
+
+**修正したバグ2件**：
+- `Source Research`のRelationプロパティが未作成だった（Articles作成時にResearchとの接続が漏れていた）→ Notion側の既存プロパティ名を`Source Research`にリネームして解消
+- Notionのrich_textは1項目2000文字までの制限があり、長い本文でAPIエラーになった → `rich_text_chunks()`で自動分割する処理を追加
+
+**未実施**：`--resume-article-id`オプションは、パイプライン途中で失敗した場合に同じArticleを重複作成せず再開するための復旧機能として今回追加した。
 
 ## 未実施事項（要判断）
 
