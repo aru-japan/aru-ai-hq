@@ -169,33 +169,36 @@
 
 ---
 
-## 10. Dashboard：Linked View埋め込み手順
+## 10. Dashboard：Linked View埋め込み手順（v2、編集長ホーム画面）
 
-DashboardページはAPIで雛形（見出し8つ＋説明のCallout）まで自動生成済み。各見出しの下に「Linked view of database」を埋め込むのはNotion UI上での手動作業になる。
+DashboardページはAPIで雛形（見出し9つ＋説明のCallout）まで自動生成済み。各見出しの下に「Linked view of database」を埋め込むのはNotion UI上での手動作業になる。
+
+**配置の考え方**：上から「①〜④ 今すぐ判断が必要なもの（承認・レビュー待ち）」→「⑤〜⑥ 今日の予定」→「⑦〜⑨ 外部シグナル・モニタリング」の順。編集長が毎朝上から順に見ていけば、優先度の高いものから対応できるように並べてある。
 
 **共通手順**
 
 1. Dashboardページを開き、埋め込みたい見出しの直下にカーソルを置く
 2. `/linked` と入力し、**「Linked view of database」** を選択
-3. 埋め込みたいデータベース（例：Experience Intelligence）を選ぶ
+3. 埋め込みたいデータベース（例：Translation）を選ぶ
 4. 表示形式をTableまたはBoardに変更
 5. 右上の「Filter」「Sort」で、下表の条件を設定する
 6. 見やすいようにプロパティの表示列を絞る（Notionの「Properties」設定で非表示にできる）
 
-**8セクションの設定内容**
+**9セクションの設定内容**
 
-| セクション | データベース | Filter | Sort |
-|---|---|---|---|
-| ☀️ Today's Opportunities | Experience Intelligence | Intelligence Type=Opportunity, Status is New/Acknowledged | Opportunity Score 降順 |
-| 🧩 Knowledge Gaps | Experience Intelligence | Intelligence Type=Gap, Status=New | Urgency 降順 |
-| 🚨 Critical Updates | Experience Intelligence | Urgency=Critical | 作成日時 降順 |
-| 🌍 Translation Queue | Translation | Needs Re-Translation=チェック済み or AI Translation Status=Queued | Review Level 降順 |
-| 📅 Today's Editorial Tasks | Editorial Calendar | Status is Idea/Planned/In Progress | Urgency 降順 → Planned Date 昇順 |
-| 📄 Articles Awaiting Review | Articles | Status is AI Draft/Human Review | Urgency 降順 → Updated Date 昇順 |
-| 🎉 Upcoming Events | Event Calendar | Event Dateが今後14日以内、Status=Confirmed or Promoting | Event Date 昇順 |
-| 📡 Recent Source Changes | Source Monitor | なし（全件） | Checked At 降順 |
+| # | セクション | データベース | Filter | Sort |
+|---|---|---|---|---|
+| ① | Publish Approval Pending | Translation | Publish Approval=Pending | Quality Overall Score 降順 |
+| ② | Article Review Waiting | Articles | Status is AI Draft or Human Review | Urgency 降順 → Updated Date 昇順 |
+| ③ | Translation Review Waiting | Translation | Quality Result is empty または Not Reviewed | 作成日 昇順 |
+| ④ | SNS Draft Waiting | SNS Queue | Status=Draft かつ Review Result ≠ Pass | 作成日 昇順 |
+| ⑤ | Today's Editorial Calendar | Editorial Calendar | Status is Idea/Planned/In Progress | Urgency 降順 → Planned Date 昇順 |
+| ⑥ | Today's Research | Research | Status=New | Priority 降順 → Urgency 降順 |
+| ⑦ | Source Monitor Alerts | Source Monitor | Change Detected=true | Checked At 降順 |
+| ⑧ | Recent Law Updates | Law Update | なし（全件） | Effective Date 降順 |
+| ⑨ | Recent Event Calendar | Event Calendar | Status ≠ Cancelled | Event Date 昇順 |
 
-> **Knowledge Gapsの表示順について**：Gap Typeの選択肢は現在「Content Gap→...→Legal Gap」の順で登録されている。Legal Gapを最優先で目立たせたい場合は、Board表示にしてGap Typeでグループ化し、Legal Gapのグループ見出しを一番上へドラッグして固定するとよい。
+> **旧バージョンからの変更**：以前の8セクション構成（Today's Opportunities／Knowledge Gaps／Critical Updates等、Experience Intelligence中心）から、**Publish Approval Pending／Article・Translation・SNSのReview待ち／Today's Research／Recent Law Updates**を軸にした9セクション構成へ全面刷新した。Experience Intelligence（Gap/Opportunity）は現時点でDashboardの主要動線からは外れているが、DB自体は健在で、必要であれば追加セクションとして復活させられる。
 
 ---
 

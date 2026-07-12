@@ -105,6 +105,19 @@ def get_prop(page, name, kind):
         return [r["id"] for r in prop.get("relation", [])]
     if kind == "url":
         return prop.get("url")
+    if kind == "formula":
+        formula = prop.get("formula", {})
+        ftype = formula.get("type")
+        if ftype == "number":
+            return formula.get("number")
+        if ftype == "string":
+            return formula.get("string")
+        if ftype == "boolean":
+            return formula.get("boolean")
+        if ftype == "date":
+            d = formula.get("date")
+            return d.get("start") if d else None
+        return None
     if kind == "rollup":
         rollup = prop.get("rollup", {})
         rtype = rollup.get("type")

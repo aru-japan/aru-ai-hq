@@ -27,7 +27,7 @@
 | `escalate_law_significance.py` | Editor-in-Chief | Law Update.Significance=Majorの場合、Affected ArticlesのUrgencyを自動でCriticalへ引き上げ |
 | `sync_editorial_calendar_status.py` | Editor-in-Chief | Linked ArticleがPublishedになったEditorial Calendarエントリを自動でPublishedへ同期 |
 | `enforce_publish_gate.py` | Editor-in-Chief（Quality Gate） | Status=PublishedなのにQA Status≠PassedやUpdate Level 2/3でHuman Reviewed=falseの記事を検知し、Human Reviewへ強制的に差し戻す（ARu Constitution §9/§13のコード化） |
-| `daily_briefing.py` | — | Dashboardの8セクション相当をCLIに表示する、Linked View未設定時点でも使えるテキスト版ダッシュボード |
+| `daily_briefing.py` | Editor-in-Chief | Dashboard（編集長ホーム画面）の9セクション相当をCLIに表示する、Linked View未設定時点でも使えるテキスト版ダッシュボード |
 | `research_assistant.py` | Researcher | テーマを指定すると、Source Library／Law Update／既存Research／既存記事との重複をNotionから実データで検索し、Markdownのリサーチ資料を出力（Pilot Operation Day 1で使用） |
 | `article_assistant.py` | Writer | テーマを指定すると、既存記事・Editorial Calendarとの重複確認、推奨Category/Update Level/Audienceを出力（Pilot Operation Day 1で使用） |
 
@@ -56,7 +56,7 @@ python3 article_assistant.py --topic "在留カード更新" --keyword "在留" 
 | escalate_law_significance.py | Law Update（Significance=Major）テストレコードから、Affected ArticleのUrgencyをMedium→Criticalへ実際に更新 |
 | sync_editorial_calendar_status.py | 対象のLinked ArticleがまだDraftのため、正しく「同期対象なし」と判定 |
 | enforce_publish_gate.py | Published状態の記事が存在しないため、正しく「違反なし」と判定 |
-| daily_briefing.py | 8セクションすべてが実データ（Gap／Opportunity／Event等）を正しく表示 |
+| daily_briefing.py | 9セクションすべてが実データ（Publish Approval Pending／Article・Translation・SNS Review Waiting／Research／Law Update／Event等）を正しく表示（Dashboard刷新に合わせて更新） |
 | research_assistant.py | 「在留カード更新」で実行し、Source Library・既存Research・既存記事との重複を正しく検出（Pilot Day 1） |
 | article_assistant.py | 同上、Category=法律・制度からUpdate Level 2を正しく推奨（Pilot Day 1） |
 

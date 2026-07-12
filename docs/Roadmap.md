@@ -79,7 +79,7 @@ Version 2・3で新規に必要となる6DB（Language Master／Region Master／
 - `escalate_law_significance.py`（Editor-in-Chief）
 - `sync_editorial_calendar_status.py`（Editor-in-Chief）
 - `enforce_publish_gate.py`（Editor-in-Chief／Quality Gate、Constitution §9・§13のコード化）
-- `daily_briefing.py`（Dashboard 8セクションのCLI版）
+- `daily_briefing.py`（Dashboard 9セクションのCLI版。編集長ホーム画面刷新に合わせて更新）
 
 すべて実データに対してテスト済み。Mission「AIが調査・執筆・翻訳・SNSを担当し、人は最終確認だけを行う」の**技術的な骨格**を、新規DBなしで実現した。
 
