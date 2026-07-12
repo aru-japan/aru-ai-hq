@@ -1,10 +1,12 @@
 """Editor-in-Chief Agent behavior: enforce ARu Constitution Sec.9/10/13 as code.
 
 Any Article that is Status=Published but has NOT actually passed the required gate
-(QA Status=Passed, and for Update Level 2/3 also Human Reviewed=true) is reverted to
-Human Review and flagged, rather than silently trusted.
+(QA Status=Passed, Review Result=Pass for Update Level >= 2, and Human Reviewed=true
+for Update Level 2/3) is reverted to Human Review and flagged, rather than silently
+trusted.
 
 Roadmap Version 3 item: encode the Quality Gate / publish gate programmatically.
+Phase B3.8 addition: also enforce the Reviewer Agent's 5-dimension Review Result.
 """
 from _common import get_env, notion_request, query_database, get_prop
 
@@ -26,12 +28,15 @@ def main():
         qa_status = get_prop(article, "QA Status", "select")
         human_reviewed = get_prop(article, "Human Reviewed", "checkbox")
         update_level = get_prop(article, "Update Level", "number")
+        review_result = get_prop(article, "Review Result", "select")
 
         violations = []
         if qa_status != "Passed":
             violations.append(f"QA Status={qa_status} (expected Passed)")
         if update_level in (2, 3) and not human_reviewed:
             violations.append(f"Update Level {update_level} requires Human Reviewed=true, was false")
+        if update_level in (2, 3) and review_result != "Pass":
+            violations.append(f"Update Level {update_level} requires Review Result=Pass, was {review_result} (Reviewer Agent gate, Phase B3.8)")
 
         if violations:
             notion_request(token, "PATCH", f"/pages/{article['id']}", {

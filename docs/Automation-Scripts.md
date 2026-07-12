@@ -103,6 +103,40 @@ python3 scripts/ai_gateway.py --input "要約したい文章..."
 
 **未実施**：`--resume-article-id`オプションは、パイプライン途中で失敗した場合に同じArticleを重複作成せず再開するための復旧機能として今回追加した。
 
+---
+
+## Phase B3.8：Reviewer Agent
+
+**場所**：`notion-build/automation/reviewer_agent.py`
+
+**内容**：Articlesの記事を、実際にClaude APIで5観点それぞれ100点満点で採点し、改善提案とともにArticleページへ保存する。
+
+**Articlesへ追加したプロパティ**：`Review Accuracy Score`／`Review Evidence Score`／`Review Readability Score`／`Review Risk Score`／`Review Localization Score`（いずれもNumber）、`Review Overall Score`（**Formula**：5項目の平均を自動算出）、`Review Result`（Select：Not Reviewed／Pass／Needs Revision／Fail）、`Review Suggestions`（Rich Text）、`Review Date`（Date）
+
+**Pass判定ロジック（v1の仮基準、運用データを見て調整予定）**：
+
+- **Pass**：Overall Score ≥ 70 かつ Risk Score ≥ 60
+- **Fail**：Overall Score < 50 または Risk Score < 40
+- それ以外：**Needs Revision**
+
+Riskだけ他の観点より厳しい閾値にしているのは、読みやすさ等が高くても法的リスクの高い記述は見逃さないため。
+
+**Publish Gateとの連携**：`enforce_publish_gate.py`を更新し、**Update Level 2・3の記事は`Review Result=Pass`でない限りPublishedへ進めない**（すでにあったQA Status・Human Reviewedのチェックに追加する形）。
+
+**テスト結果（実データ・実API）**：Phase B3.7で生成した「在留カード更新」記事（Update Level 2）を実際にレビュー。
+
+| 観点 | スコア |
+|---|---|
+| Accuracy | 75 |
+| Evidence | 55 |
+| Readability | 82 |
+| Risk | 78 |
+| Localization | 70 |
+| **Overall** | **72** |
+| **Result** | **Pass** |
+
+改善提案も実際に生成され保存された（出典URLの明記、在留資格別の具体例追加等の具体的な指摘）。
+
 ## 未実施事項（要判断）
 
 - **スケジューリング**：cron／launchd等での定期実行はまだ設定していない。日次実行にするか、Rei自身が手動実行するかは別途判断が必要
