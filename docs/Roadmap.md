@@ -68,6 +68,7 @@ Version 2・3で新規に必要となる6DB（Language Master／Region Master／
 | SNS自動投稿 | Draft自動生成まで実装済み（`generate_article_pipeline.py`、Phase B3.7）。実投稿は引き続き人間が最終確認 |
 | Reviewer Agentの実装 | 実装済み（`reviewer_agent.py`、Phase B3.8）。5観点スコアリング＋Update Level 2/3のPublish Gate連携 |
 | Translation Quality Reviewerの実装 | 実装済み（`translation_quality_reviewer.py`、Phase B3.9）。翻訳品質5観点スコアリング＋Publish Approvalゲート連携 |
+| SNS Quality Reviewerの実装 | 実装済み（`sns_quality_reviewer.py`、Phase B3.10）。SNS投稿5観点スコアリング＋Statusゲート連携 |
 | Audit Logの自動記録 | DB化はDeferred。当面はGitコミット履歴とスクリプトの実行ログで代替 |
 
 **実装済み（[Automation Scripts](./Automation-Scripts.md)参照）**

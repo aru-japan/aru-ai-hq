@@ -20,7 +20,7 @@ ARu HQ（AI編集部）の運営思想・設計・実装を1つにまとめた�
 | [AI Agent Architecture](docs/AI-Agent-Architecture.md) | AI Editorial Brain（6 Agent）の構造・利用DB・権限境界 |
 | [AI Agent Workflow](docs/AI-Agent-Workflow.md) | 6 Agent間の処理手順・エスカレーション条件 |
 | [AI Editorial Brain](docs/AI-Editorial-Brain.md) | Version 2.0の総括構想。AI編集部の全体像とガバナンス境界 |
-| [Automation Scripts](docs/Automation-Scripts.md) | Version 3で実装した6つの自動化スクリプトの一覧と実行方法 |
+| [Automation Scripts](docs/Automation-Scripts.md) | Version 3で実装した自動化スクリプト（Notion自動化＋AI Gateway＋Article/Translation/SNSの3段レビュー）の一覧と実行方法 |
 | [Pilot Operation Guide](docs/Pilot-Operation-Guide.md) | Version 3.5：AI編集部を7日間実運用するための手順 |
 | [Operation Checklist](docs/Operation-Checklist.md) | 7日間分の日次チェックリスト＋Operation Log記入欄 |
 
