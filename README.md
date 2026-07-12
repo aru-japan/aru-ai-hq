@@ -34,4 +34,4 @@ ARu HQ（AI編集部）の運営思想・設計・実装を1つにまとめた�
 
 ## 現在地
 
-Roadmap Version 1・2・3は完了（一部Deferred）。Version 3.5（Pilot Operation：7日間実運用）Day 1完了、フル9工程を実データ・実APIで実行済み。Version 4（Enterprise）はPilot完了後、別途方針確認のうえ着手する。詳細は [Roadmap](docs/Roadmap.md) を参照。
+Roadmap Version 1・2・3は完了（一部Deferred）。Version 3.5（Pilot Operation：7日間実運用）Day 2まで完了。Update Level 1の自動公開経路（Publish Approval→Not Required）を実証済み。Version 4（Enterprise）はPilot完了後、別途方針確認のうえ着手する。詳細は [Roadmap](docs/Roadmap.md) を参照。

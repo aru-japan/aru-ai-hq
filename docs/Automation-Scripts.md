@@ -86,22 +86,31 @@ python3 scripts/ai_gateway.py --input "要約したい文章..."
 
 **場所**：`notion-build/automation/generate_article_pipeline.py`
 
-**内容**：AI Gateway（実際のClaude API呼び出し）を使い、以下を1回の実行で行う。
+**内容（Phase B3.11で独立サブコマンド化）**：AI Gateway（実際のClaude API呼び出し）を使い、Article／Translation／SNSを独立して実行できる。
 
-1. Research（Status=Converted）を1件取得
-2. Claude APIで記事本文を生成し、Articlesへ保存（Status=**AI Draft**、Update Level=2、Source Researchでリンク、AI Generated=true、Human Reviewed=false）
-3. Claude APIで英訳を生成し、Translationへ保存（AI Translation Status=Done、Localization Status=Translated、Human Review Status=**Pending**、Publish Approval=**Pending**、Publish Status=Not Published）
-4. Instagram／Threads／X向けにClaude APIでそれぞれ異なるトーンの投稿文を生成し、SNS Queueへ保存（すべてStatus=**Draft**）
+```
+python3 generate_article_pipeline.py article     --keyword "..." --category "..."
+python3 generate_article_pipeline.py translation  --article-id "..."
+python3 generate_article_pipeline.py sns          --article-id "..."
+python3 generate_article_pipeline.py all          --keyword "..." --category "..."   # 従来通り3つ連続実行
+```
 
-**ガバナンス**：生成された5件（Article／Translation／SNS×3）はすべて**未公開・未承認の状態**で保存される。Update Level 2のため、Human Reviewed・Publish Approvalが完了するまで、どのAgentも公開状態に進めることはできない（ARu Constitution §9・§13、`enforce_publish_gate.py`が担保）。
+1. **article**：Research（Status=Converted）を1件取得し、Claude APIで記事本文を生成してArticlesへ保存（Status=**AI Draft**、CategoryからUpdate Levelを自動算出、Source Researchでリンク）
+2. **translation**：既存Articleを取得し、Claude APIで英訳を生成。**翻訳と同時にAI自身が文化的補足の完了度を自己評価**し（`CULTURAL_ADAPTATION: Done`／`Needs Review`）、Localization Statusへ反映（Phase B3.11で追加）
+3. **sns**：既存Articleを取得し、Instagram／Threads／Xそれぞれ異なるトーンの投稿文をClaude APIで生成しSNS Queueへ保存
 
-**テスト結果（実データ・実API）**：「在留カード更新」のResearchから、Article 1件・Translation(EN) 1件・SNS Queue 3件（Instagram/Threads/X）を実際に生成・保存。全件Claude API（`claude-haiku-4-5-20251001`）による生成。
+**ガバナンス**：生成された記事・翻訳・投稿はすべて**未公開・未承認の状態**で保存される。Update Level 2以上は、Human Reviewed・Publish Approvalが完了するまでどのAgentも公開状態に進めることはできない（ARu Constitution §9・§13、`enforce_publish_gate.py`が担保）。
 
-**修正したバグ2件**：
+**テスト結果（実データ・実API）**：
+- Phase B3.7：「在留カード更新」（Update Level 2）でArticle・Translation・SNS×3を一括生成
+- Phase B3.9（Day1）：「出入国在留管理庁サイトの更新検知」（Update Level 2）で同様に生成
+- Phase B3.11（Day2）：「浅草ほおずき市を楽しむ」（**Update Level 1**）で3工程を**独立実行**し、Translation Quality ReviewerがPublish Approvalを`Not Required`へ自動遷移させることを実証（詳細は[Operation Checklist Day 2](./Operation-Checklist.md)）
+
+**修正したバグ・改善**：
 - `Source Research`のRelationプロパティが未作成だった（Articles作成時にResearchとの接続が漏れていた）→ Notion側の既存プロパティ名を`Source Research`にリネームして解消
 - Notionのrich_textは1項目2000文字までの制限があり、長い本文でAPIエラーになった → `rich_text_chunks()`で自動分割する処理を追加
-
-**未実施**：`--resume-article-id`オプションは、パイプライン途中で失敗した場合に同じArticleを重複作成せず再開するための復旧機能として今回追加した。
+- （Phase B3.11）Article／Translation／SNSが1つのスクリプトにまとまっていたため独立呼び出しができなかった → `article`／`translation`／`sns`／`all`のサブコマンドに分割
+- （Phase B3.11）CategoryからUpdate Levelを自動算出する処理を追加（従来は法律・制度カテゴリ＝Update Level 2固定だった）
 
 ---
 

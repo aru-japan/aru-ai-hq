@@ -96,17 +96,19 @@ Version 2・3で新規に必要となる6DB（Language Master／Region Master／
 
 1. Morning Brief（`daily_briefing.py`）
 2. Research（`sync_source_monitor_to_research.py`。採否判断のみ人間）
-3. Article Draft（`generate_article_pipeline.py`、実Claude API）
+3. Article Draft（`generate_article_pipeline.py article`、実Claude API、Phase B3.11で独立サブコマンド化）
 4. Article Review（`reviewer_agent.py`、5観点スコアリング）
-5. Translation（`generate_article_pipeline.py`と同時生成）
+5. Translation（`generate_article_pipeline.py translation`、Phase B3.11で独立サブコマンド化・文化的補足の自己評価を追加）
 6. Translation Review（`translation_quality_reviewer.py`、5観点スコアリング）
-7. SNS Draft（`generate_article_pipeline.py`と同時生成、Instagram/Threads/X）
+7. SNS Draft（`generate_article_pipeline.py sns`、Instagram/Threads/X、Phase B3.11で独立サブコマンド化）
 8. SNS Review（`sns_quality_reviewer.py`、5観点スコアリング）
 9. Publish Gate Check（`enforce_publish_gate.py`）
 
 **Operation Log**：日々の気づき・改善点は、新規DBではなく[Operation Checklist](./Operation-Checklist.md)内に直接記録する（7日分のテンプレートを用意）。
 
 **Day 1実施済み（2026-07-13）**：フル9工程を実データ・実APIで実行し、全工程成功。詳細は[Operation Checklist](./Operation-Checklist.md)を参照。
+
+**Day 2実施済み（2026-07-13）**：Day 1の改善点2点に対応。①`generate_article_pipeline.py`をarticle/translation/sns/allの独立サブコマンドへリファクタリング、②Update Level 1の記事で実行し、**Translation Quality ReviewerがPublish Approvalを自動的に`Not Required`へ遷移させることを実証**。詳細は[Operation Checklist](./Operation-Checklist.md)を参照。
 
 **完了条件**：7日間分のOperation Checklistが記入され、最終日に振り返り（何が自動化できたか、何が依然手作業か、Version 4着手前に直すべき設計上の不備は何か）が行われること。
 
