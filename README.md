@@ -20,13 +20,15 @@ ARu HQ（AI編集部）の運営思想・設計・実装を1つにまとめた�
 | [AI Agent Architecture](docs/AI-Agent-Architecture.md) | AI Editorial Brain（6 Agent）の構造・利用DB・権限境界 |
 | [AI Agent Workflow](docs/AI-Agent-Workflow.md) | 6 Agent間の処理手順・エスカレーション条件 |
 | [AI Editorial Brain](docs/AI-Editorial-Brain.md) | Version 2.0の総括構想。AI編集部の全体像とガバナンス境界 |
+| [Automation Scripts](docs/Automation-Scripts.md) | Version 3で実装した6つの自動化スクリプトの一覧と実行方法 |
 
 ## 実装
 
-`notion-build/` — Notion APIを使ってARu Studioの各データベースを構築するPythonスクリプト一式。標準ライブラリのみで動作（`notion_api.py`が最小限のAPIクライアント）。
+- `notion-build/` — Notion APIを使ってARu Studioの各データベースを構築するPythonスクリプト一式。標準ライブラリのみで動作（`notion_api.py`が最小限のAPIクライアント）。
+- `notion-build/automation/` — 既存10DBに対する自動化スクリプト（Translator/Researcher/Editor-in-Chiefの各AgentロジックをPythonで実装）。詳細は[Automation Scripts](docs/Automation-Scripts.md)。
 
 セットアップは `notion-build/.env.example` を `.env` にコピーし、`NOTION_TOKEN` と `ARU_STUDIO_PAGE_ID` を設定して実行する。
 
 ## 現在地
 
-Roadmap Version 1・2は完了（一部Deferred）。Version 3（Pythonによる自動化スクリプト実装）に着手中。詳細は [Roadmap](docs/Roadmap.md) を参照。
+Roadmap Version 1・2・3は完了（一部Deferred）。Version 4（Enterprise）は着手前に方針確認が必要。詳細は [Roadmap](docs/Roadmap.md) を参照。

@@ -54,7 +54,7 @@ Version 2・3で新規に必要となる6DB（Language Master／Region Master／
 
 ---
 
-## Version 3 — AI Automation（進行中：実装順序を変更）
+## Version 3 — AI Automation（完了：実装順序を変更）
 
 **目的**：既存10DBを最大限活用し、Python自動化スクリプトで「知る」から「実行する」までを実現する。n8n専用のAutomation DBやAI Agents DBが無くても、実際に動く自動化を先に作る。
 
@@ -64,11 +64,22 @@ Version 2・3で新規に必要となる6DB（Language Master／Region Master／
 |---|---|
 | AI Agents／Prompt Library／Automation DBの本稼働 | **Deferred**。実体はPythonスクリプト（`notion-build/automation/`）として実装し、DB化は実運用で必要性が確認できてから |
 | n8nによる自動化 | まずPythonスクリプトで同等のロジックを実装（将来n8nへ移植可能な設計） |
-| Needs Re-Translationの自動検知 | Pythonスクリプトで実装 |
-| SNS自動投稿 | Publish Approvalゲートを維持したまま、Draft作成までを自動化（実投稿は引き続き人間が最終確認） |
+| Needs Re-Translationの自動検知 | Pythonスクリプトで実装済み（`check_translation_gaps.py`） |
+| SNS自動投稿 | 未着手（Draft自動生成は今後。実投稿は引き続き人間が最終確認） |
 | Audit Logの自動記録 | DB化はDeferred。当面はGitコミット履歴とスクリプトの実行ログで代替 |
 
-このバージョンで、Mission「AIが調査・執筆・翻訳・SNSを担当し、人は最終確認だけを行う」の**技術的な骨格**を、新規DBなしで実現する。
+**実装済み（[Automation Scripts](./Automation-Scripts.md)参照）**
+
+- `check_translation_gaps.py`（Translator）
+- `sync_source_monitor_to_research.py`（Researcher）
+- `escalate_law_significance.py`（Editor-in-Chief）
+- `sync_editorial_calendar_status.py`（Editor-in-Chief）
+- `enforce_publish_gate.py`（Editor-in-Chief／Quality Gate、Constitution §9・§13のコード化）
+- `daily_briefing.py`（Dashboard 8セクションのCLI版）
+
+すべて実データに対してテスト済み。Mission「AIが調査・執筆・翻訳・SNSを担当し、人は最終確認だけを行う」の**技術的な骨格**を、新規DBなしで実現した。
+
+**未実施**：定期実行のスケジューリング（cron等）、Legal Gap等の外部通知、SNS Queue自動Draft生成。
 
 ---
 
@@ -100,7 +111,7 @@ Version 2・3で新規に必要となる6DB（Language Master／Region Master／
 
 ## 現在地
 
-**Version 1・Version 2は完了（一部Deferred）。Version 3（Pythonによる自動化スクリプト実装）に着手する。**
+**Version 1・2・3は完了（一部Deferred）。Version 4（Enterprise）は、コード実装ではなく対外的な意思決定・契約行為を含むため、着手前に方針確認が必要。**
 
 ---
 

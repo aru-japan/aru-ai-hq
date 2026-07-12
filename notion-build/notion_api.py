@@ -51,3 +51,77 @@ def notion_request(token, method, path, body=None):
     except urllib.error.HTTPError as e:
         err_body = e.read().decode("utf-8")
         raise RuntimeError(f"Notion API error {e.code}: {err_body}") from None
+
+
+def query_database(token, database_id, filter_obj=None, sorts=None):
+    """Query a database, following pagination, and return the full list of page results."""
+    body = {}
+    if filter_obj is not None:
+        body["filter"] = filter_obj
+    if sorts is not None:
+        body["sorts"] = sorts
+
+    results = []
+    cursor = None
+    while True:
+        req_body = dict(body)
+        if cursor:
+            req_body["start_cursor"] = cursor
+        resp = notion_request(token, "POST", f"/databases/{database_id}/query", req_body)
+        results.extend(resp.get("results", []))
+        if not resp.get("has_more"):
+            break
+        cursor = resp.get("next_cursor")
+    return results
+
+
+def get_prop(page, name, kind):
+    """Read a property value off a page result in a convenient plain-Python form.
+
+    kind: 'select' | 'multi_select' | 'checkbox' | 'number' | 'date' | 'rich_text' | 'title' | 'relation'
+    """
+    prop = page.get("properties", {}).get(name)
+    if prop is None:
+        return None
+    if kind == "select":
+        sel = prop.get("select")
+        return sel.get("name") if sel else None
+    if kind == "multi_select":
+        return [o["name"] for o in prop.get("multi_select", [])]
+    if kind == "checkbox":
+        return prop.get("checkbox", False)
+    if kind == "number":
+        return prop.get("number")
+    if kind == "date":
+        d = prop.get("date")
+        return d.get("start") if d else None
+    if kind == "rich_text":
+        parts = prop.get("rich_text", [])
+        return "".join(p.get("plain_text", "") for p in parts)
+    if kind == "title":
+        parts = prop.get("title", [])
+        return "".join(p.get("plain_text", "") for p in parts)
+    if kind == "relation":
+        return [r["id"] for r in prop.get("relation", [])]
+    if kind == "rollup":
+        rollup = prop.get("rollup", {})
+        rtype = rollup.get("type")
+        if rtype == "date":
+            d = rollup.get("date")
+            return d.get("start") if d else None
+        if rtype == "number":
+            return rollup.get("number")
+        if rtype == "array":
+            items = rollup.get("array", [])
+            out = []
+            for item in items:
+                itype = item.get("type")
+                if itype == "date" and item.get("date"):
+                    out.append(item["date"].get("start"))
+                elif itype == "number":
+                    out.append(item.get("number"))
+                elif itype == "select" and item.get("select"):
+                    out.append(item["select"].get("name"))
+            return out
+        return None
+    raise ValueError(f"unknown kind: {kind}")
