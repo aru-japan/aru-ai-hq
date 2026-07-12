@@ -28,8 +28,9 @@ ARu HQ（AI編集部）の運営思想・設計・実装を1つにまとめた�
 
 - `notion-build/` — Notion APIを使ってARu Studioの各データベースを構築するPythonスクリプト一式。標準ライブラリのみで動作（`notion_api.py`が最小限のAPIクライアント）。
 - `notion-build/automation/` — 既存10DBに対する自動化スクリプト（Translator/Researcher/Editor-in-Chiefの各AgentロジックをPythonで実装）。詳細は[Automation Scripts](docs/Automation-Scripts.md)。
+- `scripts/ai_gateway.py` — Claude API／OpenAI APIのどちらでも呼び出せる共通AIゲートウェイ（標準ライブラリのみ）。詳細は[Automation Scripts](docs/Automation-Scripts.md)の「AI Gateway」節。
 
-セットアップは `notion-build/.env.example` を `.env` にコピーし、`NOTION_TOKEN` と `ARU_STUDIO_PAGE_ID` を設定して実行する。
+セットアップは `notion-build/.env.example` を `.env` にコピーし、`NOTION_TOKEN` と `ARU_STUDIO_PAGE_ID` を設定して実行する。AI Gatewayを使う場合は同じ`.env`に`CLAUDE_API_KEY`または`OPENAI_API_KEY`を追加する。
 
 ## 現在地
 

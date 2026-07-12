@@ -28,6 +28,8 @@
 | `sync_editorial_calendar_status.py` | Editor-in-Chief | Linked ArticleがPublishedになったEditorial Calendarエントリを自動でPublishedへ同期 |
 | `enforce_publish_gate.py` | Editor-in-Chief（Quality Gate） | Status=PublishedなのにQA Status≠PassedやUpdate Level 2/3でHuman Reviewed=falseの記事を検知し、Human Reviewへ強制的に差し戻す（ARu Constitution §9/§13のコード化） |
 | `daily_briefing.py` | — | Dashboardの8セクション相当をCLIに表示する、Linked View未設定時点でも使えるテキスト版ダッシュボード |
+| `research_assistant.py` | Researcher | テーマを指定すると、Source Library／Law Update／既存Research／既存記事との重複をNotionから実データで検索し、Markdownのリサーチ資料を出力（Pilot Operation Day 1で使用） |
+| `article_assistant.py` | Writer | テーマを指定すると、既存記事・Editorial Calendarとの重複確認、推奨Category/Update Level/Audienceを出力（Pilot Operation Day 1で使用） |
 
 ## 実行方法
 
@@ -39,6 +41,8 @@ python3 escalate_law_significance.py
 python3 sync_editorial_calendar_status.py
 python3 enforce_publish_gate.py
 python3 daily_briefing.py
+python3 research_assistant.py --topic "在留カード更新" --keyword "在留"
+python3 article_assistant.py --topic "在留カード更新" --keyword "在留" --category "法律・制度"
 ```
 
 いずれも標準ライブラリのみで動作し、`notion-build/.env`のNOTION_TOKENと各`_DB_ID`を読み込む。
@@ -53,6 +57,35 @@ python3 daily_briefing.py
 | sync_editorial_calendar_status.py | 対象のLinked ArticleがまだDraftのため、正しく「同期対象なし」と判定 |
 | enforce_publish_gate.py | Published状態の記事が存在しないため、正しく「違反なし」と判定 |
 | daily_briefing.py | 8セクションすべてが実データ（Gap／Opportunity／Event等）を正しく表示 |
+| research_assistant.py | 「在留カード更新」で実行し、Source Library・既存Research・既存記事との重複を正しく検出（Pilot Day 1） |
+| article_assistant.py | 同上、Category=法律・制度からUpdate Level 2を正しく推奨（Pilot Day 1） |
+
+---
+
+## AI Gateway（Phase B3.6）
+
+**場所**：`scripts/ai_gateway.py`（`notion-build/`とは別の、リポジトリ直下の新フォルダ）
+
+**目的**：ここまでのスクリプトはNotionからの実データ取得のみで、要約・執筆などの生成AI処理はすべてこのチャット上でAI Operator（Claude）が手動で担当していた。AI Gatewayは、**Claude APIとOpenAI APIのどちらでも呼び出せる共通の入り口**を用意し、将来この生成AI部分をコードから直接呼び出せるようにするための土台。
+
+**設定**：`notion-build/.env`に`CLAUDE_API_KEY`・`OPENAI_API_KEY`を追加（どちらか一方だけでも動作する）。
+
+**プロバイダの選び方**：`--provider`で明示指定しない限り、Claude／OpenAIどちらのキーが設定されているかを見て自動選択する（両方ある場合はClaudeを優先）。
+
+**動作確認**：
+
+```
+python3 scripts/ai_gateway.py --input "要約したい文章..."
+```
+
+**現状の制約（正直な報告）**：CLAUDE_API_KEY・OPENAI_API_KEYはまだ`.env`に未設定のため、実際のAPI呼び出しはまだ検証できていない。エラーハンドリング（キー未設定時に分かりやすいエラーメッセージで終了すること）は確認済み：
+
+```
+$ python3 scripts/ai_gateway.py --input "..."
+ERROR: Neither CLAUDE_API_KEY nor OPENAI_API_KEY is set in notion-build/.env. Add one of them to use the AI Gateway.
+```
+
+いずれかのキーが設定され次第、200文字要約の実動作を確認する。
 
 ## 未実施事項（要判断）
 
