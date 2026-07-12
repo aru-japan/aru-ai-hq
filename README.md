@@ -6,10 +6,13 @@ ARu（外国籍の方が日本で安心して暮らし、旅行し、働ける�
 
 ARu HQ（AI編集部）の運営思想・設計・実装を1つにまとめたもの。詳細は `docs/` を参照。
 
+> **ChatGPT・Claude・Cursorなど、AIとしてこのリポジトリを引き継ぐ場合は、まず [AI Handover Document](docs/AI-Handover.md) を読むこと。**
+
 ## ドキュメント
 
 | ドキュメント | 内容 |
 |---|---|
+| [AI Handover Document](docs/AI-Handover.md) | **将来のAI向け引き継ぎ文書。** このファイルだけで開発を継続できることを目的とする |
 | [ARu Constitution](docs/ARu-Constitution.md) | 運営憲章。Mission/Vision/Core ValuesからGovernanceまで |
 | [AI Agent Constitution](docs/AI-Agent-Constitution.md) | 各AIエージェントの責務・権限・禁止事項・エスカレーション条件 |
 | [ER Design](docs/ER-Design.html) | データベースのER設計書（Relation/Rollup/Formula） |

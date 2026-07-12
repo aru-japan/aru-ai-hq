@@ -8,6 +8,7 @@
 | **Status** | Active |
 | **Date** | 2026-07-12 |
 | **位置づけ** | ARu Constitution §19 Future Expansion Policyを、実際のバージョン計画に落とし込んだもの |
+| **関連文書** | [AI Handover Document](./AI-Handover.md)（将来のAI向け引き継ぎ文書。本Roadmapの要約も含む） |
 
 ---
 
