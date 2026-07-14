@@ -146,6 +146,7 @@ Research → Article → Article Review → Translation → Translation Review �
 - Notion Formulaの構文は不安定な場合がある（`dateBetween()`は動くが、日付プロパティ同士の直接`>`比較が失敗した例がある）
 - GitHubへのPushは、このBash実行環境では非対話認証ができず失敗する。人間が自身のターミナルで`git push`を実行する必要がある（過去、一度認証が通れば以降のPushは成功している）
 - スケジューリングの仕組みがないため、すべてのスクリプトは手動実行が前提
+- **Notionデータの外部バックアップが存在しない。** レコード（記事本文・翻訳・レビュー結果等）が誤って削除された場合、NotionのTrash／Version History（一般的に30日以内）が唯一の実質的な復旧手段。DBスキーマ自体は`notion-build/create_*.py`で再構築できるが、実データの復元手段は現状ない（詳細・緊急時の対応は[Recovery-Guide.md](./Recovery-Guide.md)）
 
 ## ■ Design Principles
 
@@ -159,16 +160,19 @@ Research → Article → Article Review → Translation → Translation Review �
 
 ## ■ Recovery Procedure（新しいAIが読む順番）
 
-1. **この文書（`docs/AI-Handover.md`）** — 最初に全体像をつかむ
-2. **`docs/ARu-Constitution.md`** — 何を優先するかの原則。ここに反する変更は絶対にしない
-3. **`docs/Roadmap.md`** — 現在地と、次に何をすべきか
-4. **`docs/Automation-Scripts.md`** — 実際に存在するコードと、その動作実績
-5. **`docs/Operation-Checklist.md`** — 実データ・実APIで何を検証済みか（Day別ログ）
-6. **`docs/AI-Agent-Constitution.md` → `AI-Agent-Architecture.md` → `AI-Agent-Workflow.md` → `AI-Editorial-Brain.md`** — AIエージェントの権限・振る舞いを変更する場合はここを必ず参照
-7. **`notion-build/.env.example`** — 必要な設定キーの一覧を確認する（**`notion-build/.env`自体は絶対に読み上げない・表示しない・コミットしない。中身は秘密情報**）
-8. **`git log --oneline -20`** — この文書の「Latest Commit」が古くなっていないか確認する
-9. Notion側の実データを確認する（`NOTION_TOKEN`を使い、`notion-build/automation/daily_briefing.py`を実行すると現状が一望できる）
+**2026-07-14より、この節の詳細版は[docs/START-HERE.md](./START-HERE.md)（10分で全体像）と[docs/Recovery-Guide.md](./Recovery-Guide.md)（10ステップの復旧手順＋緊急時シナリオ）に切り出した。** 重複を避けるため、ここでは要点のみ再掲する。
+
+1. [`docs/START-HERE.md`](./START-HERE.md) — 最初に全体像をつかむ（10分）
+2. この文書（`docs/AI-Handover.md`） — 開発継続のための本体文書
+3. `docs/ARu-Constitution.md` — 何を優先するかの原則。ここに反する変更は絶対にしない。Pending Amendments節も確認する
+4. `docs/Roadmap.md` → `docs/Automation-Scripts.md` → `docs/Version4-Status.md` — 現在地、実装カタログ、直近スナップショット
+5. AIエージェントの権限・振る舞いを変更する場合は`docs/AI-Agent-Constitution.md` → `AI-Agent-Architecture.md` → `AI-Agent-Workflow.md` → `AI-Editorial-Brain.md`を参照
+6. `notion-build/.env.example` — 必要な設定キーの一覧を確認する（**`notion-build/.env`自体は絶対に読み上げない・表示しない・コミットしない。中身は秘密情報**）
+7. `git log --oneline -20` — この文書の「Latest Commit」が古くなっていないか確認する
+8. Notion側の実データを確認する（`notion-build/automation/daily_briefing.py`を実行すると現状が一望できる）
+
+**セッション・PC・APIキーのいずれかを失った場合は、上記の代わりに[docs/Recovery-Guide.md](./Recovery-Guide.md)のEmergency Recoveryを参照。**
 
 ---
 
-*ARu HQ / Decode Japan — AI Handover Document v1.1 — 2026-07-14*
+*ARu HQ / Decode Japan — AI Handover Document v1.2 — 2026-07-14*

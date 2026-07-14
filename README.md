@@ -6,13 +6,15 @@ ARu（外国籍の方が日本で安心して暮らし、旅行し、働ける�
 
 ARu HQ（AI編集部）の運営思想・設計・実装を1つにまとめたもの。詳細は `docs/` を参照。
 
-> **ChatGPT・Claude・Cursorなど、AIとしてこのリポジトリを引き継ぐ場合は、まず [AI Handover Document](docs/AI-Handover.md) を読むこと。**
+> **ChatGPT・Claude・Cursorなど、AIとしてこのリポジトリを引き継ぐ場合は、まず [START HERE](docs/START-HERE.md) を読むこと。** 10分でプロジェクト全体像を把握できる。チャット履歴を失った場合は [Recovery Guide](docs/Recovery-Guide.md) の手順に従う。
 
 ## ドキュメント
 
 | ドキュメント | 内容 |
 |---|---|
-| [AI Handover Document](docs/AI-Handover.md) | **将来のAI向け引き継ぎ文書。** このファイルだけで開発を継続できることを目的とする |
+| [START HERE](docs/START-HERE.md) | **最初に読む文書。** Project Overview／読む順番／現在のVersion・Architecture・Dashboard・Workflow・ドキュメント階層を10分で把握できる |
+| [Recovery Guide](docs/Recovery-Guide.md) | チャット履歴・セッション・PCを失った場合の10ステップ復旧手順＋緊急時シナリオ（APIキーローテーション、GitHub/Notion復元等） |
+| [AI Handover Document](docs/AI-Handover.md) | **開発継続のための本体文書。** Architecture・Current Phase・Remaining Tasksまで、このファイルだけで開発を継続できることを目的とする |
 | [ARu Constitution](docs/ARu-Constitution.md) | 運営憲章。Mission/Vision/Core ValuesからGovernanceまで |
 | [AI Agent Constitution](docs/AI-Agent-Constitution.md) | 各AIエージェントの責務・権限・禁止事項・エスカレーション条件 |
 | [ER Design](docs/ER-Design.html) | データベースのER設計書（Relation/Rollup/Formula） |
@@ -20,7 +22,7 @@ ARu HQ（AI編集部）の運営思想・設計・実装を1つにまとめた�
 | [Roadmap](docs/Roadmap.md) | Version 1〜5の展開計画 |
 | [Operating Manual](docs/Operating-Manual.md) | 編集長向け標準運用手順書（SOP） |
 | [View & Template Guide](docs/View-Template-Guide.md) | Notion UI上でのView/Template手動設定手順 |
-| [Dashboard Setup Guide](docs/Dashboard-Setup-Guide.md) | 編集長ホーム画面（Dashboard）の9セクションを、初めてのNotionユーザーでも30分で完成させる手順 |
+| [Dashboard Setup Guide](docs/Dashboard-Setup-Guide.md) | 編集長ホーム画面（Dashboard）の13セクションを、初めてのNotionユーザーでも35〜40分で完成させる手順 |
 | [AI Agent Architecture](docs/AI-Agent-Architecture.md) | AI Editorial Brain（6 Agent）の構造・利用DB・権限境界 |
 | [AI Agent Workflow](docs/AI-Agent-Workflow.md) | 6 Agent間の処理手順・エスカレーション条件 |
 | [AI Editorial Brain](docs/AI-Editorial-Brain.md) | Version 2.0の総括構想。AI編集部の全体像とガバナンス境界 |

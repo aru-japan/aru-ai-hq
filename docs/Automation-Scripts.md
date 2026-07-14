@@ -27,7 +27,7 @@
 | `escalate_law_significance.py` | Editor-in-Chief | Law Update.Significance=Majorの場合、Affected ArticlesのUrgencyを自動でCriticalへ引き上げ |
 | `sync_editorial_calendar_status.py` | Editor-in-Chief | Linked ArticleがPublishedになったEditorial Calendarエントリを自動でPublishedへ同期 |
 | `enforce_publish_gate.py` | Editor-in-Chief（Quality Gate） | Status=PublishedなのにQA Status≠PassedやUpdate Level 2/3でHuman Reviewed=falseの記事を検知し、Human Reviewへ強制的に差し戻す（ARu Constitution §9/§13のコード化） |
-| `daily_briefing.py` | Editor-in-Chief | Dashboard（編集長ホーム画面）の9セクション相当をCLIに表示する、Linked View未設定時点でも使えるテキスト版ダッシュボード |
+| `daily_briefing.py` | Editor-in-Chief | Dashboard（編集長ホーム画面）のうち🔴 Update Needed＋①〜⑨（計10セクション）をCLIに表示する、Linked View未設定時点でも使えるテキスト版ダッシュボード（📊📝🚀📚🛠の5セクションは専用Notionページ／Linked View側のみで、CLI版には未反映） |
 | `research_assistant.py` | Researcher | テーマを指定すると、Source Library／Law Update／既存Research／既存記事との重複をNotionから実データで検索し、Markdownのリサーチ資料を出力（Pilot Operation Day 1で使用） |
 | `article_assistant.py` | Writer | テーマを指定すると、既存記事・Editorial Calendarとの重複確認、推奨Category/Update Level/Audienceを出力（Pilot Operation Day 1で使用） |
 | `article_freshness_monitor.py` | Editor-in-Chief（Freshness Gate） | Update Levelごとのレビュー間隔超過、およびLaw Update/Source Monitor/Event Calendarの変化検知を基に、記事のFreshness Statusを日次更新しDashboard最上部の「🔴 Update Needed」に反映（Version 4準備、詳細後述） |

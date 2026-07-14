@@ -201,7 +201,7 @@ Version 4 Phase 3として、Publishing Center（`notion-build/automation/publis
 
 DashboardページはAPIで雛形（見出し9つ＋説明のCallout）まで自動生成済み。各見出しの下に「Linked view of database」を埋め込むのはNotion UI上での手動作業になる。
 
-**詳しい手順（画面イメージ付き・初めてのNotionユーザーでも30分で完了）は、[Dashboard Setup Guide](./Dashboard-Setup-Guide.md)に独立させた。** 共通手順、9セクションそれぞれのFilter／Sort／表示プロパティ／View種別、完了チェックリスト、つまずきやすいポイントまで記載している。
+**詳しい手順（画面イメージ付き）は、[Dashboard Setup Guide](./Dashboard-Setup-Guide.md)に独立させた。** 共通手順、13セクション（🔴📊📝🚀📚🛠＋①〜⑨）それぞれのFilter／Sort／表示プロパティ／View種別、完了チェックリスト、つまずきやすいポイントまで記載している。
 
 **配置の考え方**（要約）：上から「①〜④ 今すぐ判断が必要なもの（承認・レビュー待ち）」→「⑤〜⑥ 今日の予定」→「⑦〜⑨ 外部シグナル・モニタリング」の順。編集長が毎朝上から順に見ていけば、優先度の高いものから対応できるように並べてある。
 
