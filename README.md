@@ -20,6 +20,7 @@ ARu HQ（AI編集部）の運営思想・設計・実装を1つにまとめた�
 | [Roadmap](docs/Roadmap.md) | Version 1〜5の展開計画 |
 | [Operating Manual](docs/Operating-Manual.md) | 編集長向け標準運用手順書（SOP） |
 | [View & Template Guide](docs/View-Template-Guide.md) | Notion UI上でのView/Template手動設定手順 |
+| [Dashboard Setup Guide](docs/Dashboard-Setup-Guide.md) | 編集長ホーム画面（Dashboard）の9セクションを、初めてのNotionユーザーでも30分で完成させる手順 |
 | [AI Agent Architecture](docs/AI-Agent-Architecture.md) | AI Editorial Brain（6 Agent）の構造・利用DB・権限境界 |
 | [AI Agent Workflow](docs/AI-Agent-Workflow.md) | 6 Agent間の処理手順・エスカレーション条件 |
 | [AI Editorial Brain](docs/AI-Editorial-Brain.md) | Version 2.0の総括構想。AI編集部の全体像とガバナンス境界 |
