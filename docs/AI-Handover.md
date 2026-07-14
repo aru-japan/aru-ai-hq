@@ -78,6 +78,7 @@ Research → Article → Article Review → Translation → Translation Review �
 - **一括生成** `notion-build/bulk_generate_articles.py`（旧`bulk_generate_20_articles.py`）：`TOPICS`リストを差し替えるだけで、Research→Article（9セクションテンプレート）→Review→Translation→Review→SNS×3→Reviewのフルパイプラインを日々再利用できる汎用スクリプト
 - **Version 4準備** `article_freshness_monitor.py`：Update Levelごとのレビュー間隔（L1=90日／L2=30日／L3=14〜30日）を超過した記事、およびLaw Update/Source Monitor/Event Calendarで変化が検知された記事を`Freshness Status=Needs Update`にし、Dashboard最上部の「🔴 Update Needed」へ反映（新規DBなし、既存Articles DBへのプロパティ追加のみ）
 - **Version 4準備** `coverage_analyzer.py`（＋`life_topics.py`／`backfill_life_topics.py`）：既存Category（Update Level判定用、変更なし）とは別に`Life Topics`（22トピックのMulti-select）を新設し、記事数・鮮度・Review待ちをトピック別に集計。AIが不足トピック・優先トピック・おすすめ新規テーマ（10件）を「外国籍の方の生活への影響度」の視点で提案し、Dashboard「📊 Coverage Analysis」＋専用Notionページ（計算済みサマリーをTable Blockとして毎回上書き生成）に反映
+- **Version 4 Phase 2** `editorial_planner.py`：Coverage Analyzerのデータから★1〜5の優先編集プランを生成（★の算出はLife Topic Impact×記事数の決定論的ロジック、AIはReason／タイトル案／Expected Categoryの生成のみ担当）。`--generate-research`で選択したプラン項目のResearchレコードを自動作成（新規プロパティなし、Research DB既存の`Gap Engine`／`AI Suggested`選択肢を利用）。Dashboard「📝 Editorial Planner」＋専用Notionページに反映
 
 詳細と実行方法は`docs/Automation-Scripts.md`。
 
@@ -118,10 +119,12 @@ Research → Article → Article Review → Translation → Translation Review �
 - 記事本文のARu公式テンプレート統一（9セクション）、`Verification Status`／`Last Verified Date`の記録（2026-07-14）
 - Article Freshness Monitor（Version 4準備）：Update Levelごとのレビュー間隔管理＋Law Update/Source Monitor/Event Calendarとの連携による強制再レビューフラグ、Dashboard最上部「🔴 Update Needed」（2026-07-14）
 - Coverage Analyzer（Version 4準備）：Life Topics（22トピック）によるカテゴリ分析＋AIによる不足分析・優先トピック・新規テーマ提案、Dashboard「📊 Coverage Analysis」＋専用ページ（2026-07-14）
+- Editorial Planner（Version 4 Phase 2）：★1〜5の優先編集プラン自動生成＋`--generate-research`によるResearchレコード自動作成、Dashboard「📝 Editorial Planner」＋専用ページ（2026-07-14）
 
 ## ■ Remaining Tasks
 
 - **ARu Constitutionの改訂提案が承認待ち**（Pending Amendments、提案日2026-07-14、Level B、レビュー期間72時間→発効予定2026-07-17以降）。ARu公式9セクションテンプレートとArticle Freshness Monitorの実態を§4・§11へ反映する内容。**2026-07-17以降、編集長（Rei）の承認を得たら**、`docs/ARu-Constitution.md`の該当箇所を本文へ反映し、v2.0.0→v2.1.0へバージョンアップ、Revision Historyに記録し、Pending Amendments節から該当エントリを削除すること
+- **Editorial Plannerが提案した19件のResearch（Status=New、Discovery Method=Gap Engine）がレビュー待ち**（2026-07-14、`editorial_planner.py --generate-research`で作成）。Dashboard「⑥ Today's Research」に表示される。Reiが内容を確認し、実際に記事化するものを選んで`generate_article_pipeline.py article`または`bulk_generate_articles.py`のTOPICSへ追加する
 - Article.Status自体をAI Draft→Publishedへ自動昇格させるスクリプトが存在しない（Translation側のゲートのみ実証済み）
 - 定期実行（cron/launchd）は未設定。すべて手動実行
 - Critical Gap等の外部通知（Slack/メール）は未実装

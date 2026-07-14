@@ -1,11 +1,11 @@
-<title>Automation Scripts v1.3</title>
+<title>Automation Scripts v1.4</title>
 
 # Automation Scripts
 ### ARu Studio — Roadmap Version 3 実装記録 ＋ Version 4準備
 
 | | |
 |---|---|
-| **Status** | Active — Notion自動化12スクリプト＋AI Gateway＋Article Freshness Monitor＋Coverage Analyzer実装・実データ／実API（Claude）でテスト済み |
+| **Status** | Active — Notion自動化13スクリプト＋AI Gateway＋Article Freshness Monitor＋Coverage Analyzer＋Editorial Planner実装・実データ／実API（Claude）でテスト済み |
 | **Date** | 2026-07-14 |
 | **位置づけ** | [AI Agent Workflow](./AI-Agent-Workflow.md)に定めた処理を、新規DB（AI Agents／Prompt Library／Automation）を追加せず、既存10DBに対するPythonスクリプトとして実装したもの |
 | **場所** | `notion-build/automation/` |
@@ -33,6 +33,7 @@
 | `article_freshness_monitor.py` | Editor-in-Chief（Freshness Gate） | Update Levelごとのレビュー間隔超過、およびLaw Update/Source Monitor/Event Calendarの変化検知を基に、記事のFreshness Statusを日次更新しDashboard最上部の「🔴 Update Needed」に反映（Version 4準備、詳細後述） |
 | `coverage_analyzer.py` | Editor-in-Chief（企画・編集会議） | 生活トピック別の記事数・鮮度・Review待ちを集計し、AIが不足トピック・優先トピック・おすすめ新規テーマ（10件）を提案。Dashboard「📊 Coverage Analysis」＋専用Notionページに反映（詳細後述） |
 | `backfill_life_topics.py` | — | 既存記事にLife Topicsを一括付与する再実行可能なバックフィルスクリプト（Coverage Analyzerの前提データ作成用） |
+| `editorial_planner.py` | Editor-in-Chief（編集会議・アサイン） | Coverage Analyzerの集計データから、★1〜5の優先度付き編集プラン（Reason・タイトル案・想定Update Level／Category）を生成し、`--generate-research`でResearchレコードを自動作成。Dashboard「📝 Editorial Planner」＋専用Notionページに反映（詳細後述） |
 
 ## 実行方法
 
@@ -333,6 +334,44 @@ python3 coverage_analyzer.py
 
 **テスト結果（実データ・実API、2026-07-14）**：既存Articles 53件全件をLife Topics付与済み。分析結果、`介護`／`妊娠・出産`／`高齢者支援`／`障がい者支援`が0件、`教育`／`ニュース・トレンド`が1件のみと判明。AIは単純な件数だけでなく「生命・生活への影響度」を踏まえ、医療・健康／妊娠・出産／介護／障がい者支援を優先トピックとして提案し、「外国籍の方が日本で妊娠したら最初にすべきことは？」等、検索されやすい質問形式のテーマ案を10件生成した。
 
+---
+
+## Editorial Planner（Version 4 Phase 2、2026-07-14）
+
+**場所**：`notion-build/automation/editorial_planner.py`（依存：`life_topics.py`／`coverage_analyzer.aggregate()`）
+
+**目的**：Coverage Analyzerが「何が足りないか」を示すのに対し、Editorial Plannerは「次に何を書くべきか」を具体的に提案する。編集会議でそのままアサインに使える粒度（優先度・理由・タイトル案・想定Update Level／Category）まで踏み込む。
+
+**Life Topic Impact（新設）**：`life_topics.py`に`LIFE_TOPIC_IMPACT`（Critical／High／Medium／Low、22トピック分）を追加。記事数だけでなく「その情報がないと読者がどれだけ困るか」を加味するための軸で、医療・健康／妊娠・出産／防災・緊急対応／在留資格・ビザをCriticalとした。
+
+**検出ロジック（決定論的、AIに委ねない）**：トピックごとに「影響度別の許容記事数」を超えていなければプランに含める。
+
+| 影響度 | 許容記事数（この件数以下でプランに含む） |
+|---|---|
+| Critical | 4件以下 |
+| High | 3件以下 |
+| Medium | 2件以下 |
+| Low | 1件以下 |
+
+★の算出も決定論的（影響度×現在の記事数の組み合わせで1〜5に固定マッピング）。AIは各プランの**Reason・タイトル案・Expected Category**の生成にのみ使い、優先順位の算出そのものはAIに委ねない——Article Freshness Monitorの「日数計算は決定論、推奨コメントはAI」という設計方針を踏襲したもの。
+
+**Expected Update Level**：AIには聞かない。AIが提案したExpected CategoryをArticles.Categoryの正規の7値で検証し（無効な値は`life_topics.DEFAULT_CATEGORY_FOR_TOPIC`のフォールバックへ）、既存の`generate_article_pipeline.compute_update_level()`にそのまま渡して算出する。カテゴリ判定ロジックを二重管理しないための設計。
+
+**Generate Research アクション**：
+
+```
+python3 editorial_planner.py                                    # プラン表示のみ
+python3 editorial_planner.py --generate-research                 # 全プラン項目のタイトル案をResearchへ
+python3 editorial_planner.py --generate-research --limit 3       # 優先度上位3項目のみ
+python3 editorial_planner.py --generate-research --topics "医療・健康,妊娠・出産"  # トピック名で選択
+```
+
+作成されるResearchレコードは、新規プロパティの追加なしで既存の選択肢をそのまま利用：`Status=New`（Dashboard「⑥ Today's Research」に自動的に現れる）、`Evidence Level=AI Suggested`、`Discovery Method=Gap Engine`（Research DBに元々用意されていた選択肢を活用）、`Priority`／`Urgency`は★の数から機械的にマッピング。
+
+**表示**：Dashboard「📊 Coverage Analysis」の直下に「📝 Editorial Planner」セクションを追加。詳細は専用Notionページ（Coverage Analysisと同じ、Table/Block形式で毎回上書き生成する方式）。
+
+**テスト結果（実データ・実API、2026-07-14）**：既存53記事に対して実行し、10トピックがプランに検出された（★5：妊娠・出産、★4：介護／高齢者支援／障がい者支援／医療・健康／防災・緊急対応、★3：子育て、★2：教育／年金・社会保険、★1：ニュース・トレンド）。`--generate-research`を実行し、実際に19件のResearchレコードを作成（Status=New、Discovery Method=Gap Engine、Category／Priority／Urgencyともに正しく設定されていることを実データで確認）。
+
 ## 未実施事項（要判断）
 
 - **スケジューリング**：cron／launchd等での定期実行はまだ設定していない。日次実行にするか、Rei自身が手動実行するかは別途判断が必要
@@ -341,4 +380,4 @@ python3 coverage_analyzer.py
 
 ---
 
-*ARu HQ / Decode Japan — Automation Scripts v1.3 — 2026-07-14*
+*ARu HQ / Decode Japan — Automation Scripts v1.4 — 2026-07-14*

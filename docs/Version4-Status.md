@@ -39,6 +39,16 @@
 
 **実行結果（実データ・実API、2026-07-14）**：`介護`／`妊娠・出産`／`高齢者支援`／`障がい者支援`が0件、`教育`／`ニュース・トレンド`が1件のみと判明。AIは医療・健康／妊娠・出産／介護／障がい者支援を優先トピックとして提案し、質問形式の新規テーマ案10件を生成した（詳細は[Automation Scripts](./Automation-Scripts.md)）。
 
+### ⑤ Editorial Planner（Version 4 Phase 2）
+`editorial_planner.py`を新規実装。Coverage Analyzerが「何が足りないか」を示すのに対し、Editorial Plannerは「次に何を書くべきか」を編集会議でそのままアサインできる粒度まで具体化する。
+
+- **検出・優先度算出は決定論的**：`life_topics.py`に追加した`LIFE_TOPIC_IMPACT`（Critical／High／Medium／Low）と現在の記事数を組み合わせ、影響度別の許容記事数を超えていないトピックを★1〜5でプランに含める。AIは各トピックのReason・タイトル案・Expected Categoryの生成のみ担当し、優先順位そのものはAIに委ねない
+- **Expected Update Level**：AIには聞かず、AIが提案したExpected Category（7値のうち無効な場合はフォールバック）を既存の`compute_update_level()`にそのまま渡して算出——ロジックの二重管理を避けた
+- **Generate Research アクション**：`--generate-research`（＋`--topics`／`--limit`で選択）で、プラン項目の提案タイトルをResearchレコードとして自動作成。新規プロパティは追加せず、Research DB既存の`Status=New`／`Evidence Level=AI Suggested`／`Discovery Method=Gap Engine`をそのまま利用するため、作成したResearchはDashboard「⑥ Today's Research」に自動的に現れる
+- Dashboard「📊 Coverage Analysis」の直下に「📝 Editorial Planner」セクションを追加
+
+**実行結果（実データ・実API、2026-07-14）**：53記事に対して実行し10トピックがプランに検出された（★5：妊娠・出産／★4：介護・高齢者支援・障がい者支援・医療・健康・防災・緊急対応／★3：子育て／★2：教育・年金・社会保険／★1：ニュース・トレンド）。`--generate-research`を実行し、実際に**Researchレコード19件**を新規作成（Category／Priority／Urgencyがすべて正しく設定されていることを実データで確認）。
+
 ---
 
 ## 2. 現在のコンテンツ量（Notion実データ、2026-07-14時点）
@@ -46,7 +56,7 @@
 | データベース | 件数 | 内訳 |
 |---|---|---|
 | **Articles（記事数）** | **53件** | Status: AI Draft 52／Draft 1　｜　Update Level: L1=37／L2=16　｜　Article Review: Pass 51／Needs Revision 1／未レビュー 1　｜　Freshness Status: Fresh 51／Needs Update 2 |
-| **Research** | **52件** | Status: Converted 52（全件Articleへ転換済み） |
+| **Research** | **71件** | Status: Converted 52（Articleへ転換済み）／New 19（すべてEditorial Plannerが本日提案、Discovery Method=Gap Engine、レビュー待ち） |
 | **Translation** | **54件** | Publish Approval: Pending 15／Not Required 39　｜　Quality Result: Pass 52／Needs Revision 1／未レビュー 1 |
 | **SNS Queue** | **160件** | Platform: X 53／Threads 53／Instagram 54　｜　Status: 全件Draft　｜　Review Result: Pass 152／Needs Revision 7／Fail 1 |
 
@@ -78,7 +88,7 @@ Version 4本体は**前提条件（Pilot Operation 7日間の実運用完了）�
 | 層 | 内容 | 進捗 |
 |---|---|---|
 | **前提条件** | Version 3.5 Pilot Operation（7日間実運用） | **2/7日（約29%）** |
-| **Version 4準備作業**（技術的土台） | Article Freshness Monitor、Coverage Analyzer | **2/2件 実施済み（100%）**（現時点でRoadmapに明記された準備作業はこの2件） |
+| **Version 4準備作業**（技術的土台） | Article Freshness Monitor、Coverage Analyzer、Editorial Planner | **3/3件 実施済み（100%）**（現時点でRoadmapに明記された準備作業はこの3件） |
 | **Version 4本体**（Roadmap記載5項目：Usage Scope実運用／自治体・観光協会・企業とのデータ連携／JNTO・Visit Japan連携／企業向けダッシュボード／Mentorネットワーク本格拡大） | いずれも対外的な契約・意思決定を伴う | **0/5件（0%）** |
 
 **総合評価**：技術的な土台固め（Freshness Monitor）は計画通り先行実装できたが、Version 4本体は実装だけでは進められない項目が大半を占める。次のゲートはPilot Operation Day 3〜7の完走と、その後の対外的な方針確認。**全体としては「本体着手前」であり、大まかな目安としては一桁%〜10%程度**（前提条件の進捗と、技術準備1件の完了を反映した粗い目安であり、対外交渉が絡む項目のため精緻な%算出はできない）。
@@ -98,6 +108,7 @@ Version 4本体は**前提条件（Pilot Operation 7日間の実運用完了）�
 9. **Deferred中の6DB**（Language Master／Region Master／Mentor／AI Agents／Prompt Library／Automation）は引き続き未着手（方針通り、削除ではなく保留）
 10. **コンテンツの偏りが明確に**：Coverage Analyzerにより、`介護`／`妊娠・出産`／`高齢者支援`／`障がい者支援`が0件、`教育`が1件のみと判明。現状53記事の大半が「文化・マナー」「行政手続き・相談窓口」に偏っており、外国籍の方の生活に不可欠な医療・福祉系トピックが手薄
 11. **ARu Constitutionの改訂提案が承認待ち**：Pending Amendments（Level B、提案日2026-07-14、発効予定2026-07-17以降）。ARu公式テンプレートとArticle Freshness Monitorの実態を§4・§11へ反映する内容で、編集長の承認待ち
+12. **Editorial Plannerが提案した19件のResearchが未レビュー**：`Status=New`のままDashboard「⑥ Today's Research」に滞留中。優先度（Priority/Urgency）は機械的に設定されているが、実際に記事化するかどうかはRei自身の判断が必要
 
 ---
 
@@ -108,7 +119,7 @@ Version 4本体は**前提条件（Pilot Operation 7日間の実運用完了）�
 3. **滞留中のレビュー対応**：Needs Revision/Fail状態のSNS 8件・Article 1件・Translation 1件を人間が確認し、Publish可否を判断
 4. **外部シグナル起因の要更新記事2件を実際に再レビュー**し、Freshness Monitor→人間レビューのワークフローが実運用でも機能することを確認
 5. **未レビュー（None）の2件を調査**し、過去のテストレコードかどうかを特定・整理
-6. **Coverage Analyzerが提案した10テーマから2〜3件を選び、実際に記事化**する（特に`医療・健康`／`妊娠・出産`など優先トピック）。既存の`bulk_generate_articles.py`のTOPICSに追加すれば、9セクションテンプレート・3段レビュー・Life Topics自動付与がそのまま適用される
+6. **Editorial Plannerが作成した19件のResearch（★5：妊娠・出産を最優先）から2〜3件を選び、実際に記事化**する。Research自体は既に`Status=New`で存在するため、`generate_article_pipeline.py article --keyword "..."`で直接拾える（Statusを`Converted`へ変更してから実行）。9セクションテンプレート・3段レビュー・Life Topics自動付与はそのまま適用される
 
 ## 6. 今週やるべきこと
 
@@ -119,6 +130,7 @@ Version 4本体は**前提条件（Pilot Operation 7日間の実運用完了）�
 5. **Version 4本体着手に向けた優先順位の方針確認**：自治体連携／JNTO連携／企業向けダッシュボード／Mentorネットワーク拡大のうち、どれから対外的な意思決定を進めるかをReiと確認
 6. **医療・福祉系トピックの記事化計画**：Coverage Analyzerが検知した0件トピック（介護／妊娠・出産／高齢者支援／障がい者支援）について、少なくとも各1本ずつ着手する計画を立てる。Update Level判定（現行Categoryでは「生活情報」等に該当し原則Level 1だが、内容次第では専門家レビューが望ましい場合もあるため、着手時に個別判断する）
 7. **ARu Constitutionの改訂承認**：2026-07-17以降、Pending Amendments（§4・§11）をRei自身が確認し、承認する場合はv2.1.0へ反映
+8. **Editorial Plannerの週次運用リズムを決める**：毎朝実行するのか、週1回の編集会議前に実行するのか。19件のResearchが一度に滞留した経験を踏まえ、`--limit`や`--topics`での小分け運用が実務上ちょうどよいかを検証する
 
 ---
 
@@ -128,10 +140,10 @@ Version 4本体は**前提条件（Pilot Operation 7日間の実運用完了）�
 
 | ドキュメント | 確認内容 | 結果 |
 |---|---|---|
-| [README.md](../README.md) | 「現在地」節がARu公式テンプレート統一・Freshness Monitor・Coverage Analyzer実装（いずれも2026-07-14）を反映しているか | ✅ 一致（本レポートと同時に更新） |
-| [Roadmap.md](./Roadmap.md) | Version 4節に「Version 4準備作業」としてArticle Freshness Monitor・Coverage Analyzerが記載されているか、前提条件（Pilot Operation完了）の位置づけが変わっていないか | ✅ 一致。前提条件は変更なし、準備作業として正しく記載済み |
+| [README.md](../README.md) | 「現在地」節がARu公式テンプレート統一・Freshness Monitor・Coverage Analyzer・Editorial Planner実装（いずれも2026-07-14）を反映しているか | ✅ 一致（本レポートと同時に更新） |
+| [Roadmap.md](./Roadmap.md) | Version 4節に「Version 4準備作業」としてArticle Freshness Monitor・Coverage Analyzer・Editorial Plannerが記載されているか、前提条件（Pilot Operation完了）の位置づけが変わっていないか | ✅ 一致。前提条件は変更なし、準備作業として正しく記載済み |
 | [AI-Handover.md](./AI-Handover.md) | Completed Features／Current Automationに本日の実装が反映されているか、Latest Commitが最新か | ✅ Completed Features／Current Automationとも一致（本レポートと同時に更新）。Latest Commitは前回のレポート作成時（`5e82259`→`c661ed3`）に一度修正済みで、以降の修正は都度反映している |
-| [ARu-Constitution.md](./ARu-Constitution.md) | 本日の実装（9セクションテンプレート、Freshness Monitorのレビュー間隔）が§4・§11の記述と一致しているか | ⚠️ **不一致を検出し、Level B Pending Amendmentとして提案済み**（2026-07-14提案、発効予定2026-07-17以降）。編集長の承認を得るまで本文（v2.0.0）は変更しない方針 |
+| [ARu-Constitution.md](./ARu-Constitution.md) | 本日の実装（9セクションテンプレート、Freshness Monitorのレビュー間隔、Coverage Analyzer、Editorial Planner）が本文の記述と矛盾していないか | ⚠️ 9セクションテンプレートとFreshness Monitorのレビュー間隔については**不一致を検出し、Level B Pending Amendmentとして提案済み**（2026-07-14提案、発効予定2026-07-17以降、編集長の承認を得るまで本文v2.0.0は変更しない）。Coverage Analyzer・Editorial Plannerは既存の§7 Source Policy／§9 AI Behavior Rulesの範囲内（Research作成のみでPublish Approvalには一切触れない）で動作しており、**改訂提案は不要と判断** |
 
 **整合性上の結論**：README／Roadmap／AI-Handoverの3文書は本日の実装内容と矛盾しない。ARu Constitutionのみ、本日の実装によって記述が実態と乖離したため、正規の改訂プロセス（§20 Governance）に沿ってPending Amendmentとして提案し、承認待ちの状態。
 

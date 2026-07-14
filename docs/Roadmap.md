@@ -122,6 +122,8 @@ Version 2・3で新規に必要となる6DB（Language Master／Region Master／
 **Version 4準備作業（Pilot Operation期間中に先行実施、Version 4着手そのものではない）**：
 
 - **Article Freshness Monitor**（`notion-build/automation/article_freshness_monitor.py`、2026-07-14）：既存Articles DBに`Freshness Status`／`Days Since Verification`／`Freshness Urgency Score`／`Freshness Checked Date`／`Freshness Note`を追加し、Update Levelごとの review interval（Level 1=90日／Level 2=30日／Level 3=14〜30日で設定可能）を超過した記事を自動検知。Law Update／Source Monitor／Event Calendarで関連する変化が検知された記事は、時間経過に関わらずAIの推奨コメント付きで強制的に再レビュー対象へ。Dashboardの最上部に「🔴 Update Needed」セクションとして追加済み。新規DBは追加していない（既存Articles DBの拡張のみ）。詳細は[Automation Scripts](./Automation-Scripts.md)を参照。エンタープライズ向け機能（企業向けダッシュボード等）そのものではなく、コンテンツ鮮度という運用の土台を先に固めるための実装。
+- **Coverage Analyzer**（`notion-build/automation/coverage_analyzer.py`、2026-07-14）：既存Category（Update Level判定用、変更なし）とは別に`Life Topics`（22トピックのMulti-select）を新設し、生活トピック別の記事数・鮮度・Review待ちを集計。AIが「外国籍の方の生活への影響度」の視点で不足トピック・優先トピックとおすすめ新規テーマ（10件）を提案。Dashboard「📊 Coverage Analysis」＋専用Notionページに反映。新規DBは追加していない。
+- **Editorial Planner**（`notion-build/automation/editorial_planner.py`、Version 4 Phase 2、2026-07-14）：Coverage Analyzerのデータから、Life Topic Impact（Critical／High／Medium／Low）と現在の記事数を組み合わせた決定論的ロジックで★1〜5の優先編集プランを生成（AIはReason・タイトル案・Expected Categoryの生成のみ担当し、優先順位そのものはAIに委ねない）。`--generate-research`で選択したプラン項目のResearchレコードを自動作成（Research DB既存の`Gap Engine`／`AI Suggested`選択肢を利用、新規プロパティなし）。Dashboard「📊 Coverage Analysis」の直下に「📝 Editorial Planner」セクションを追加。「不足を見つける」だけでなく「次に何を書くべきかを具体的に提案する」段階へ進んだもの。
 
 **目的**：個人利用者向けサービスから、企業・自治体・日本語学校向けプラットフォームへ拡張する。
 
