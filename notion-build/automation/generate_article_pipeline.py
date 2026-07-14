@@ -24,6 +24,7 @@ sys.path.insert(0, os.path.join(REPO_ROOT, "scripts"))
 from notion_api import load_env, notion_request, query_database, get_prop  # noqa: E402
 import ai_gateway  # noqa: E402
 from life_topics import classify_life_topics  # noqa: E402
+from duplicate_guard import check_before_generate, log_generated  # noqa: E402
 
 ENV_PATH = os.path.join(NOTION_BUILD_DIR, ".env")
 
@@ -160,6 +161,11 @@ def run_article(env, keyword, category):
     summary = get_prop(research, "Summary", "rich_text")
     print(f"  Using Research: {topic}")
 
+    existing = check_before_generate(token, env, topic, expect_research=True)
+    if existing:
+        print(f"  Status: Already Exists (stage={existing['stage']}, article_id={existing['article_id']}). Skipping generation.")
+        return existing["article_id"]
+
     verified_date = __import__("datetime").date.today().isoformat()
     print(f"[Article] Generating via AI Gateway (Category={category}, Update Level={update_level})...")
     provider, title, body = generate_article_text(topic, summary, update_level, verified_date)
@@ -194,6 +200,7 @@ def run_article(env, keyword, category):
         "parent": {"database_id": articles_db}, "properties": article_props
     })
     print(f"  SAVED Article: {article_page['id']}")
+    log_generated(topic, article_page["id"])
     return article_page["id"]
 
 

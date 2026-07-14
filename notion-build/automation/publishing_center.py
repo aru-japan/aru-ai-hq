@@ -32,7 +32,7 @@ Property responsibilities (to avoid overlapping with what already exists):
                                     the one thing none of the above answer alone.
 
 Publishing Status values: Draft / Ready to Publish / Published / Needs Update /
-Archived. Transitions performed by this script:
+Archived / Duplicate. Transitions performed by this script:
   - Draft <-> Ready to Publish: automatic, based on evaluate_readiness() below.
     Never advances past Ready to Publish -- Published is always a human action.
   - Published -> Needs Update: automatic, when Freshness Status flips to
@@ -43,7 +43,10 @@ Archived. Transitions performed by this script:
   - -> Published: only ever set by a human in the Notion UI. This script's job
     on the next run is only to backfill Published Date / Published By (from
     the page's real last_edited_by, not invented) once it notices the change.
-  - Archived: never touched by this script once set (a human's terminal call).
+  - Archived / Duplicate: never touched by this script once set (a terminal
+    call -- Duplicate is set by a human resolving a duplicate-article
+    investigation, never automatically; see duplicate_guard.py for the
+    prevention side of that).
 """
 import os
 import sys
@@ -63,7 +66,7 @@ from notion_api import load_env, notion_request, query_database, get_prop  # noq
 
 ENV_PATH = os.path.join(NOTION_BUILD_DIR, ".env")
 
-PUBLISHING_STATUS_OPTIONS = ["Draft", "Ready to Publish", "Published", "Needs Update", "Archived"]
+PUBLISHING_STATUS_OPTIONS = ["Draft", "Ready to Publish", "Published", "Needs Update", "Archived", "Duplicate"]
 
 
 def log(msg):
@@ -177,8 +180,8 @@ def sync_publishing_status(env, dry_run=False):
         freshness = get_prop(article, "Freshness Status", "select")
         prev = get_prop(article, "Previous Publishing Status", "select")
 
-        if pub_status == "Archived":
-            stats["Archived (untouched)"] += 1
+        if pub_status in ("Archived", "Duplicate"):
+            stats[f"{pub_status} (untouched)"] += 1
             continue
 
         if pub_status == "Published":

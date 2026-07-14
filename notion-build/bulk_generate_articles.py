@@ -45,6 +45,7 @@ import reviewer_agent as ra  # noqa: E402
 import translation_quality_reviewer as tqr  # noqa: E402
 import sns_quality_reviewer as sqr  # noqa: E402
 from life_topics import classify_life_topics  # noqa: E402
+from duplicate_guard import check_before_generate, log_generated  # noqa: E402
 
 ENV_PATH = os.path.join(NOTION_BUILD_DIR, ".env")
 
@@ -143,6 +144,7 @@ def process_topic(env, index, total, item):
         "parent": {"database_id": env["ARTICLES_DB_ID"]}, "properties": article_props
     })
     log(f"  Article created: {article_page['id']} ({title[:40]}...)")
+    log_generated(topic, article_page["id"])
 
     # 3. Article Review
     a_provider, a_scores, a_overall, a_result, a_suggestions = ra.review_article(article_page)
@@ -247,10 +249,26 @@ def main():
     parser.add_argument("--limit", type=int, default=None, help="Only process the first N topics (for testing)")
     args = parser.parse_args()
 
-    topics = TOPICS[:args.limit] if args.limit else TOPICS
-    total = len(topics)
-
+    candidate_topics = TOPICS[:args.limit] if args.limit else TOPICS
     env = load_env(ENV_PATH)
+    token = env["NOTION_TOKEN"]
+
+    # Prevent, not just detect: filter out any topic that already exists in the
+    # pipeline (Research/Article/Translation/SNS) BEFORE generating anything for
+    # it. 1 Research Topic = 1 Article -- see duplicate_guard.py.
+    log("Checking existing pipeline state for each topic before generating anything...")
+    topics = []
+    already_exists = []
+    for item in candidate_topics:
+        existing = check_before_generate(token, env, item["topic"], expect_research=False)
+        if existing:
+            log(f"  Status: Already Exists (stage={existing['stage']}) -- SKIPPING: {item['topic']}")
+            already_exists.append({"topic": item["topic"], "stage": existing["stage"]})
+        else:
+            topics.append(item)
+    total = len(topics)
+    log(f"  {len(candidate_topics)} candidate topic(s), {len(already_exists)} already exist, {total} to generate.")
+
     results = []
     failures = []
 
@@ -265,6 +283,10 @@ def main():
 
     log("\n" + "=" * 70)
     log(f"DONE. {len(results)}/{total} articles fully generated, reviewed, and saved.")
+    if already_exists:
+        log(f"ALREADY EXISTS, skipped before generation ({len(already_exists)}):")
+        for e in already_exists:
+            log(f"  - {e['topic']} (stage={e['stage']})")
     if failures:
         log(f"FAILURES ({len(failures)}):")
         for f in failures:

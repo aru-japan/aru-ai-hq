@@ -85,6 +85,23 @@
 
 ---
 
+### 改訂提案（3件目）：§4 Editorial Policy への追加「1 Research Topic = 1 Article」
+
+| | |
+|---|---|
+| **提案日** | 2026-07-14 |
+| **提案理由** | Articles DBの重複記事調査（15グループ・記事30件が完全重複と判明、Archive済み）を受け、Reiが明示的に「1 Research Topic = 1 Article」を原則とすると指示。既存の§4「1記事＝1メッセージ」（1記事に複数テーマを詰め込まない、という記事内容のスコープに関する規定）とは別の軸——同一テーマに対して複数のArticleレコードを作らない、というデータガバナンスの規定であり、明文化されていなかった実態を条文化するもの。再発防止の実装（`duplicate_guard.py`）は既に完了・テスト済み |
+| **レベル判定** | Level B（運営改善：ワークフロー変更） |
+| **レビュー期間** | 72時間以上（起算日 2026-07-14） |
+| **発効予定** | 2026-07-17以降、編集長の承認を得た時点で該当バージョンに反映 |
+| **承認** | 未承認（Pending） |
+
+提案（§4 Editorial Policyへの追加、「1記事＝1メッセージ」の直後に挿入）：
+
+> 同一テーマ（Research.Topic）に対して、Articleは1件のみとする（**1 Research Topic = 1 Article**）。内容を更新する必要が生じた場合は、新しいArticleを作成せず、既存のArticleを更新する。生成前にResearch／Article／Translation／SNSの存在を確認し、既存の場合は新規生成を行わない仕組みを設ける（実装：`notion-build/automation/duplicate_guard.py`。詳細は[Automation Scripts](./Automation-Scripts.md)）。
+
+---
+
 ## 目次
 
 - [Revision History](#revision-history)

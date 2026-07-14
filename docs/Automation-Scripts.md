@@ -1,11 +1,11 @@
-<title>Automation Scripts v1.5</title>
+<title>Automation Scripts v1.6</title>
 
 # Automation Scripts
 ### ARu Studio — Roadmap Version 3 実装記録 ＋ Version 4準備
 
 | | |
 |---|---|
-| **Status** | Active — Notion自動化14スクリプト＋AI Gateway＋Article Freshness Monitor＋Coverage Analyzer＋Editorial Planner＋Publishing Center実装・実データ／実API（Claude）でテスト済み |
+| **Status** | Active — Notion自動化16スクリプト＋AI Gateway＋Article Freshness Monitor＋Coverage Analyzer＋Editorial Planner＋Publishing Center＋Duplicate Prevention実装・実データ／実API（Claude）でテスト済み |
 | **Date** | 2026-07-14 |
 | **位置づけ** | [AI Agent Workflow](./AI-Agent-Workflow.md)に定めた処理を、新規DB（AI Agents／Prompt Library／Automation）を追加せず、既存10DBに対するPythonスクリプトとして実装したもの |
 | **場所** | `notion-build/automation/` |
@@ -34,7 +34,9 @@
 | `coverage_analyzer.py` | Editor-in-Chief（企画・編集会議） | 生活トピック別の記事数・鮮度・Review待ちを集計し、AIが不足トピック・優先トピック・おすすめ新規テーマ（10件）を提案。Dashboard「📊 Coverage Analysis」＋専用Notionページに反映（詳細後述） |
 | `backfill_life_topics.py` | — | 既存記事にLife Topicsを一括付与する再実行可能なバックフィルスクリプト（Coverage Analyzerの前提データ作成用） |
 | `editorial_planner.py` | Editor-in-Chief（編集会議・アサイン） | Coverage Analyzerの集計データから、★1〜5の優先度付き編集プラン（Reason・タイトル案・想定Update Level／Category）を生成し、`--generate-research`でResearchレコードを自動作成。Dashboard「📝 Editorial Planner」＋専用Notionページに反映（詳細後述） |
-| `publishing_center.py` | Editor-in-Chief（公開管理） | Articles全件のPublishing Status（Draft／Ready to Publish／Published／Needs Update／Archived）を、Review Result・Translation Quality Result／Publish Approval・Freshness Status・必須項目の充足状況から同期。Published判定は必ず人間が行い、AIは自動公開しない。Dashboard「🚀 Ready to Publish」「📚 Published Articles」「🛠 Needs Update」に反映（詳細後述） |
+| `publishing_center.py` | Editor-in-Chief（公開管理） | Articles全件のPublishing Status（Draft／Ready to Publish／Published／Needs Update／Archived／Duplicate）を、Review Result・Translation Quality Result／Publish Approval・Freshness Status・必須項目の充足状況から同期。Published判定は必ず人間が行い、AIは自動公開しない。Dashboard「🚀 Ready to Publish」「📚 Published Articles」「🛠 Needs Update」に反映（詳細後述） |
+| `duplicate_guard.py` | Editor-in-Chief（生成前ゲート） | 生成開始**前**にResearch.Topic／Article／Translation／SNSの存在を順に確認し、既存なら生成せず「Already Exists」として記録する。「1 Research Topic = 1 Article」原則をコードで強制（詳細後述） |
+| `duplicate_prevention_report.py` | Editor-in-Chief（公開管理） | `duplicate_guard.py`のログから本日の生成件数・スキップ件数・Already Exists一覧を集計。Dashboard「🛡 Duplicate Prevention」＋専用Notionページに反映（詳細後述） |
 
 ## 実行方法
 
@@ -447,6 +449,59 @@ Draft 33件のうち大半はUpdate Level 2（法律・制度）でTranslation P
 - `ARu App URL`は自動生成できない（実投稿APIが存在しないため）。人間が手動入力する前提
 - Translationが0件の記事はReady to Publishに進めない設計だが、これは要件に明記された基準を字義通り実装した結果であり、意図的な挙動
 
+---
+
+## Articles DB正規化：重複記事の検出とアーカイブ（2026-07-14）
+
+**きっかけ**：Reiから「Articles DBに同じテーマの記事が複数存在しているようです」と指摘を受け、公開作業を一時停止して調査した。
+
+**原因**：タイトル文言の違いではなく（AIは毎回異なる表現でタイトルを生成するため、同一テーマでも見た目上は別記事に見える）、**同一テーマのResearch→Article→Translation→SNSフルパイプラインが複数回実行されていた**ことが根本原因。具体的には：
+
+- 2026-07-14の一括生成で、バックグラウンド処理を誤って2回起動し、13テーマが2回ずつ生成された
+- 2026-07-13の一括生成のTOPICSリストに「ゴミ分別」が重複して含まれていた
+- 2026-07-12の初期テストで作成された【テスト】記事が、本番記事と同じResearchに紐づいたまま残っていた
+
+**検出方法**：Article.Titleではなく、紐づくResearch.Topicでグループ化することで確実に検出（AIが生成するタイトル文言は毎回変わるため、Title同士の突合せでは検出漏れが起きる）。
+
+**結果**：15グループ・記事30件がすべて完全重複（Article・Translation・SNS×3まで含めてフルパイプラインが2回実行されていた）と判明。判定基準（① Article・Translation・SNS全件がPassでNeeds Revisionがないこと優先 → ② Review Overall Scoreが高い方 → ③ 同条件なら作成が早い方）で各グループ1件を残し、**15件をArchive**した（削除はしていない）。
+
+各アーカイブ記事には`Status=Archived`・`Archived Date`に加え、`Publishing Status=Duplicate`（新設の選択肢）・`Previous Publishing Status`・`Publishing Status Updated Date`を記録。53記事 → 実質38記事（Ready to Publish 11／Draft 27）に正規化された。
+
+---
+
+## Duplicate Prevention（Version 4 Phase 4、2026-07-14）
+
+**場所**：`notion-build/automation/duplicate_guard.py`（＋`duplicate_prevention_report.py`）
+
+**目的**：上記の重複を二度と起こさない。検知して後から直すのではなく、**生成が始まる前に止める**設計。ARuの原則：**「1 Research Topic = 1 Article」**。内容を更新する必要が生じた場合も、新しいArticleを作るのではなく既存Articleを更新する運用とする。
+
+**チェック手順（①〜④、生成前に実施）**：
+
+1. `Research.Topic`が完全一致するレコードが既に存在するか
+2. そのResearchから変換された、`Status`が`Archived`ではないArticleが存在するか
+3. そのArticleにTranslationが存在するか
+4. そのArticleにSNS Queueが存在するか
+
+いずれかが存在する場合、**新規生成を一切行わず**、到達していた最も深い段階（Research／Article／Translation／SNS）とともに「Already Exists」として記録する。
+
+**呼び出し元によってチェックの意味が変わる**：
+
+- `bulk_generate_articles.py`（Researchを自らその場で作成する経路）：Research.Topicが存在するだけで異常（2026-07-14の事故そのもの）とみなし、その時点でブロックする
+- `generate_article_pipeline.py article`（既存のConverted Researchを前提に動く経路）：Researchが存在するのは正常なので、そこでは止めず、非ArchivedのArticleが存在する場合にのみブロックする
+
+**`bulk_generate_articles.py`側の変更点（検知ではなく防止）**：従来は`process_topic()`内で生成してから問題が判明していたが、`main()`のループが始まる**前**に全TOPICSを一括チェックし、既存トピックをリストから除外してから処理を始めるよう変更した。
+
+**Dashboard連携**：Dashboard「📝 Editorial Planner」の直下に「🛡 Duplicate Prevention」セクションを追加。本日の生成件数・生成スキップ件数・重複検知件数・Already Exists一覧・重複なし✅を、専用Notionページ（Table Blockと同じ、毎回上書き生成方式）で表示。
+
+**既知の制約**：集計の元になるログ（`notion-build/automation/logs/duplicate_prevention.jsonl`）はローカルファイルであり、Notion・Gitのどちらとも同期しない（`.gitignore`済み）。「本日の」件数は、そのスクリプトを実行した端末上での活動のみを反映する。
+
+**テスト結果（実データ、2026-07-14）**：
+- 既存の完全重複記事（花火大会）に対して`generate_article_pipeline.py article`を実行 → AI Gateway呼び出し・Notionレコード作成を一切せず、段階=SNSで正しくスキップ
+- 現在の`bulk_generate_articles.py`のTOPICS（15件、いずれも生成済み）を事前チェック → 15件全件が正しく「既に存在」と判定され、生成対象から除外されることを確認（2026-07-14の事故が再現不可能になったことを実証）
+- 存在しない架空トピックでチェック → 正しく「生成可能」と判定
+
+**テスト中に発見・修正したバグ**：`publishing_center.py`は`Publishing Status`の新しい選択肢`Duplicate`を認識しておらず、`Archived`だけを「触らない」対象としていた。このままアーカイブ後に`publishing_center.py`を再実行すると、Duplicateへ移動した15件が評価ロジックに引っかかり、Draft／Ready to Publishへ**意図せず復元されてしまう**バグだった。`sync_publishing_status()`の判定と、`ensure_schema()`が書き込む選択肢一覧の両方に`Duplicate`を追加して修正し、実データで再実行して15件が正しく`Duplicate (untouched)`のまま維持されることを確認した。
+
 ## 未実施事項（要判断）
 
 - **スケジューリング**：cron／launchd等での定期実行はまだ設定していない。日次実行にするか、Rei自身が手動実行するかは別途判断が必要
@@ -455,4 +510,4 @@ Draft 33件のうち大半はUpdate Level 2（法律・制度）でTranslation P
 
 ---
 
-*ARu HQ / Decode Japan — Automation Scripts v1.5 — 2026-07-14*
+*ARu HQ / Decode Japan — Automation Scripts v1.6 — 2026-07-14*
