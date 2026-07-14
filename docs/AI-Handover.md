@@ -119,6 +119,7 @@ Research → Article → Article Review → Translation → Translation Review �
 
 ## ■ Remaining Tasks
 
+- **ARu Constitutionの改訂提案が承認待ち**（Pending Amendments、提案日2026-07-14、Level B、レビュー期間72時間→発効予定2026-07-17以降）。ARu公式9セクションテンプレートとArticle Freshness Monitorの実態を§4・§11へ反映する内容。**2026-07-17以降、編集長（Rei）の承認を得たら**、`docs/ARu-Constitution.md`の該当箇所を本文へ反映し、v2.0.0→v2.1.0へバージョンアップ、Revision Historyに記録し、Pending Amendments節から該当エントリを削除すること
 - Article.Status自体をAI Draft→Publishedへ自動昇格させるスクリプトが存在しない（Translation側のゲートのみ実証済み）
 - 定期実行（cron/launchd）は未設定。すべて手動実行
 - Critical Gap等の外部通知（Slack/メール）は未実装

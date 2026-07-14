@@ -27,6 +27,33 @@
 
 ---
 
+## Pending Amendments（改訂提案中）
+
+[§20 Governance](#20-governance)の改訂プロセスに従い、承認前の改訂案をここに記載する。**Revision Historyへの記録・バージョン番号の更新は、レビュー期間満了後、編集長の正式な承認を経て初めて行う。** それまで本文（§4・§11）は現行のv2.0.0のまま変更しない。
+
+| | |
+|---|---|
+| **提案日** | 2026-07-14 |
+| **提案理由** | ARu公式記事テンプレート（9セクション構成）の導入、およびArticle Freshness Monitor（Update Levelごとに異なるレビュー間隔での定期再確認＋外部シグナル連動）の実装により、運営の実態が現行の§4・§11の記述と乖離したため |
+| **レベル判定** | Level B（運営改善：ワークフロー変更） |
+| **レビュー期間** | 72時間以上（起算日 2026-07-14） |
+| **発効予定** | 2026-07-17以降、編集長の承認を得た時点でv2.1.0として本文に反映 |
+| **承認** | 未承認（Pending） |
+
+### 提案内容①：§4 Editorial Policy への追加
+
+> 記事本文は「ARu公式テンプレート」（9セクション構成：Question／Basic Answer／More Details／Why Does Japan Do This?／Practical Steps and Cautions／Latest Information／ARu Tip／Related Questions／Mentor Support）に統一する。Basic Answerは、それだけ読んでも要点が分かる無料部分として単独で読める内容にする。Latest Informationには、最新情報があれば明記し、なければ最終確認日（Last Verified Date）を明記する。
+
+### 提案内容②：§11 Update Rules の第4項目を置き換え
+
+現行（v2.0.0）：
+> Update Level 2・3のコンテンツは、変更が検知されなくても**定期的な再確認**（目安90日ごと）を行う。情報が「古いまま正しそうに見える」状態を放置しない。
+
+提案（v2.1.0案）：
+> すべてのUpdate Levelのコンテンツは、変更が検知されなくても**定期的な再確認**を行う。再確認の間隔はUpdate Levelごとに異なる：Level 1は90日、Level 2は30日、Level 3は14〜30日（運用上の設定値。Article Freshness Monitorのコードで管理し、変更する場合もこの憲章の改訂は不要）。間隔を超過した記事は Freshness Status＝Needs Update として Dashboard最上部（🔴 Update Needed）に表示し、情報が「古いまま正しそうに見える」状態を放置しない。加えて、Law Update・Source Monitor・Event Calendarで関連する変化が検知された記事は、間隔を待たずに再確認対象とする（実装：`notion-build/automation/article_freshness_monitor.py`。詳細は[Automation Scripts](./Automation-Scripts.md)）。
+
+---
+
 ## 目次
 
 - [Revision History](#revision-history)
