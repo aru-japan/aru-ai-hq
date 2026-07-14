@@ -1,12 +1,12 @@
-<title>Automation Scripts v1.0</title>
+<title>Automation Scripts v1.2</title>
 
 # Automation Scripts
-### ARu Studio — Roadmap Version 3 実装記録
+### ARu Studio — Roadmap Version 3 実装記録 ＋ Version 4準備
 
 | | |
 |---|---|
-| **Status** | Active — Notion自動化9スクリプト＋AI Gateway実装・実データ／実API（Claude）でテスト済み |
-| **Date** | 2026-07-12 |
+| **Status** | Active — Notion自動化10スクリプト＋AI Gateway＋Article Freshness Monitor実装・実データ／実API（Claude）でテスト済み |
+| **Date** | 2026-07-14 |
 | **位置づけ** | [AI Agent Workflow](./AI-Agent-Workflow.md)に定めた処理を、新規DB（AI Agents／Prompt Library／Automation）を追加せず、既存10DBに対するPythonスクリプトとして実装したもの |
 | **場所** | `notion-build/automation/` |
 
@@ -30,6 +30,7 @@
 | `daily_briefing.py` | Editor-in-Chief | Dashboard（編集長ホーム画面）の9セクション相当をCLIに表示する、Linked View未設定時点でも使えるテキスト版ダッシュボード |
 | `research_assistant.py` | Researcher | テーマを指定すると、Source Library／Law Update／既存Research／既存記事との重複をNotionから実データで検索し、Markdownのリサーチ資料を出力（Pilot Operation Day 1で使用） |
 | `article_assistant.py` | Writer | テーマを指定すると、既存記事・Editorial Calendarとの重複確認、推奨Category/Update Level/Audienceを出力（Pilot Operation Day 1で使用） |
+| `article_freshness_monitor.py` | Editor-in-Chief（Freshness Gate） | Update Levelごとのレビュー間隔超過、およびLaw Update/Source Monitor/Event Calendarの変化検知を基に、記事のFreshness Statusを日次更新しDashboard最上部の「🔴 Update Needed」に反映（Version 4準備、詳細後述） |
 
 ## 実行方法
 
@@ -243,6 +244,49 @@ Riskだけ他の観点より厳しい閾値にしているのは、読みやす�
 - Translation Review：15/15 Pass（Update Level 2の4記事＝運転免許・ふるさと納税・年末調整・転職退職はすべて正しくPublish Approval=Pendingを維持。Update Level 1の11記事は自動でNot Requiredへ）
 - SNS Review：44/45 Pass（1件Needs Revision：図書館記事のInstagram投稿、Accuracy Scoreが閾値未満のためStatus=Draftのまま保持）
 
+---
+
+## Article Freshness Monitor（Version 4準備、2026-07-14）
+
+**場所**：`notion-build/automation/article_freshness_monitor.py`
+
+**目的**：記事の情報が古くなっていないかを日次で自動チェックし、レビューが必要な記事をDashboard最上部に表示する。新規データベースは追加せず、既存Articles DBへのプロパティ追加とDashboardページへのセクション追加のみで実装した。
+
+**Articlesへ追加したプロパティ**：`Freshness Status`（Select：Fresh／Needs Update）、`Days Since Verification`（Number）、`Freshness Urgency Score`（Number：レビュー期限に対する経過日数の割合(%)。100超で期限超過）、`Freshness Checked Date`（Date：直近チェック日）、`Freshness Note`（Rich Text：なぜ再レビューが必要かの短いメモ）
+
+**Update LevelごとのReview Interval**：
+
+| Update Level | 間隔 | 備考 |
+|---|---|---|
+| 1 | 90日 | イベント・文化・旅行情報・生活情報等 |
+| 2 | 30日 | 法律・制度 |
+| 3 | 14〜30日（既定30日） | `LEVEL_3_INTERVAL_DAYS`定数を書き換えるだけで変更可能（コード内で14〜30日にクランプ） |
+
+**基準日の決め方（優先順）**：`Last Verified Date` → `Review Date` → `Published Date` → Notionページの作成日時（`created_time`）。いずれも無い記事は対象外としてスキップ（現状は発生しない設計）。
+
+**外部シグナル連携（時間経過を待たずに強制フラグ）**：
+
+| 情報源 | 検知条件 | Articlesへの接続経路 |
+|---|---|---|
+| Law Update | `Update Status`が`Confirmed`または`Reflecting to Article` | `Affected Articles`（既存Relation、直結） |
+| Source Monitor | `Change Detected=true` | `Triggered Research` → Research.`Converted Article` → Articles（既存Relationを2ホップで辿る、新規Relationは追加していない） |
+| Event Calendar | `Status=Cancelled` | `Related Article`（既存Relation、直結） |
+
+該当した記事は、時間経過に関わらず`Freshness Status=Needs Update`・`Freshness Urgency Score=150`（時間ベースの最大値100を上回り、常に最優先で表示される）に設定され、`Freshness Note`にはAI Gateway経由で生成した「なぜ再レビューすべきか」の日本語1〜2文が保存される。
+
+**Dashboard連携**：Dashboardページの最上部（① Publish Approval Pendingより上）に「🔴 Update Needed」の見出し＋説明Calloutを追加済み（Linked View自体は他セクション同様、手動設定が必要。手順は[View & Template Guide](./View-Template-Guide.md)）。`daily_briefing.py`にも同内容をセクション0として追加し、Freshness Urgency Score降順で表示する。
+
+**実行方法**：
+
+```
+cd notion-build/automation
+python3 article_freshness_monitor.py
+```
+
+初回実行時に`ensure_schema()`が上記5プロパティを自動作成する（既存の場合は上書きされるだけで害はない、何度実行しても安全＝冪等）。
+
+**テスト結果（実データ・実API、2026-07-14）**：既存Articles 53件全件を実行。基準日なしでスキップされた記事は0件。Fresh 51件、Needs Update（時間経過による期限超過）0件（すべて直近2日以内に作成された記事のため妥当）、Needs Update（外部シグナルによる強制フラグ）2件——Law Update側の入管法改正シグナル1件、Source Monitor側の変化検知シグナル1件がそれぞれ正しく紐づいたArticleを検知し、AIが生成した再レビュー推奨コメントも内容に即した具体的な文面になっていることを確認した。
+
 ## 未実施事項（要判断）
 
 - **スケジューリング**：cron／launchd等での定期実行はまだ設定していない。日次実行にするか、Rei自身が手動実行するかは別途判断が必要
@@ -251,4 +295,4 @@ Riskだけ他の観点より厳しい閾値にしているのは、読みやす�
 
 ---
 
-*ARu HQ / Decode Japan — Automation Scripts v1.0 — 2026-07-12*
+*ARu HQ / Decode Japan — Automation Scripts v1.2 — 2026-07-14*

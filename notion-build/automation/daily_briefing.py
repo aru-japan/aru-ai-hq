@@ -2,8 +2,9 @@
 linked views are manually embedded in Notion (or as a terminal-based alternative for
 Rei / Claude Code).
 
-Section order matches the Dashboard page exactly: (1)-(4) things awaiting a human
-decision, (5)-(6) today's plan, (7)-(9) external signals/monitoring.
+Section order matches the Dashboard page exactly: (0) articles flagged by the Article
+Freshness Monitor, (1)-(4) things awaiting a human decision, (5)-(6) today's plan,
+(7)-(9) external signals/monitoring.
 """
 from _common import get_env, query_database, get_prop
 
@@ -24,6 +25,21 @@ def main():
     event_db = env["EVENT_CALENDAR_DB_ID"]
     law_db = env["LAW_UPDATE_DB_ID"]
     sns_db = env["SNS_QUEUE_DB_ID"]
+
+    # 0. Update Needed (Article Freshness Monitor)
+    section("🔴 Update Needed")
+    stale = query_database(token, articles_db, filter_obj={
+        "property": "Freshness Status", "select": {"equals": "Needs Update"}
+    }, sorts=[{"property": "Freshness Urgency Score", "direction": "descending"}])
+    if not stale:
+        print("  (none)")
+    for a in stale:
+        days = get_prop(a, "Days Since Verification", "number")
+        urgency = get_prop(a, "Freshness Urgency Score", "number")
+        note = get_prop(a, "Freshness Note", "rich_text")
+        print(f"  - [Urgency {urgency}] {get_prop(a, 'Title', 'title')} ({days}日経過)")
+        if note:
+            print(f"      note: {note}")
 
     # 1. Publish Approval Pending
     section("① Publish Approval Pending")

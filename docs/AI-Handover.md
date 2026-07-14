@@ -76,6 +76,7 @@ Research → Article → Article Review → Translation → Translation Review �
 - **B3.10** `sns_quality_reviewer.py`：SNS 5観点レビュー
 - その他：`daily_briefing.py`（CLI版Dashboard）、`check_translation_gaps.py`、`sync_source_monitor_to_research.py`、`escalate_law_significance.py`、`sync_editorial_calendar_status.py`、`enforce_publish_gate.py`、`research_assistant.py`、`article_assistant.py`
 - **一括生成** `notion-build/bulk_generate_articles.py`（旧`bulk_generate_20_articles.py`）：`TOPICS`リストを差し替えるだけで、Research→Article（9セクションテンプレート）→Review→Translation→Review→SNS×3→Reviewのフルパイプラインを日々再利用できる汎用スクリプト
+- **Version 4準備** `article_freshness_monitor.py`：Update Levelごとのレビュー間隔（L1=90日／L2=30日／L3=14〜30日）を超過した記事、およびLaw Update/Source Monitor/Event Calendarで変化が検知された記事を`Freshness Status=Needs Update`にし、Dashboard最上部の「🔴 Update Needed」へ反映（新規DBなし、既存Articles DBへのプロパティ追加のみ）
 
 詳細と実行方法は`docs/Automation-Scripts.md`。
 
@@ -113,6 +114,8 @@ Research → Article → Article Review → Translation → Translation Review �
 - Article／Translation／SNSの3段階品質レビュー（すべて実データ・実APIでテスト済み）
 - Publish Gate（Constitution §9/§13をコードで強制）
 - Update Level 1の自動承認経路（Publish Approval→Not Required）を実データで実証
+- 記事本文のARu公式テンプレート統一（9セクション）、`Verification Status`／`Last Verified Date`の記録（2026-07-14）
+- Article Freshness Monitor（Version 4準備）：Update Levelごとのレビュー間隔管理＋Law Update/Source Monitor/Event Calendarとの連携による強制再レビューフラグ、Dashboard最上部「🔴 Update Needed」（2026-07-14）
 
 ## ■ Remaining Tasks
 
@@ -158,4 +161,4 @@ Research → Article → Article Review → Translation → Translation Review �
 
 ---
 
-*ARu HQ / Decode Japan — AI Handover Document v1.0 — 2026-07-13*
+*ARu HQ / Decode Japan — AI Handover Document v1.1 — 2026-07-14*

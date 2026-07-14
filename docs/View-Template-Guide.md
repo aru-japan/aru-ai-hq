@@ -169,7 +169,19 @@
 
 ---
 
-## 10. Dashboard：Linked View埋め込み手順（v2、編集長ホーム画面）
+## 10. Dashboard：🔴 Update Needed（v3、Article Freshness Monitor連動、最上部に追加）
+
+Version 4準備として、Article Freshness Monitor（`notion-build/automation/article_freshness_monitor.py`）を追加した。Dashboardの一番上（① Publish Approval Pendingより上）に見出し＋Calloutを自動追加済み。Linked View自体は他セクション同様に手動設定が必要。
+
+| View | 表示形式 | Filter | Sort / 表示プロパティ |
+|---|---|---|---|
+| **🔴 Update Needed** | Table | Freshness Status = `Needs Update` | Sort: Freshness Urgency Score（降順）／ 表示: Title, Update Level, Days Since Verification, Freshness Urgency Score, Freshness Note, Freshness Checked Date |
+
+**Freshness Urgency Scoreの意味**：レビュー期限（Update Level 1=90日／Level 2=30日／Level 3=14〜30日、`article_freshness_monitor.py`の`LEVEL_3_INTERVAL_DAYS`で設定変更可）に対する経過日数の割合（%）。100を超えると期限超過。Law Update／Source Monitor／Event Calendarで関連する変化が検知された記事は、時間経過に関わらず強制的に150として最上位に表示される。
+
+---
+
+## 11. Dashboard：Linked View埋め込み手順（v2、編集長ホーム画面）
 
 DashboardページはAPIで雛形（見出し9つ＋説明のCallout）まで自動生成済み。各見出しの下に「Linked view of database」を埋め込むのはNotion UI上での手動作業になる。
 
@@ -181,4 +193,4 @@ DashboardページはAPIで雛形（見出し9つ＋説明のCallout）まで自
 
 ---
 
-*ARu HQ / Decode Japan — View & Template Setup Guide v1 — 2026-07-12*
+*ARu HQ / Decode Japan — View & Template Setup Guide v1.1 — 2026-07-14*

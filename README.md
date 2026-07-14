@@ -24,7 +24,7 @@ ARu HQ（AI編集部）の運営思想・設計・実装を1つにまとめた�
 | [AI Agent Architecture](docs/AI-Agent-Architecture.md) | AI Editorial Brain（6 Agent）の構造・利用DB・権限境界 |
 | [AI Agent Workflow](docs/AI-Agent-Workflow.md) | 6 Agent間の処理手順・エスカレーション条件 |
 | [AI Editorial Brain](docs/AI-Editorial-Brain.md) | Version 2.0の総括構想。AI編集部の全体像とガバナンス境界 |
-| [Automation Scripts](docs/Automation-Scripts.md) | Version 3で実装した自動化スクリプト（Notion自動化＋AI Gateway＋Article/Translation/SNSの3段レビュー）の一覧と実行方法 |
+| [Automation Scripts](docs/Automation-Scripts.md) | Version 3で実装した自動化スクリプト（Notion自動化＋AI Gateway＋Article/Translation/SNSの3段レビュー＋Version 4準備のArticle Freshness Monitor）の一覧と実行方法 |
 | [Pilot Operation Guide](docs/Pilot-Operation-Guide.md) | Version 3.5：AI編集部を7日間実運用するための手順 |
 | [Operation Checklist](docs/Operation-Checklist.md) | 7日間分の日次チェックリスト＋Operation Log記入欄 |
 
@@ -38,4 +38,4 @@ ARu HQ（AI編集部）の運営思想・設計・実装を1つにまとめた�
 
 ## 現在地
 
-Roadmap Version 1・2・3は完了（一部Deferred）。Version 3.5（Pilot Operation：7日間実運用）Day 2まで完了。Update Level 1の自動公開経路（Publish Approval→Not Required）を実証済み。記事本文はARu公式テンプレート（9セクション構成）に統一し、`bulk_generate_articles.py`で日々の一括生成に対応（2026-07-14）。Version 4（Enterprise）はPilot完了後、別途方針確認のうえ着手する。詳細は [Roadmap](docs/Roadmap.md) を参照。
+Roadmap Version 1・2・3は完了（一部Deferred）。Version 3.5（Pilot Operation：7日間実運用）Day 2まで完了。Update Level 1の自動公開経路（Publish Approval→Not Required）を実証済み。記事本文はARu公式テンプレート（9セクション構成）に統一し、`bulk_generate_articles.py`で日々の一括生成に対応（2026-07-14）。Version 4準備として、Article Freshness Monitor（既存記事の鮮度自動チェック＋Dashboard「🔴 Update Needed」）を先行実装（2026-07-14、新規DBなし）。Version 4（Enterprise）本体はPilot完了後、別途方針確認のうえ着手する。詳細は [Roadmap](docs/Roadmap.md) を参照。

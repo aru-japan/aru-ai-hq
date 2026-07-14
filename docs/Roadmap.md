@@ -119,6 +119,10 @@ Version 2・3で新規に必要となる6DB（Language Master／Region Master／
 
 **前提条件：Version 3.5 Pilot Operation（7日間の実運用）が完了していること。** 設計上動くはずのものが、実際の運用でも動くと確認できるまで、企業・自治体向けへは拡張しない。
 
+**Version 4準備作業（Pilot Operation期間中に先行実施、Version 4着手そのものではない）**：
+
+- **Article Freshness Monitor**（`notion-build/automation/article_freshness_monitor.py`、2026-07-14）：既存Articles DBに`Freshness Status`／`Days Since Verification`／`Freshness Urgency Score`／`Freshness Checked Date`／`Freshness Note`を追加し、Update Levelごとの review interval（Level 1=90日／Level 2=30日／Level 3=14〜30日で設定可能）を超過した記事を自動検知。Law Update／Source Monitor／Event Calendarで関連する変化が検知された記事は、時間経過に関わらずAIの推奨コメント付きで強制的に再レビュー対象へ。Dashboardの最上部に「🔴 Update Needed」セクションとして追加済み。新規DBは追加していない（既存Articles DBの拡張のみ）。詳細は[Automation Scripts](./Automation-Scripts.md)を参照。エンタープライズ向け機能（企業向けダッシュボード等）そのものではなく、コンテンツ鮮度という運用の土台を先に固めるための実装。
+
 **目的**：個人利用者向けサービスから、企業・自治体・日本語学校向けプラットフォームへ拡張する。
 
 - Usage Scope（Enterprise／Municipal Partnership）を実運用で使い始める。Universal Propertiesの段階ですでに全Content Core DBに用意済み
