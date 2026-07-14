@@ -27,6 +27,7 @@ ARu HQ（AI編集部）の運営思想・設計・実装を1つにまとめた�
 | [Automation Scripts](docs/Automation-Scripts.md) | Version 3で実装した自動化スクリプト（Notion自動化＋AI Gateway＋Article/Translation/SNSの3段レビュー＋Version 4準備のArticle Freshness Monitor）の一覧と実行方法 |
 | [Pilot Operation Guide](docs/Pilot-Operation-Guide.md) | Version 3.5：AI編集部を7日間実運用するための手順 |
 | [Operation Checklist](docs/Operation-Checklist.md) | 7日間分の日次チェックリスト＋Operation Log記入欄 |
+| [Version 4 Status Report](docs/Version4-Status.md) | Version 4準備状況のスナップショット（実装機能／記事数等のコンテンツ量／完成率／課題／次にやること） |
 
 ## 実装
 
