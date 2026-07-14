@@ -6,7 +6,7 @@
 |---|---|
 | **Date** | 2026-07-14 |
 | **対象** | Version 4（Enterprise）準備状況のスナップショット |
-| **最新Commit** | `cf5f4bb` |
+| **最新Commit** | `0eb1fda` |
 | **位置づけ** | [Roadmap](./Roadmap.md)・[AI-Handover](./AI-Handover.md)・[README](../README.md)との整合性を確認済み |
 
 > このレポートは特定時点のスナップショット。「本日」は2026-07-14を指す。数値はすべてNotion実データへの実クエリで取得したもので、推測値ではない。
