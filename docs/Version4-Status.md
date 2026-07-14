@@ -6,7 +6,7 @@
 |---|---|
 | **Date** | 2026-07-14 |
 | **対象** | Version 4（Enterprise）準備状況のスナップショット |
-| **最新Commit** | `c661ed3` |
+| **最新Commit** | 本レポート更新時点の`git log`を参照（Coverage Analyzer実装分を追記） |
 | **位置づけ** | [Roadmap](./Roadmap.md)・[AI-Handover](./AI-Handover.md)・[README](../README.md)との整合性を確認済み |
 
 > このレポートは特定時点のスナップショット。「本日」は2026-07-14を指す。数値はすべてNotion実データへの実クエリで取得したもので、推測値ではない。
@@ -30,6 +30,15 @@
 
 53記事全件に対して実行し、Fresh 51件／Needs Update（外部シグナル起因）2件を正しく検知（詳細は[Automation Scripts](./Automation-Scripts.md)）。
 
+### ④ Coverage Analyzer（Version 4準備）
+`coverage_analyzer.py`（＋`life_topics.py`／`backfill_life_topics.py`）を新規実装。既存の`Category`（Update Level判定用、変更していない）とは別に、外国籍の方の生活ニーズに基づく**Life Topics**（22トピック、Multi-select）をArticlesに新設し、既存53記事全件をAIで分類した。
+
+- **①カテゴリ分析**：Life Topicごとに記事数／直近更新日／Freshness状況／Update Level構成／Review待ち件数を集計（既存Category別の参考表も併記）
+- **②不足分析**：件数だけでなく「生活への影響度・緊急性」の視点でAIが不足トピック・優先トピックを判定し、おすすめ新規記事テーマを10件生成
+- Dashboard最上部（🔴 Update Neededの直下）に「📊 Coverage Analysis」を追加。詳細は専用Notionページ（Table Blockとして毎回上書き生成、Linked View手動設定は不要）
+
+**実行結果（実データ・実API、2026-07-14）**：`介護`／`妊娠・出産`／`高齢者支援`／`障がい者支援`が0件、`教育`／`ニュース・トレンド`が1件のみと判明。AIは医療・健康／妊娠・出産／介護／障がい者支援を優先トピックとして提案し、質問形式の新規テーマ案10件を生成した（詳細は[Automation Scripts](./Automation-Scripts.md)）。
+
 ---
 
 ## 2. 現在のコンテンツ量（Notion実データ、2026-07-14時点）
@@ -43,6 +52,23 @@
 
 **注**：Articles(53)×3プラットフォーム=159に対しSNSは160件、Translation(54)がArticles(53)より1件多い。これは今回の一括生成以前に存在していた個別テストレコード（例：「【テスト】在留カードの更新手続きガイド」関連）による差分で、パイプライン自体の不整合ではない。念のため要確認（下記「現在の課題」参照）。
 
+### Life Topic別カバレッジ（最も手薄な10トピック、Coverage Analyzer実データ）
+
+| Life Topic | 記事数 |
+|---|---|
+| 介護 | 0 |
+| 妊娠・出産 | 0 |
+| 高齢者支援 | 0 |
+| 障がい者支援 | 0 |
+| 教育 | 1 |
+| ニュース・トレンド | 1 |
+| 医療・健康 | 2 |
+| 子育て | 2 |
+| 防災・緊急対応 | 2 |
+| 年金・社会保険 | 3 |
+
+全22トピックの完全な内訳は[Coverage Analysis Notionページ](https://www.notion.so/39d157f0f15d8151ae56dcb0e25ac853)（`COVERAGE_ANALYSIS_PAGE_ID`、実行のたびに上書き更新される）を参照。
+
 ---
 
 ## 3. Version 4 完成率
@@ -52,7 +78,7 @@ Version 4本体は**前提条件（Pilot Operation 7日間の実運用完了）�
 | 層 | 内容 | 進捗 |
 |---|---|---|
 | **前提条件** | Version 3.5 Pilot Operation（7日間実運用） | **2/7日（約29%）** |
-| **Version 4準備作業**（技術的土台） | Article Freshness Monitor | **1/1件 実施済み（100%）**（現時点でRoadmapに明記された準備作業はこれのみ） |
+| **Version 4準備作業**（技術的土台） | Article Freshness Monitor、Coverage Analyzer | **2/2件 実施済み（100%）**（現時点でRoadmapに明記された準備作業はこの2件） |
 | **Version 4本体**（Roadmap記載5項目：Usage Scope実運用／自治体・観光協会・企業とのデータ連携／JNTO・Visit Japan連携／企業向けダッシュボード／Mentorネットワーク本格拡大） | いずれも対外的な契約・意思決定を伴う | **0/5件（0%）** |
 
 **総合評価**：技術的な土台固め（Freshness Monitor）は計画通り先行実装できたが、Version 4本体は実装だけでは進められない項目が大半を占める。次のゲートはPilot Operation Day 3〜7の完走と、その後の対外的な方針確認。**全体としては「本体着手前」であり、大まかな目安としては一桁%〜10%程度**（前提条件の進捗と、技術準備1件の完了を反映した粗い目安であり、対外交渉が絡む項目のため精緻な%算出はできない）。
@@ -70,6 +96,8 @@ Version 4本体は**前提条件（Pilot Operation 7日間の実運用完了）�
 7. **SNS実投稿は未実装**：Draft生成・レビューまでで、実際のプラットフォームへの投稿は手動または未着手
 8. **外部通知の仕組みがない**：Critical Gap等の重要検知をSlack/メール等へ通知する機能は未実装
 9. **Deferred中の6DB**（Language Master／Region Master／Mentor／AI Agents／Prompt Library／Automation）は引き続き未着手（方針通り、削除ではなく保留）
+10. **コンテンツの偏りが明確に**：Coverage Analyzerにより、`介護`／`妊娠・出産`／`高齢者支援`／`障がい者支援`が0件、`教育`が1件のみと判明。現状53記事の大半が「文化・マナー」「行政手続き・相談窓口」に偏っており、外国籍の方の生活に不可欠な医療・福祉系トピックが手薄
+11. **ARu Constitutionの改訂提案が承認待ち**：Pending Amendments（Level B、提案日2026-07-14、発効予定2026-07-17以降）。ARu公式テンプレートとArticle Freshness Monitorの実態を§4・§11へ反映する内容で、編集長の承認待ち
 
 ---
 
@@ -80,6 +108,7 @@ Version 4本体は**前提条件（Pilot Operation 7日間の実運用完了）�
 3. **滞留中のレビュー対応**：Needs Revision/Fail状態のSNS 8件・Article 1件・Translation 1件を人間が確認し、Publish可否を判断
 4. **外部シグナル起因の要更新記事2件を実際に再レビュー**し、Freshness Monitor→人間レビューのワークフローが実運用でも機能することを確認
 5. **未レビュー（None）の2件を調査**し、過去のテストレコードかどうかを特定・整理
+6. **Coverage Analyzerが提案した10テーマから2〜3件を選び、実際に記事化**する（特に`医療・健康`／`妊娠・出産`など優先トピック）。既存の`bulk_generate_articles.py`のTOPICSに追加すれば、9セクションテンプレート・3段レビュー・Life Topics自動付与がそのまま適用される
 
 ## 6. 今週やるべきこと
 
@@ -88,6 +117,8 @@ Version 4本体は**前提条件（Pilot Operation 7日間の実運用完了）�
 3. **Article Status自動昇格スクリプトの設計検討**：Publish Gate（`enforce_publish_gate.py`）との整合性を保ちながら、AI Draft→Published経路を設計
 4. **Dashboard Linked Viewの手動設定**：「🔴 Update Needed」を含む全セクションが未設定であれば[Dashboard Setup Guide](./Dashboard-Setup-Guide.md)に沿って設定完了させる
 5. **Version 4本体着手に向けた優先順位の方針確認**：自治体連携／JNTO連携／企業向けダッシュボード／Mentorネットワーク拡大のうち、どれから対外的な意思決定を進めるかをReiと確認
+6. **医療・福祉系トピックの記事化計画**：Coverage Analyzerが検知した0件トピック（介護／妊娠・出産／高齢者支援／障がい者支援）について、少なくとも各1本ずつ着手する計画を立てる。Update Level判定（現行Categoryでは「生活情報」等に該当し原則Level 1だが、内容次第では専門家レビューが望ましい場合もあるため、着手時に個別判断する）
+7. **ARu Constitutionの改訂承認**：2026-07-17以降、Pending Amendments（§4・§11）をRei自身が確認し、承認する場合はv2.1.0へ反映
 
 ---
 
@@ -97,11 +128,12 @@ Version 4本体は**前提条件（Pilot Operation 7日間の実運用完了）�
 
 | ドキュメント | 確認内容 | 結果 |
 |---|---|---|
-| [README.md](../README.md) | 「現在地」節がARu公式テンプレート統一・Freshness Monitor実装（いずれも2026-07-14）を反映しているか | ✅ 一致（本レポート作成前の作業で既に更新済み） |
-| [Roadmap.md](./Roadmap.md) | Version 4節に「Version 4準備作業」としてArticle Freshness Monitorが記載されているか、前提条件（Pilot Operation完了）の位置づけが変わっていないか | ✅ 一致。前提条件は変更なし、準備作業として正しく記載済み |
-| [AI-Handover.md](./AI-Handover.md) | Completed Features／Current Automationに本日の実装が反映されているか、Latest Commitが最新か | ⚠️ **Latest Commitが`5e82259`のまま古くなっていたため、本レポート作成時に`c661ed3`へ修正した。** それ以外（Completed Features、Current Automation一覧）は一致 |
+| [README.md](../README.md) | 「現在地」節がARu公式テンプレート統一・Freshness Monitor・Coverage Analyzer実装（いずれも2026-07-14）を反映しているか | ✅ 一致（本レポートと同時に更新） |
+| [Roadmap.md](./Roadmap.md) | Version 4節に「Version 4準備作業」としてArticle Freshness Monitor・Coverage Analyzerが記載されているか、前提条件（Pilot Operation完了）の位置づけが変わっていないか | ✅ 一致。前提条件は変更なし、準備作業として正しく記載済み |
+| [AI-Handover.md](./AI-Handover.md) | Completed Features／Current Automationに本日の実装が反映されているか、Latest Commitが最新か | ✅ Completed Features／Current Automationとも一致（本レポートと同時に更新）。Latest Commitは前回のレポート作成時（`5e82259`→`c661ed3`）に一度修正済みで、以降の修正は都度反映している |
+| [ARu-Constitution.md](./ARu-Constitution.md) | 本日の実装（9セクションテンプレート、Freshness Monitorのレビュー間隔）が§4・§11の記述と一致しているか | ⚠️ **不一致を検出し、Level B Pending Amendmentとして提案済み**（2026-07-14提案、発効予定2026-07-17以降）。編集長の承認を得るまで本文（v2.0.0）は変更しない方針 |
 
-**整合性上の結論**：3文書とも本日の実装内容と矛盾しない。唯一のズレ（AI-HandoverのLatest Commit）は本レポート作成と同時に修正済み。
+**整合性上の結論**：README／Roadmap／AI-Handoverの3文書は本日の実装内容と矛盾しない。ARu Constitutionのみ、本日の実装によって記述が実態と乖離したため、正規の改訂プロセス（§20 Governance）に沿ってPending Amendmentとして提案し、承認待ちの状態。
 
 ---
 

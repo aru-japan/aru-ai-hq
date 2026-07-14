@@ -23,6 +23,7 @@ sys.path.insert(0, os.path.join(REPO_ROOT, "scripts"))
 
 from notion_api import load_env, notion_request, query_database, get_prop  # noqa: E402
 import ai_gateway  # noqa: E402
+from life_topics import classify_life_topics  # noqa: E402
 
 ENV_PATH = os.path.join(NOTION_BUILD_DIR, ".env")
 
@@ -166,6 +167,9 @@ def run_article(env, keyword, category):
     print(f"  Title: {title}")
     print(f"  Body ({len(body)} chars): {body[:120]}...")
 
+    life_topics = classify_life_topics(title, body)
+    print(f"  Life Topics: {life_topics}")
+
     article_props = {
         "Title": {"title": [{"text": {"content": title}}]},
         "Body": {"rich_text": rich_text_chunks(body)},
@@ -184,6 +188,8 @@ def run_article(env, keyword, category):
         "Verification Status": {"select": {"name": "Verified"}},
         "Last Verified Date": {"date": {"start": verified_date}},
     }
+    if life_topics:
+        article_props["Life Topics"] = {"multi_select": [{"name": t} for t in life_topics]}
     article_page = notion_request(token, "POST", "/pages", {
         "parent": {"database_id": articles_db}, "properties": article_props
     })

@@ -1,11 +1,11 @@
-<title>Automation Scripts v1.2</title>
+<title>Automation Scripts v1.3</title>
 
 # Automation Scripts
 ### ARu Studio — Roadmap Version 3 実装記録 ＋ Version 4準備
 
 | | |
 |---|---|
-| **Status** | Active — Notion自動化10スクリプト＋AI Gateway＋Article Freshness Monitor実装・実データ／実API（Claude）でテスト済み |
+| **Status** | Active — Notion自動化12スクリプト＋AI Gateway＋Article Freshness Monitor＋Coverage Analyzer実装・実データ／実API（Claude）でテスト済み |
 | **Date** | 2026-07-14 |
 | **位置づけ** | [AI Agent Workflow](./AI-Agent-Workflow.md)に定めた処理を、新規DB（AI Agents／Prompt Library／Automation）を追加せず、既存10DBに対するPythonスクリプトとして実装したもの |
 | **場所** | `notion-build/automation/` |
@@ -31,6 +31,8 @@
 | `research_assistant.py` | Researcher | テーマを指定すると、Source Library／Law Update／既存Research／既存記事との重複をNotionから実データで検索し、Markdownのリサーチ資料を出力（Pilot Operation Day 1で使用） |
 | `article_assistant.py` | Writer | テーマを指定すると、既存記事・Editorial Calendarとの重複確認、推奨Category/Update Level/Audienceを出力（Pilot Operation Day 1で使用） |
 | `article_freshness_monitor.py` | Editor-in-Chief（Freshness Gate） | Update Levelごとのレビュー間隔超過、およびLaw Update/Source Monitor/Event Calendarの変化検知を基に、記事のFreshness Statusを日次更新しDashboard最上部の「🔴 Update Needed」に反映（Version 4準備、詳細後述） |
+| `coverage_analyzer.py` | Editor-in-Chief（企画・編集会議） | 生活トピック別の記事数・鮮度・Review待ちを集計し、AIが不足トピック・優先トピック・おすすめ新規テーマ（10件）を提案。Dashboard「📊 Coverage Analysis」＋専用Notionページに反映（詳細後述） |
+| `backfill_life_topics.py` | — | 既存記事にLife Topicsを一括付与する再実行可能なバックフィルスクリプト（Coverage Analyzerの前提データ作成用） |
 
 ## 実行方法
 
@@ -287,6 +289,50 @@ python3 article_freshness_monitor.py
 
 **テスト結果（実データ・実API、2026-07-14）**：既存Articles 53件全件を実行。基準日なしでスキップされた記事は0件。Fresh 51件、Needs Update（時間経過による期限超過）0件（すべて直近2日以内に作成された記事のため妥当）、Needs Update（外部シグナルによる強制フラグ）2件——Law Update側の入管法改正シグナル1件、Source Monitor側の変化検知シグナル1件がそれぞれ正しく紐づいたArticleを検知し、AIが生成した再レビュー推奨コメントも内容に即した具体的な文面になっていることを確認した。
 
+---
+
+## Coverage Analyzer（Version 4準備、2026-07-14）
+
+**場所**：`notion-build/automation/coverage_analyzer.py`（依存：`life_topics.py`／`backfill_life_topics.py`）
+
+**目的**：編集長（Rei）が毎朝5分で「何の記事を追加・更新すべきか」を判断できるようにする。単なる記事数の集計ではなく、「外国籍の方が日本で生活する上で必要な情報が十分網羅されているか」という視点でAIが分析する。
+
+**Life Topics（新設）**：既存の`Category`（7値：イベント／日本文化／旅行情報／生活情報／ニュース／トレンド／法律・制度）はUpdate Levelの判定に使われており、これは変更していない。カバレッジ分析にはより粒度の細かい**独立した軸**が必要なため、Articlesに`Life Topics`（Multi-select、22トピック）を新設した。1記事が複数トピックに紐づいてよい。
+
+<details><summary>22トピック一覧</summary>
+
+住居・引っ越し／医療・健康／税金／年金・社会保険／教育／子育て／介護／妊娠・出産／高齢者支援／障がい者支援／防災・緊急対応／就労・キャリア／在留資格・ビザ／交通／通信・インフラ／金融・銀行／買い物・消費／文化・マナー／イベント・季節行事／旅行・観光／ニュース・トレンド／行政手続き・相談窓口
+
+</details>
+
+**既存記事への付与**：`backfill_life_topics.py`で、既存53記事すべてをAIが分類（タイトル＋本文からLife Topicsを最大3件選択、既に付与済みの記事はスキップするため再実行安全）。以降の新規記事は`generate_article_pipeline.py`の`article`サブコマンドおよび`bulk_generate_articles.py`が生成時に自動付与するため、再バックフィルは基本的に不要。
+
+**①カテゴリ分析**：Life Topicごとに以下を集計（既存Categoryでも参考表として同様に集計）。
+
+- 記事数
+- 直近更新日（`Last Verified Date`→`Review Date`→`Published Date`→作成日時の優先順、Article Freshness Monitorの`get_baseline_date()`を再利用）
+- Freshness状況（Fresh／Needs Updateの内訳、Article Freshness Monitorが日次更新する`Freshness Status`をそのまま利用）
+- Update Level構成（L1／L2／L3の内訳）
+- Review待ち件数（`Review Result`≠Pass）
+
+**②不足分析（AI）**：①の集計（記事数0件のトピックも含む）をAI Gatewayに渡し、単純な件数の少なさではなく「生活への影響度・緊急性」を踏まえて以下を生成する。
+
+- 不足しているトピック（5〜8件）
+- 優先して追加すべきトピック（3〜5件、理由付き）
+- おすすめ新規記事テーマ（10件、読者が実際に検索しそうな質問形式）
+
+**表示**：Dashboard最上部（🔴 Update Neededの直下）に「📊 Coverage Analysis」セクションを追加し、詳細は専用の**Coverage Analysisページ**（`COVERAGE_ANALYSIS_PAGE_ID`、初回実行時に自動作成）へリンク。このページはLinked View（手動設定が必要な他セクションと違い）ではなく、**実際のTable Blockとして毎回上書き生成**される——集計結果は「特定条件のレコード一覧」ではなく「計算済みのサマリー」なので、Notion APIで作成可能な通常のBlockで十分表現できるという判断による。
+
+**実行方法**：
+
+```
+cd notion-build/automation
+python3 backfill_life_topics.py   # 初回のみ（以降は新規記事が自動付与）
+python3 coverage_analyzer.py
+```
+
+**テスト結果（実データ・実API、2026-07-14）**：既存Articles 53件全件をLife Topics付与済み。分析結果、`介護`／`妊娠・出産`／`高齢者支援`／`障がい者支援`が0件、`教育`／`ニュース・トレンド`が1件のみと判明。AIは単純な件数だけでなく「生命・生活への影響度」を踏まえ、医療・健康／妊娠・出産／介護／障がい者支援を優先トピックとして提案し、「外国籍の方が日本で妊娠したら最初にすべきことは？」等、検索されやすい質問形式のテーマ案を10件生成した。
+
 ## 未実施事項（要判断）
 
 - **スケジューリング**：cron／launchd等での定期実行はまだ設定していない。日次実行にするか、Rei自身が手動実行するかは別途判断が必要
@@ -295,4 +341,4 @@ python3 article_freshness_monitor.py
 
 ---
 
-*ARu HQ / Decode Japan — Automation Scripts v1.2 — 2026-07-14*
+*ARu HQ / Decode Japan — Automation Scripts v1.3 — 2026-07-14*

@@ -44,6 +44,7 @@ import generate_article_pipeline as gap  # noqa: E402
 import reviewer_agent as ra  # noqa: E402
 import translation_quality_reviewer as tqr  # noqa: E402
 import sns_quality_reviewer as sqr  # noqa: E402
+from life_topics import classify_life_topics  # noqa: E402
 
 ENV_PATH = os.path.join(NOTION_BUILD_DIR, ".env")
 
@@ -117,6 +118,7 @@ def process_topic(env, index, total, item):
 
     # 2. Article (ARu 9-section template)
     provider, title, body = gap.generate_article_text(topic, item["summary"], update_level, verified_date)
+    life_topics = classify_life_topics(title, body)
     article_props = {
         "Title": {"title": [{"text": {"content": title}}]},
         "Body": {"rich_text": gap.rich_text_chunks(body)},
@@ -135,6 +137,8 @@ def process_topic(env, index, total, item):
         "Verification Status": {"select": {"name": "Verified"}},
         "Last Verified Date": {"date": {"start": verified_date}},
     }
+    if life_topics:
+        article_props["Life Topics"] = {"multi_select": [{"name": t} for t in life_topics]}
     article_page = notion_request(token, "POST", "/pages", {
         "parent": {"database_id": env["ARTICLES_DB_ID"]}, "properties": article_props
     })
