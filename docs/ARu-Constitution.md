@@ -54,6 +54,37 @@
 
 ---
 
+### 改訂提案（2件目）：§15 Publishing Workflow の「Level 1 ── 自動公開」表記の明確化
+
+| | |
+|---|---|
+| **提案日** | 2026-07-14 |
+| **提案理由** | Publishing Center（`notion-build/automation/publishing_center.py`）の実装により、「Level 1 ── 自動公開」という現行表記が誤解を招くことが明確になったため。実際には、Level 1でもAIが記事をARuアプリへ自動的に掲載することは一度もなく、これまでも今後も存在しない（§9 AI Behavior Rulesの「Publish Approvalのゲートを迂回しない」に一貫して従っている）。「自動公開」が指しているのは実際には「Translation.Publish Approvalが自動でNot Requiredへ解除されること」のみで、ARuアプリへの実際の掲載は常に人間の操作（Publishing Status＝Publishedへの変更）を要する。運営方針・AIの権限範囲そのものは一切変更しておらず、既存の実態を正確に記述し直すだけの改訂 |
+| **レベル判定** | Level B（運営改善：ワークフロー記述の明確化） |
+| **レビュー期間** | 72時間以上（起算日 2026-07-14） |
+| **発効予定** | 2026-07-17以降、編集長の承認を得た時点でv2.1.0（または承認タイミングにより該当バージョン）に反映 |
+| **承認** | 未承認（Pending） |
+
+現行（v2.0.0）：
+```
+  ┌─ Level 1 ── 自動公開
+  ├─ Level 2 ── 担当メンターの承認 → 公開
+  └─ Level 3 ── 編集長／専門メンターの承認（Change Summary添付）→ 公開
+```
+
+提案：
+```
+  ┌─ Level 1 ── Publish Approval自動解除（Not Required）→ 人間がPublishing Statusを
+  │              Ready to Publishへ、ARuアプリ掲載後にPublishedへ手動更新
+  ├─ Level 2 ── 担当メンターの承認 → 人間がPublishing StatusをPublishedへ手動更新
+  └─ Level 3 ── 編集長／専門メンターの承認（Change Summary添付）→ 人間がPublishing Status
+                 をPublishedへ手動更新
+```
+
+> 本文にも一文追記：「ARuアプリへの実際の掲載（Publishing Status＝Published）は、いずれのUpdate Levelでも常に人間が行う。AIが承認ゲートを満たした記事を自動的にARuアプリへ掲載することはない（実装：`notion-build/automation/publishing_center.py`。詳細は[Automation Scripts](./Automation-Scripts.md)）。」
+
+---
+
 ## 目次
 
 - [Revision History](#revision-history)

@@ -1,11 +1,11 @@
-<title>Automation Scripts v1.4</title>
+<title>Automation Scripts v1.5</title>
 
 # Automation Scripts
 ### ARu Studio — Roadmap Version 3 実装記録 ＋ Version 4準備
 
 | | |
 |---|---|
-| **Status** | Active — Notion自動化13スクリプト＋AI Gateway＋Article Freshness Monitor＋Coverage Analyzer＋Editorial Planner実装・実データ／実API（Claude）でテスト済み |
+| **Status** | Active — Notion自動化14スクリプト＋AI Gateway＋Article Freshness Monitor＋Coverage Analyzer＋Editorial Planner＋Publishing Center実装・実データ／実API（Claude）でテスト済み |
 | **Date** | 2026-07-14 |
 | **位置づけ** | [AI Agent Workflow](./AI-Agent-Workflow.md)に定めた処理を、新規DB（AI Agents／Prompt Library／Automation）を追加せず、既存10DBに対するPythonスクリプトとして実装したもの |
 | **場所** | `notion-build/automation/` |
@@ -34,6 +34,7 @@
 | `coverage_analyzer.py` | Editor-in-Chief（企画・編集会議） | 生活トピック別の記事数・鮮度・Review待ちを集計し、AIが不足トピック・優先トピック・おすすめ新規テーマ（10件）を提案。Dashboard「📊 Coverage Analysis」＋専用Notionページに反映（詳細後述） |
 | `backfill_life_topics.py` | — | 既存記事にLife Topicsを一括付与する再実行可能なバックフィルスクリプト（Coverage Analyzerの前提データ作成用） |
 | `editorial_planner.py` | Editor-in-Chief（編集会議・アサイン） | Coverage Analyzerの集計データから、★1〜5の優先度付き編集プラン（Reason・タイトル案・想定Update Level／Category）を生成し、`--generate-research`でResearchレコードを自動作成。Dashboard「📝 Editorial Planner」＋専用Notionページに反映（詳細後述） |
+| `publishing_center.py` | Editor-in-Chief（公開管理） | Articles全件のPublishing Status（Draft／Ready to Publish／Published／Needs Update／Archived）を、Review Result・Translation Quality Result／Publish Approval・Freshness Status・必須項目の充足状況から同期。Published判定は必ず人間が行い、AIは自動公開しない。Dashboard「🚀 Ready to Publish」「📚 Published Articles」「🛠 Needs Update」に反映（詳細後述） |
 
 ## 実行方法
 
@@ -372,6 +373,80 @@ python3 editorial_planner.py --generate-research --topics "医療・健康,妊�
 
 **テスト結果（実データ・実API、2026-07-14）**：既存53記事に対して実行し、10トピックがプランに検出された（★5：妊娠・出産、★4：介護／高齢者支援／障がい者支援／医療・健康／防災・緊急対応、★3：子育て、★2：教育／年金・社会保険、★1：ニュース・トレンド）。`--generate-research`を実行し、実際に19件のResearchレコードを作成（Status=New、Discovery Method=Gap Engine、Category／Priority／Urgencyともに正しく設定されていることを実データで確認）。
 
+---
+
+## Publishing Center（Version 4 Phase 3、2026-07-14）
+
+**場所**：`notion-build/automation/publishing_center.py`（`enforce_publish_gate.py`も拡張）
+
+**目的**：編集長（Rei）が、記事の公開・更新・アーカイブ状況を一目で把握し、ARuアプリへ掲載する記事を迷わず選べるようにする。**AIによる自動公開は一切行わない**——ARuアプリへの実投稿APIが存在しないため、Publishedは「人間がARuアプリへ手動掲載済み」という管理状態として定義している。
+
+**プロパティの責務分担（重複を避けるための整理）**：
+
+| プロパティ | 責務 | このスクリプトの扱い |
+|---|---|---|
+| `Status`（既存） | Notion内の編集ワークフロー（Draft/AI Draft/Human Review/Approved/...） | 一切変更しない |
+| `Review Result`（既存） | 記事本文がAIレビューを通過したか | 読み取りのみ |
+| `Translation.Quality Result`（既存） | 各言語の翻訳がAIレビューを通過したか | 読み取りのみ |
+| `Translation.Publish Approval`（既存） | Constitution §9/§13が定める人間承認ゲート | 読み取りのみ（書き込むのは`translation_quality_reviewer.py`と人間のみ） |
+| `Freshness Status`（既存） | レビュー間隔内かどうか（Article Freshness Monitorが管理） | 読み取り、Publishing Statusとの同期に利用 |
+| `Publishing Status`（新規） | **ARuアプリに実際に掲載されているか／掲載準備が整っているか** | このスクリプトが管理する中心プロパティ |
+
+**追加したプロパティ**（Articles DB。`Published Date`は既存プロパティを再利用し、重複追加していない）：
+
+- `Publishing Status`（Select：Draft／Ready to Publish／Published／Needs Update／Archived）
+- `Published By`（People）
+- `ARu App URL`（URL、手動入力）
+- `Previous Publishing Status`（Select、同じ5値）
+- `Publishing Status Updated Date`（Date）
+
+**Ready to Publish判定（すべて満たす場合のみ）**：
+
+1. `Review Result = Pass`
+2. 紐づく全Translationの`Quality Result = Pass`（Translationが1件も無い場合は不可）
+3. 紐づく全Translationの`Publish Approval`が`Not Required`または`Approved`（`Pending`／`Rejected`は不可。Update Level 2/3は人間が`Approved`にしない限り`Pending`のまま=不可のため、人間承認必須がそのまま担保される）
+4. `Freshness Status = Fresh`（`Needs Update`はもちろん、未判定も不可——「鮮度不明」を「鮮度OK」とみなさない安全側の判断）
+5. 必須項目：Title・Body・Category・Last Verified Dateが存在。**「Summary」はArticles DBに独立したプロパティが存在しないため、Source Research（Articleの出典）のSummaryが存在するかで代替判定している**（要件にあった項目名と実スキーマの差異を、勝手にプロパティを増やさず既存データで解釈した設計判断）
+
+**Ready to Publishへ進めても、自動でPublishedにはしない。** Publishedへの変更は常に人間がNotion上で行う。
+
+**Freshness Monitor連携（双方向）**：
+
+- `Published`の記事でFreshness Statusが`Needs Update`になったら → Publishing Statusを`Needs Update`へ自動変更（`Previous Publishing Status=Published`を記録）
+- `Needs Update`の記事でFreshness Statusが`Fresh`に戻ったら → `Previous Publishing Status`を見て元の状態（`Published`または`Ready to Publish`）へ自動復帰
+- 未公開（Draft/Ready to Publish）の記事は、Freshness Statusが`Needs Update`である限りReady to Publishへ進めない
+
+**公開操作の記録**：人間がNotion上でPublishing Statusを`Published`へ変更すると、次回`publishing_center.py`実行時に「Published Dateが空＝直近で公開された」と判定し、`Published Date`（今日の日付）と`Published By`（そのページの実際の`last_edited_by`、Notion APIの実データを使用——存在しない投稿APIは一切仮定していない）を自動記録する。`ARu App URL`は掲載先を人間が手動入力する。
+
+**enforce_publish_gate.pyの拡張**：既存は`Status=Published`のみ監視していたが、`Publishing Status=Published`も同じ基準（QA Status=Passed、Update Level 2/3はHuman Reviewed=trueかつReview Result=Pass）で監視するよう拡張。違反があれば`Publishing Status`を`Needs Update`へ強制的に差し戻す。
+
+**初期分類結果（実データ、2026-07-14）**：既存53記事に対して実行。
+
+| Publishing Status | 件数 |
+|---|---|
+| Ready to Publish | 20 |
+| Draft | 33 |
+| Published | 0（一括自動設定は行っていない） |
+| Needs Update | 0 |
+
+Draft 33件のうち大半はUpdate Level 2（法律・制度）でTranslation Publish Approvalが`Pending`のまま（人間承認待ち、正しい挙動）、一部は`Last Verified Date`未設定（ARu公式テンプレート導入前の旧記事）、2件はFreshness Status=Needs Update（Article Freshness Monitorが検知済み）。
+
+**テスト結果（実データ・実API、2026-07-14）**：
+
+- Update Level 1で全条件Pass → 20件が正しくReady to Publishへ（実データで確認）
+- Update Level 2でPublish Approval=Pending → 全件Draftのまま（実データで確認、人間承認必須が維持されている）
+- Freshness Status=Needs Update → Ready to Publishにならないことを確認（2件とも該当理由に明記）
+- Publishing Statusを人間が`Published`へ変更 → 次回実行でPublished Date／Published Byが正しく記録されることを確認
+- Published記事のFreshness StatusをNeeds Updateに変更 → Publishing Statusが`Needs Update`へ自動遷移し、`Previous Publishing Status=Published`が記録されることを確認
+- Freshness StatusをFreshに戻す → `Previous Publishing Status`を見て`Published`へ正しく復帰することを確認
+- `enforce_publish_gate.py`実行 → 違反0件（テスト用に一時的にPublishedへ変更した記事は、既存ゲートが`QA Status`未設定という実在の欠落を正しく検知して差し戻した。テスト後は実データを汚さないよう手動でクリーンアップ済み）
+
+**既知の制約**：
+
+- **`QA Status`（既存の手動プロパティ）が53記事すべて未設定**。`enforce_publish_gate.py`は元々このプロパティを必須としており、Ready to Publish判定には含めていないため、Publishing Status=Publishedへ進めても既存ゲートに引っかかる可能性がある。QA Statusを誰がいつ設定する運用にするかは、Rei自身の判断が必要な未解決事項として残す（Ready to Publish条件に含めるかどうかも含め、要件にはなかったため今回は変更していない）
+- `ARu App URL`は自動生成できない（実投稿APIが存在しないため）。人間が手動入力する前提
+- Translationが0件の記事はReady to Publishに進めない設計だが、これは要件に明記された基準を字義通り実装した結果であり、意図的な挙動
+
 ## 未実施事項（要判断）
 
 - **スケジューリング**：cron／launchd等での定期実行はまだ設定していない。日次実行にするか、Rei自身が手動実行するかは別途判断が必要
@@ -380,4 +455,4 @@ python3 editorial_planner.py --generate-research --topics "医療・健康,妊�
 
 ---
 
-*ARu HQ / Decode Japan — Automation Scripts v1.4 — 2026-07-14*
+*ARu HQ / Decode Japan — Automation Scripts v1.5 — 2026-07-14*

@@ -7,16 +7,16 @@
 |---|---|
 | **Status** | Active |
 | **対象** | Notionをあまり使ったことがない方 |
-| **所要時間の目安** | 合計約25〜30分（共通手順の理解に5分＋9セクション×2〜3分） |
+| **所要時間の目安** | 合計約35〜40分（共通手順の理解に5分＋13セクション×2〜3分） |
 | **前提** | NotionパブリックAPIは「他のデータベースを絞り込み表示する画面（Linked View）」を自動作成できないため、この作業だけは人の手で行う必要がある |
 
 ---
 
 ## この作業で何をするか
 
-Dashboardページには、すでに9つの見出しと説明文（Callout）がAPI経由で用意されている。それぞれの見出しの下に、**「Linked view of database」**という機能を使って、対応するデータベースの中身を絞り込み表示する画面を1つずつ埋め込んでいく。
+Dashboardページには、すでに見出しと説明文（Callout）がAPI経由で用意されている。それぞれの見出しの下に、**「Linked view of database」**という機能を使って、対応するデータベースの中身を絞り込み表示する画面を1つずつ埋め込んでいく。
 
-やることは、**同じ6ステップを9回繰り返すだけ**。1回できれば、あとは数値を変えるだけの単純作業になる。
+やることは、**同じ6ステップを13回繰り返すだけ**。1回できれば、あとは数値を変えるだけの単純作業になる（「📊 Coverage Analysis」「📝 Editorial Planner」の2つはLinked Viewではなく専用Notionページへのリンクなので、この作業の対象外——本文中のリンクをクリックするだけで内容が見られる）。
 
 ---
 
@@ -75,14 +75,18 @@ Dashboardページを開き、埋め込みたい見出し（例：「① Publish
 
 ツールバー右端の**「•••」**（もっと見る）をクリックし、**「Properties」**を選ぶ。表示したいプロパティだけをオン（目のアイコン）にし、それ以外はオフにする。列が多すぎると見づらいため、下の一覧で指定した項目だけを表示することを推奨する。
 
-これで1セクション完了。**残り8セクションも同じ6ステップを繰り返すだけ。**
+これで1セクション完了。**残り12セクションも同じ6ステップを繰り返すだけ。**
 
 ---
 
-## 9セクション設定一覧
+## 13セクション設定一覧
 
 | # | セクション | データベース | View種別 | Filter | Sort | 表示するプロパティ |
 |---|---|---|---|---|---|---|
+| 🔴 | Update Needed | Articles | Table | `Freshness Status` は `Needs Update` | `Freshness Urgency Score` 降順 | Title／Update Level／Days Since Verification／Freshness Urgency Score／Freshness Note／Freshness Checked Date |
+| 🚀 | Ready to Publish | Articles | Table | `Publishing Status` は `Ready to Publish` | `Priority` 降順 → `Update Level` 降順 → `Last Verified Date` 昇順 | Title／Category／Life Topics／Update Level／Review Result／Last Verified Date（※Publish ApprovalはTranslation側のプロパティのためArticles Viewには列として出せない。関連Translationを開いて確認する） |
+| 📚 | Published Articles | Articles | Table | `Publishing Status` は `Published` | なし | Title／Published Date／Published By／ARu App URL |
+| 🛠 | Needs Update（公開済み） | Articles | Table | `Publishing Status` は `Needs Update` | `Freshness Urgency Score` 降順 → `Days Since Verification` 降順 | Title／Freshness Urgency Score／Days Since Verification／Update Level |
 | ① | Publish Approval Pending | Translation | Table | `Publish Approval` は `Pending` | `Quality Overall Score` 降順 | Translation Name／Language／Publish Approval／Quality Overall Score／Parent Article |
 | ② | Article Review Waiting | Articles | Table | `Status` は `AI Draft` または `Human Review` | `Urgency` 降順 → `Updated Date` 昇順 | Title／Status／Update Level／Urgency／Category |
 | ③ | Translation Review Waiting | Translation | Table | `Quality Result` が空、または `Not Reviewed` | 作成日時 昇順 | Translation Name／Language／Quality Result／AI Translation Status |

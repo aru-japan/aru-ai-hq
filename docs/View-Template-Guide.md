@@ -181,7 +181,23 @@ Version 4準備として、Article Freshness Monitor（`notion-build/automation/
 
 ---
 
-## 11. Dashboard：Linked View埋め込み手順（v2、編集長ホーム画面）
+## 11. Dashboard：🚀📚🛠 Publishing Center（v4、Articles Database拡張、Editorial Plannerの直下に追加）
+
+Version 4 Phase 3として、Publishing Center（`notion-build/automation/publishing_center.py`）を追加した。既存Articles DBに`Publishing Status`等のプロパティを追加し、Dashboardの「📝 Editorial Planner」直下に3セクションを自動追加済み。Linked View自体は他セクション同様に手動設定が必要。
+
+| View | 表示形式 | Filter | Sort / 表示プロパティ |
+|---|---|---|---|
+| **🚀 Ready to Publish** | Table | Publishing Status = `Ready to Publish` | Sort: Priority（降順）→ Update Level（降順）→ Last Verified Date（昇順）／ 表示: Title, Category, Life Topics, Update Level, Review Result, Last Verified Date（Publish ApprovalはTranslation側のプロパティのためArticles Viewの列にはできない。関連Translationを開いて確認する） |
+| **📚 Published Articles** | Table | Publishing Status = `Published` | 表示: Title, Published Date, Published By, ARu App URL |
+| **🛠 Needs Update（公開済み）** | Table | Publishing Status = `Needs Update` | Sort: Freshness Urgency Score（降順）→ Days Since Verification（降順） |
+
+**既存の「🔴 Update Needed」との違い**：🔴は未公開含む全記事の鮮度アラート（Freshness Status基準）、🛠はARuアプリに公開済みで実際に読者が見ている記事のうち要更新のもの（Publishing Status基準）に絞った一覧。両方残す理由は、前者が「編集部内で何を直すか」、後者が「アプリ上で今まさに古い情報を見せている記事はどれか」という異なる緊急度を示すため。
+
+**Publishing Statusを人間が`Published`へ変更する運用**：Notion上で該当記事のPublishing Statusを`Published`に変更し、実際にARuアプリへ手動で掲載する（掲載APIは現時点で存在しないため、この操作自体がPublishedの定義）。その後`python3 notion-build/automation/publishing_center.py`を実行すると、Published Date・Published By（Notion上の最終編集者）が自動記録される。ARu App URLは記事ページを開いて手動で入力する。
+
+---
+
+## 12. Dashboard：Linked View埋め込み手順（v2、編集長ホーム画面）
 
 DashboardページはAPIで雛形（見出し9つ＋説明のCallout）まで自動生成済み。各見出しの下に「Linked view of database」を埋め込むのはNotion UI上での手動作業になる。
 
@@ -193,4 +209,4 @@ DashboardページはAPIで雛形（見出し9つ＋説明のCallout）まで自
 
 ---
 
-*ARu HQ / Decode Japan — View & Template Setup Guide v1.1 — 2026-07-14*
+*ARu HQ / Decode Japan — View & Template Setup Guide v1.2 — 2026-07-14*

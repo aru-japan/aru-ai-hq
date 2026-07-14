@@ -39,7 +39,8 @@ Research → Article → Article Review → Translation → Translation Review �
 | Translation Review | `translation_quality_reviewer.py` | Translation（5観点：Meaning Accuracy/Naturalness/Cultural Adaptation/Terminology/Hallucination Risk） |
 | SNS | `generate_article_pipeline.py sns` | Articles → SNS Queue（Instagram/Threads/X、実Claude API生成） |
 | SNS Review | `sns_quality_reviewer.py` | SNS Queue（5観点：Accuracy/Platform Fit/Engagement/Cultural Sensitivity/Risk） |
-| Publish Gate | `enforce_publish_gate.py` | Articles（QA Status・Review Result・Human Reviewedを横断確認） |
+| Publish Gate | `enforce_publish_gate.py` | Articles（QA Status・Review Result・Human Reviewedを横断確認。Status=Published／Publishing Status=Published両方を監視） |
+| Publishing | `publishing_center.py` | Articles（Publishing Status＝ARuアプリへの実掲載管理。人間が最終操作、AIは自動公開しない） |
 
 **ゲートの核心ロジック**：Update Level（Articleのプロパティ、1〜3）によって挙動が分岐する。
 
@@ -79,6 +80,7 @@ Research → Article → Article Review → Translation → Translation Review �
 - **Version 4準備** `article_freshness_monitor.py`：Update Levelごとのレビュー間隔（L1=90日／L2=30日／L3=14〜30日）を超過した記事、およびLaw Update/Source Monitor/Event Calendarで変化が検知された記事を`Freshness Status=Needs Update`にし、Dashboard最上部の「🔴 Update Needed」へ反映（新規DBなし、既存Articles DBへのプロパティ追加のみ）
 - **Version 4準備** `coverage_analyzer.py`（＋`life_topics.py`／`backfill_life_topics.py`）：既存Category（Update Level判定用、変更なし）とは別に`Life Topics`（22トピックのMulti-select）を新設し、記事数・鮮度・Review待ちをトピック別に集計。AIが不足トピック・優先トピック・おすすめ新規テーマ（10件）を「外国籍の方の生活への影響度」の視点で提案し、Dashboard「📊 Coverage Analysis」＋専用Notionページ（計算済みサマリーをTable Blockとして毎回上書き生成）に反映
 - **Version 4 Phase 2** `editorial_planner.py`：Coverage Analyzerのデータから★1〜5の優先編集プランを生成（★の算出はLife Topic Impact×記事数の決定論的ロジック、AIはReason／タイトル案／Expected Categoryの生成のみ担当）。`--generate-research`で選択したプラン項目のResearchレコードを自動作成（新規プロパティなし、Research DB既存の`Gap Engine`／`AI Suggested`選択肢を利用）。Dashboard「📝 Editorial Planner」＋専用Notionページに反映
+- **Version 4 Phase 3** `publishing_center.py`：Articlesに`Publishing Status`等を追加し、Review Result／Translation Quality Result・Publish Approval／Freshness Status／必須項目からDraft⇄Ready to Publishを自動同期。**Publishedへは常に人間が変更し、AIは自動公開しない**。Freshness Monitorと双方向連携（Published→Needs Update、鮮度回復で自動復帰）。`enforce_publish_gate.py`もPublishing Status=Publishedを監視するよう拡張。Dashboard「🚀 Ready to Publish」「📚 Published Articles」「🛠 Needs Update」に反映
 
 詳細と実行方法は`docs/Automation-Scripts.md`。
 
@@ -120,12 +122,14 @@ Research → Article → Article Review → Translation → Translation Review �
 - Article Freshness Monitor（Version 4準備）：Update Levelごとのレビュー間隔管理＋Law Update/Source Monitor/Event Calendarとの連携による強制再レビューフラグ、Dashboard最上部「🔴 Update Needed」（2026-07-14）
 - Coverage Analyzer（Version 4準備）：Life Topics（22トピック）によるカテゴリ分析＋AIによる不足分析・優先トピック・新規テーマ提案、Dashboard「📊 Coverage Analysis」＋専用ページ（2026-07-14）
 - Editorial Planner（Version 4 Phase 2）：★1〜5の優先編集プラン自動生成＋`--generate-research`によるResearchレコード自動作成、Dashboard「📝 Editorial Planner」＋専用ページ（2026-07-14）
+- Publishing Center（Version 4 Phase 3）：Publishing Statusによる公開管理（Draft/Ready to Publish/Published/Needs Update/Archived）、Freshness Monitorとの双方向連携、公開操作の自動記録（Published Date/By）、Dashboard「🚀📚🛠」3セクション（2026-07-14）
 
 ## ■ Remaining Tasks
 
-- **ARu Constitutionの改訂提案が承認待ち**（Pending Amendments、提案日2026-07-14、Level B、レビュー期間72時間→発効予定2026-07-17以降）。ARu公式9セクションテンプレートとArticle Freshness Monitorの実態を§4・§11へ反映する内容。**2026-07-17以降、編集長（Rei）の承認を得たら**、`docs/ARu-Constitution.md`の該当箇所を本文へ反映し、v2.0.0→v2.1.0へバージョンアップ、Revision Historyに記録し、Pending Amendments節から該当エントリを削除すること
+- **ARu Constitutionの改訂提案が2件承認待ち**（Pending Amendments、いずれも提案日2026-07-14、Level B、レビュー期間72時間→発効予定2026-07-17以降）：①ARu公式9セクションテンプレートとArticle Freshness Monitorの実態を§4・§11へ反映、②Publishing Centerの実装で明確になった「Level 1 ── 自動公開」表記の誤解を§15で解消（AIがARuアプリへ自動掲載することは元々一度もなく、運営方針自体は変更なし）。**2026-07-17以降、編集長（Rei）の承認を得たら**、`docs/ARu-Constitution.md`の該当箇所を本文へ反映し、v2.0.0→v2.1.0（以降）へバージョンアップ、Revision Historyに記録し、Pending Amendments節から該当エントリを削除すること
 - **Editorial Plannerが提案した19件のResearch（Status=New、Discovery Method=Gap Engine）がレビュー待ち**（2026-07-14、`editorial_planner.py --generate-research`で作成）。Dashboard「⑥ Today's Research」に表示される。Reiが内容を確認し、実際に記事化するものを選んで`generate_article_pipeline.py article`または`bulk_generate_articles.py`のTOPICSへ追加する
-- Article.Status自体をAI Draft→Publishedへ自動昇格させるスクリプトが存在しない（Translation側のゲートのみ実証済み）
+- Article.Status自体をAI Draft→Publishedへ自動昇格させるスクリプトが存在しない（Translation側のゲートのみ実証済み）。**Publishing Statusの導入により、少なくとも「ARuアプリに実際に掲載されているか」はStatusとは独立して追跡できるようになった**（`publishing_center.py`）
+- **`QA Status`（Articles既存プロパティ）が全53記事で未設定**。`enforce_publish_gate.py`は必須としているが、Publishing CenterのReady to Publish判定には含めていない（要件になかったため）。誰がいつ設定する運用にするか、Ready to Publish条件に含めるべきかはReiの判断待ち
 - 定期実行（cron/launchd）は未設定。すべて手動実行
 - Critical Gap等の外部通知（Slack/メール）は未実装
 - SNS実投稿（実際にプラットフォームへ投稿する部分）は未実装。Draft生成まで

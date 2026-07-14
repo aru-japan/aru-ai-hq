@@ -49,13 +49,25 @@
 
 **実行結果（実データ・実API、2026-07-14）**：53記事に対して実行し10トピックがプランに検出された（★5：妊娠・出産／★4：介護・高齢者支援・障がい者支援・医療・健康・防災・緊急対応／★3：子育て／★2：教育・年金・社会保険／★1：ニュース・トレンド）。`--generate-research`を実行し、実際に**Researchレコード19件**を新規作成（Category／Priority／Urgencyがすべて正しく設定されていることを実データで確認）。
 
+### ⑥ Publishing Center（Version 4 Phase 3）
+`publishing_center.py`を新規実装。編集長がARuアプリへ何を掲載するか一目で判断できるようにする、Version 4準備の最終ピース。**AIによる自動公開は一切行わない**——ARuアプリへの実投稿APIが存在しないため、Publishedは「人間が手動掲載済み」の管理状態として定義した。
+
+- 新規プロパティ：`Publishing Status`（Draft／Ready to Publish／Published／Needs Update／Archived）、`Published By`、`ARu App URL`、`Previous Publishing Status`、`Publishing Status Updated Date`（`Published Date`は既存プロパティを再利用、重複追加していない）
+- Ready to Publish判定は5条件すべてが必要：Article Review Result=Pass／全Translation Quality Result=Pass／全Translation Publish Approvalが Not Required か Approved（Update Level 2・3の人間承認必須がそのまま担保される）／Freshness Status=Fresh／必須項目（Title・Body・Category・Last Verified Date、Summary相当はSource Researchので代替判定）が揃っていること。**自動でPublishedにはしない**
+- Article Freshness Monitorと双方向連携：Published記事が要更新になれば自動でNeeds Updateへ、鮮度回復時は`Previous Publishing Status`を見て元の状態へ自動復帰
+- 人間がPublishedへ変更すると、次回実行時にPublished Date・Published By（実際の`last_edited_by`、存在しないAPIは仮定せず）を自動記録
+- `enforce_publish_gate.py`を拡張し、Publishing Status=Publishedも既存ゲート基準（QA Status／Update Level 2・3のHuman Reviewed・Review Result）で監視
+- Dashboard「📝 Editorial Planner」の直下に「🚀 Ready to Publish」「📚 Published Articles」「🛠 Needs Update」の3セクションを追加
+
+**実行結果（実データ・実API、2026-07-14）**：既存53記事を初期分類し、**Ready to Publish 20件／Draft 33件／Published 0件**（一括自動設定はしていない）。Update Level 1で全条件Passの記事は正しくReady to Publishへ、Update Level 2でPublish Approval=Pendingの記事は正しくDraftのまま、Freshness Needs Updateの2記事はReady to Publishにならないことを確認。Publishing Statusを人間がPublishedへ変更→Published Date/By自動記録→Freshness悪化でNeeds Updateへ自動遷移→鮮度回復で自動復帰、という一連のライフサイクルをテストで実証。`enforce_publish_gate.py`実行で違反0件を確認したが、その過程で**`QA Status`（既存の手動プロパティ）が全53記事で未設定という実在のギャップを検知**（詳細は[Automation Scripts](./Automation-Scripts.md)、下記「現在の課題」参照）。
+
 ---
 
 ## 2. 現在のコンテンツ量（Notion実データ、2026-07-14時点）
 
 | データベース | 件数 | 内訳 |
 |---|---|---|
-| **Articles（記事数）** | **53件** | Status: AI Draft 52／Draft 1　｜　Update Level: L1=37／L2=16　｜　Article Review: Pass 51／Needs Revision 1／未レビュー 1　｜　Freshness Status: Fresh 51／Needs Update 2 |
+| **Articles（記事数）** | **53件** | Status: AI Draft 52／Draft 1　｜　Update Level: L1=37／L2=16　｜　Article Review: Pass 51／Needs Revision 1／未レビュー 1　｜　Freshness Status: Fresh 51／Needs Update 2　｜　**Publishing Status: Ready to Publish 20／Draft 33／Published 0** |
 | **Research** | **71件** | Status: Converted 52（Articleへ転換済み）／New 19（すべてEditorial Plannerが本日提案、Discovery Method=Gap Engine、レビュー待ち） |
 | **Translation** | **54件** | Publish Approval: Pending 15／Not Required 39　｜　Quality Result: Pass 52／Needs Revision 1／未レビュー 1 |
 | **SNS Queue** | **160件** | Platform: X 53／Threads 53／Instagram 54　｜　Status: 全件Draft　｜　Review Result: Pass 152／Needs Revision 7／Fail 1 |
@@ -88,7 +100,7 @@ Version 4本体は**前提条件（Pilot Operation 7日間の実運用完了）�
 | 層 | 内容 | 進捗 |
 |---|---|---|
 | **前提条件** | Version 3.5 Pilot Operation（7日間実運用） | **2/7日（約29%）** |
-| **Version 4準備作業**（技術的土台） | Article Freshness Monitor、Coverage Analyzer、Editorial Planner | **3/3件 実施済み（100%）**（現時点でRoadmapに明記された準備作業はこの3件） |
+| **Version 4準備作業**（技術的土台） | Article Freshness Monitor、Coverage Analyzer、Editorial Planner、Publishing Center | **4/4件 実施済み（100%）**（現時点でRoadmapに明記された準備作業はこの4件） |
 | **Version 4本体**（Roadmap記載5項目：Usage Scope実運用／自治体・観光協会・企業とのデータ連携／JNTO・Visit Japan連携／企業向けダッシュボード／Mentorネットワーク本格拡大） | いずれも対外的な契約・意思決定を伴う | **0/5件（0%）** |
 
 **総合評価**：技術的な土台固め（Freshness Monitor）は計画通り先行実装できたが、Version 4本体は実装だけでは進められない項目が大半を占める。次のゲートはPilot Operation Day 3〜7の完走と、その後の対外的な方針確認。**全体としては「本体着手前」であり、大まかな目安としては一桁%〜10%程度**（前提条件の進捗と、技術準備1件の完了を反映した粗い目安であり、対外交渉が絡む項目のため精緻な%算出はできない）。
@@ -109,6 +121,8 @@ Version 4本体は**前提条件（Pilot Operation 7日間の実運用完了）�
 10. **コンテンツの偏りが明確に**：Coverage Analyzerにより、`介護`／`妊娠・出産`／`高齢者支援`／`障がい者支援`が0件、`教育`が1件のみと判明。現状53記事の大半が「文化・マナー」「行政手続き・相談窓口」に偏っており、外国籍の方の生活に不可欠な医療・福祉系トピックが手薄
 11. **ARu Constitutionの改訂提案が承認待ち**：Pending Amendments（Level B、提案日2026-07-14、発効予定2026-07-17以降）。ARu公式テンプレートとArticle Freshness Monitorの実態を§4・§11へ反映する内容で、編集長の承認待ち
 12. **Editorial Plannerが提案した19件のResearchが未レビュー**：`Status=New`のままDashboard「⑥ Today's Research」に滞留中。優先度（Priority/Urgency）は機械的に設定されているが、実際に記事化するかどうかはRei自身の判断が必要
+13. **`QA Status`が全53記事で未設定**：`enforce_publish_gate.py`が元々必須としている項目だが、これまで誰も設定していなかった（AI生成パイプラインには組み込まれていない、人間専用の項目）。Ready to Publish 20件のうち、実際にPublishedへ進めようとすると、この既存ゲートに引っかかる可能性がある。QA Statusを誰がいつ設定する運用にするか、Ready to Publish条件に含めるべきかはRei自身の判断待ち
+14. **ARu Constitutionの改訂提案が2件目も発生**：Publishing Centerの実装で「Level 1 ── 自動公開」（§15）という表記が実態と異なることが判明（AIは一度も自動公開しておらず、今後もしない）。Level B Pending Amendmentとして追加提案済み（2026-07-14、発効予定2026-07-17以降）。運営方針自体の変更ではなく記述の明確化
 
 ---
 
@@ -120,6 +134,7 @@ Version 4本体は**前提条件（Pilot Operation 7日間の実運用完了）�
 4. **外部シグナル起因の要更新記事2件を実際に再レビュー**し、Freshness Monitor→人間レビューのワークフローが実運用でも機能することを確認
 5. **未レビュー（None）の2件を調査**し、過去のテストレコードかどうかを特定・整理
 6. **Editorial Plannerが作成した19件のResearch（★5：妊娠・出産を最優先）から2〜3件を選び、実際に記事化**する。Research自体は既に`Status=New`で存在するため、`generate_article_pipeline.py article --keyword "..."`で直接拾える（Statusを`Converted`へ変更してから実行）。9セクションテンプレート・3段レビュー・Life Topics自動付与はそのまま適用される
+7. **Ready to Publish 20件のうち1〜2件を実際にARuアプリへ手動掲載してみる**：QA Status未設定の問題を先に解消（値を`Passed`に設定）した上で、Publishing Statusを`Published`へ変更し、`publishing_center.py`実行でPublished Date/Byが正しく記録されることを実運用でも確認する
 
 ## 6. 今週やるべきこと
 
@@ -129,8 +144,10 @@ Version 4本体は**前提条件（Pilot Operation 7日間の実運用完了）�
 4. **Dashboard Linked Viewの手動設定**：「🔴 Update Needed」を含む全セクションが未設定であれば[Dashboard Setup Guide](./Dashboard-Setup-Guide.md)に沿って設定完了させる
 5. **Version 4本体着手に向けた優先順位の方針確認**：自治体連携／JNTO連携／企業向けダッシュボード／Mentorネットワーク拡大のうち、どれから対外的な意思決定を進めるかをReiと確認
 6. **医療・福祉系トピックの記事化計画**：Coverage Analyzerが検知した0件トピック（介護／妊娠・出産／高齢者支援／障がい者支援）について、少なくとも各1本ずつ着手する計画を立てる。Update Level判定（現行Categoryでは「生活情報」等に該当し原則Level 1だが、内容次第では専門家レビューが望ましい場合もあるため、着手時に個別判断する）
-7. **ARu Constitutionの改訂承認**：2026-07-17以降、Pending Amendments（§4・§11）をRei自身が確認し、承認する場合はv2.1.0へ反映
+7. **ARu Constitutionの改訂承認**：2026-07-17以降、Pending Amendments（§4・§11、および§15）をRei自身が確認し、承認する場合はv2.1.0（以降）へ反映
 8. **Editorial Plannerの週次運用リズムを決める**：毎朝実行するのか、週1回の編集会議前に実行するのか。19件のResearchが一度に滞留した経験を踏まえ、`--limit`や`--topics`での小分け運用が実務上ちょうどよいかを検証する
+9. **QA Statusの運用方針を決める**：Ready to Publish条件に含めるか、掲載直前チェックリストとして人間が別途確認する運用にするか。決めた方針を`publishing_center.py`のevaluate_readiness()または運用手順として反映する
+10. **ARu App URLの記録方法を決める**：ARuアプリ側にスラッグ／IDの命名規則があるか確認し、Publishedへ変更する際の入力ルールを定める
 
 ---
 
@@ -140,12 +157,12 @@ Version 4本体は**前提条件（Pilot Operation 7日間の実運用完了）�
 
 | ドキュメント | 確認内容 | 結果 |
 |---|---|---|
-| [README.md](../README.md) | 「現在地」節がARu公式テンプレート統一・Freshness Monitor・Coverage Analyzer・Editorial Planner実装（いずれも2026-07-14）を反映しているか | ✅ 一致（本レポートと同時に更新） |
-| [Roadmap.md](./Roadmap.md) | Version 4節に「Version 4準備作業」としてArticle Freshness Monitor・Coverage Analyzer・Editorial Plannerが記載されているか、前提条件（Pilot Operation完了）の位置づけが変わっていないか | ✅ 一致。前提条件は変更なし、準備作業として正しく記載済み |
+| [README.md](../README.md) | 「現在地」節がARu公式テンプレート統一・Freshness Monitor・Coverage Analyzer・Editorial Planner・Publishing Center実装（いずれも2026-07-14）を反映しているか | ✅ 一致（本レポートと同時に更新） |
+| [Roadmap.md](./Roadmap.md) | Version 4節に「Version 4準備作業」としてArticle Freshness Monitor・Coverage Analyzer・Editorial Planner・Publishing Centerが記載されているか、前提条件（Pilot Operation完了）の位置づけが変わっていないか | ✅ 一致。前提条件は変更なし、準備作業として正しく記載済み |
 | [AI-Handover.md](./AI-Handover.md) | Completed Features／Current Automationに本日の実装が反映されているか、Latest Commitが最新か | ✅ Completed Features／Current Automationとも一致（本レポートと同時に更新）。Latest Commitは前回のレポート作成時（`5e82259`→`c661ed3`）に一度修正済みで、以降の修正は都度反映している |
-| [ARu-Constitution.md](./ARu-Constitution.md) | 本日の実装（9セクションテンプレート、Freshness Monitorのレビュー間隔、Coverage Analyzer、Editorial Planner）が本文の記述と矛盾していないか | ⚠️ 9セクションテンプレートとFreshness Monitorのレビュー間隔については**不一致を検出し、Level B Pending Amendmentとして提案済み**（2026-07-14提案、発効予定2026-07-17以降、編集長の承認を得るまで本文v2.0.0は変更しない）。Coverage Analyzer・Editorial Plannerは既存の§7 Source Policy／§9 AI Behavior Rulesの範囲内（Research作成のみでPublish Approvalには一切触れない）で動作しており、**改訂提案は不要と判断** |
+| [ARu-Constitution.md](./ARu-Constitution.md) | 本日の実装（9セクションテンプレート、Freshness Monitorのレビュー間隔、Coverage Analyzer、Editorial Planner、Publishing Center）が本文の記述と矛盾していないか | ⚠️ **不一致を2件検出し、いずれもLevel B Pending Amendmentとして提案済み**（2026-07-14提案、発効予定2026-07-17以降、編集長の承認を得るまで本文v2.0.0は変更しない）：①9セクションテンプレートとFreshness Monitorのレビュー間隔（§4・§11）、②Publishing Centerの実装で判明した「Level 1 ── 自動公開」という表記の誤解（§15、AIが自動公開したことは元々一度もなく運営方針の変更ではない）。Coverage Analyzer・Editorial Plannerは既存の§7 Source Policy／§9 AI Behavior Rulesの範囲内（Research作成のみでPublish Approvalには一切触れない）で動作しており、改訂提案は不要と判断 |
 
-**整合性上の結論**：README／Roadmap／AI-Handoverの3文書は本日の実装内容と矛盾しない。ARu Constitutionのみ、本日の実装によって記述が実態と乖離したため、正規の改訂プロセス（§20 Governance）に沿ってPending Amendmentとして提案し、承認待ちの状態。
+**整合性上の結論**：README／Roadmap／AI-Handoverの3文書は本日の実装内容と矛盾しない。ARu Constitutionのみ、本日の実装によって記述が実態と乖離した箇所が2件見つかり、いずれも正規の改訂プロセス（§20 Governance）に沿ってPending Amendmentとして提案し、承認待ちの状態。
 
 ---
 

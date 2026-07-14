@@ -78,7 +78,7 @@ def query_database(token, database_id, filter_obj=None, sorts=None):
 def get_prop(page, name, kind):
     """Read a property value off a page result in a convenient plain-Python form.
 
-    kind: 'select' | 'multi_select' | 'checkbox' | 'number' | 'date' | 'rich_text' | 'title' | 'relation'
+    kind: 'select' | 'multi_select' | 'checkbox' | 'number' | 'date' | 'rich_text' | 'title' | 'relation' | 'url' | 'formula' | 'rollup' | 'people'
     """
     prop = page.get("properties", {}).get(name)
     if prop is None:
@@ -105,6 +105,8 @@ def get_prop(page, name, kind):
         return [r["id"] for r in prop.get("relation", [])]
     if kind == "url":
         return prop.get("url")
+    if kind == "people":
+        return [p["id"] for p in prop.get("people", [])]
     if kind == "formula":
         formula = prop.get("formula", {})
         ftype = formula.get("type")
