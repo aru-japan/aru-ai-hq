@@ -53,9 +53,25 @@ def find_research(token, research_db_id, keyword):
     return results[0] if results else None
 
 
-def generate_article_text(topic, research_summary, update_level):
+ARU_ARTICLE_TEMPLATE_INSTRUCTIONS = """記事は必ず以下のARu公式テンプレート（9セクション）の構成で書いてください。各セクションの見出しはそのまま太字（**見出し**）で示し、9つすべてを含めてください。
+
+1. **Question** — ユーザーが最初に知りたい質問（1文、疑問形）
+2. **Basic Answer** — 短く明確な基本回答。これだけ読んでも要点が分かる、無料部分として単独で読める内容にする
+3. **More Details** — 基本回答だけでは分からない背景・例外・具体例
+4. **Why Does Japan Do This?** — 日本独自の文化・制度・暗黙のルール・背景理由
+5. **Practical Steps and Cautions** — 実際の手順、必要なもの、よくある失敗、注意点
+6. **Latest Information** — 法改正・制度変更等の最新情報があれば明記する。無ければ「最終確認日：{verified_date}」と明記する
+7. **ARu Tip** — 外国籍ユーザーの不安を減らす、短く実践的なアドバイス（1〜2文）
+8. **Related Questions** — 関連するテーマを2〜3件、箇条書きで提案する
+9. **Mentor Support** — それでも分からない場合や日本語をもっと学びたい場合に、メンター相談へ自然につなげる案内"""
+
+
+def generate_article_text(topic, research_summary, update_level, verified_date):
+    template = ARU_ARTICLE_TEMPLATE_INSTRUCTIONS.format(verified_date=verified_date)
     prompt = f"""あなたはARu（外国籍の方向け日本生活サポートメディア）のWriter Agentです。
-ARu Constitutionの原則に従ってください：「何をすべきか」だけでなく「なぜそうするのか」という文化的・制度的背景を書く。Update Level={update_level}のコンテンツです（2以上は法律・制度系として一般的情報にとどめ断定的な個別助言をせず免責事項を1文入れる。1は文化・イベント・生活情報として温かく物語的に書く）。
+ARu Constitutionの原則に従ってください：「何をすべきか」だけでなく「なぜそうするのか」という文化的・制度的背景を書く。Update Level={update_level}のコンテンツです（2以上は法律・制度系として一般的情報にとどめ断定的な個別助言をせず免責事項を1文入れる。1は文化・イベント・生活情報として温かく書く）。
+
+{template}
 
 以下のリサーチ内容をもとに、テーマ「{topic}」について記事を書いてください。
 
@@ -64,9 +80,9 @@ ARu Constitutionの原則に従ってください：「何をすべきか」だ�
 
 出力形式（このまま2つのセクションで出力し、他の説明は付けないこと）：
 TITLE: <記事タイトル>
-BODY: <本文。600〜900文字程度。導入・背景・具体的な内容・注意点／楽しみ方・締めの流れで>
+BODY: <本文。9セクションすべてを含む、1200〜1800文字程度>
 """
-    provider, text = ai_gateway.complete(prompt, max_tokens=1500)
+    provider, text = ai_gateway.complete(prompt, max_tokens=2400)
     title, body = "", text
     for line in text.splitlines():
         if line.startswith("TITLE:"):
@@ -143,8 +159,9 @@ def run_article(env, keyword, category):
     summary = get_prop(research, "Summary", "rich_text")
     print(f"  Using Research: {topic}")
 
+    verified_date = __import__("datetime").date.today().isoformat()
     print(f"[Article] Generating via AI Gateway (Category={category}, Update Level={update_level})...")
-    provider, title, body = generate_article_text(topic, summary, update_level)
+    provider, title, body = generate_article_text(topic, summary, update_level, verified_date)
     print(f"  provider={provider}")
     print(f"  Title: {title}")
     print(f"  Body ({len(body)} chars): {body[:120]}...")
@@ -164,6 +181,8 @@ def run_article(env, keyword, category):
         "AI Generated": {"checkbox": True},
         "Human Reviewed": {"checkbox": False},
         "Source Research": {"relation": [{"id": research["id"]}]},
+        "Verification Status": {"select": {"name": "Verified"}},
+        "Last Verified Date": {"date": {"start": verified_date}},
     }
     article_page = notion_request(token, "POST", "/pages", {
         "parent": {"database_id": articles_db}, "properties": article_props

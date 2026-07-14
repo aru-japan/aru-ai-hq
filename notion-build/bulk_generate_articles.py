@@ -1,24 +1,35 @@
-"""Bulk-generate 20 Articles (with Translation + 3x SNS drafts, all reviewed) and
+"""Bulk-generate Articles (with Translation + 3x SNS drafts, all reviewed) and
 register them directly into Notion via the API -- the fastest reliable path, since
 Notion's native CSV import cannot set Select/Relation/Formula properties correctly
 for a schema this rich.
 
-For each of the 20 topics:
-  Research (Converted) -> Article (AI Draft) -> Article Review
-                        -> Translation (EN)   -> Translation Review
-                        -> SNS x3 (IG/Threads/X) -> SNS Review x3
+Reusable across batches: swap the TOPICS list for each day's run (renamed from
+bulk_generate_20_articles.py -- Phase B3.12 -- to reflect that it's not tied to a
+fixed count).
+
+For each topic:
+  Research (Converted) -> Article (AI Draft, ARu 9-section template) -> Article Review
+                        -> Translation (EN)                          -> Translation Review
+                        -> SNS x3 (IG/Threads/X)                     -> SNS Review x3
 
 All content is generated via the real Claude API (same prompts/quality bar as the
 rest of ARu Studio -- reviewer_agent.py / translation_quality_reviewer.py /
-sns_quality_reviewer.py's own scoring logic is reused, not reimplemented).
+sns_quality_reviewer.py's own scoring logic is reused, not reimplemented). Article
+bodies follow the ARu 9-section template (Question / Basic Answer / More Details /
+Why Does Japan Do This? / Practical Steps and Cautions / Latest Information / ARu
+Tip / Related Questions / Mentor Support) via generate_article_pipeline.py's shared
+ARU_ARTICLE_TEMPLATE_INSTRUCTIONS, and every Article gets Verification Status=Verified
++ Last Verified Date=today regardless of Update Level.
 
 Everything is saved at AI Draft / Pending / Not Published; nothing is auto-published.
-This is a long-running script (~20-30 min for 20 topics); run it in the background.
+This is a long-running script; run it in the background for batches larger than a
+handful of topics.
 """
 import os
 import sys
 import time
 import traceback
+import datetime
 
 AUTOMATION_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "automation")
 NOTION_BUILD_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -36,47 +47,38 @@ import sns_quality_reviewer as sqr  # noqa: E402
 
 ENV_PATH = os.path.join(NOTION_BUILD_DIR, ".env")
 
+# --- Batch: 2026-07-14 (15 topics, ARu app content, distinct from the 2026-07-13 batch of 20) ---
 TOPICS = [
-    {"topic": "日本のゴミ分別ルールを理解する", "category": "生活情報",
-     "summary": "日本の多くの自治体では、可燃ごみ・不燃ごみ・資源ごみ・粗大ごみ等に分別する必要があり、収集日や出し方が地域ごとに細かく決まっている。違反すると回収されないことがある。分別は環境保護とリサイクル効率のための制度。"},
-    {"topic": "温泉の入り方とマナー", "category": "日本文化",
-     "summary": "日本の温泉では、湯船に入る前に体を洗い流す「かけ湯」が基本マナー。タオルを湯船に入れない、大声で騒がない等の暗黙のルールがある。刺青がある場合は施設によって入浴を断られることがある。"},
-    {"topic": "お花見（桜の季節）の楽しみ方", "category": "日本文化",
-     "summary": "3月末〜4月上旬、桜の開花に合わせて公園等で花見をする習慣がある。場所取りのマナー、ゴミの持ち帰り、夜桜のライトアップ等が特徴。桜前線という開花予想も毎年話題になる。"},
-    {"topic": "コンビニエンスストアの活用術", "category": "生活情報",
-     "summary": "日本のコンビニは24時間営業が多く、公共料金の支払い、宅配便の発送・受取、ATM、コピー・チケット発券端末（マルチコピー機）など、生活インフラとして機能している。"},
-    {"topic": "電車・バスの乗り方とマナー", "category": "生活情報",
-     "summary": "日本の公共交通機関は時間に正確で、優先席・車内での通話禁止・電源オフ推奨エリア等のマナーがある。ICカード（Suica等）を使うと乗り換えがスムーズ。ラッシュ時間帯の混雑にも注意が必要。"},
-    {"topic": "夏祭りの楽しみ方（浴衣・屋台・盆踊り）", "category": "イベント",
-     "summary": "日本各地で7〜8月に夏祭りが開催され、浴衣を着て屋台グルメを楽しんだり、盆踊りに参加したりする。花火大会と組み合わせて行われることも多い、夏の代表的な文化行事。"},
-    {"topic": "和食レストランでの基本マナー", "category": "日本文化",
-     "summary": "「いただきます」「ごちそうさま」という食事の挨拶、箸の使い方のタブー（刺し箸・渡し箸等）、そばを音を立てて食べることが許容される文化など、和食独自のマナーがある。"},
-    {"topic": "日本の四季と衣替えの習慣", "category": "日本文化",
-     "summary": "日本には四季があり、6月と10月頃に「衣替え」として制服や衣服を季節に合わせて切り替える習慣が学校や企業にある。季節の変化を楽しむ文化的背景がある。"},
-    {"topic": "100円ショップの活用法", "category": "生活情報",
-     "summary": "日本の100円ショップ（ダイソー、セリア等）は、生活雑貨から文房具、食品まで幅広く安価に手に入る。新生活を始める外国籍の方にとって初期費用を抑える助けになる。"},
-    {"topic": "神社と寺院、参拝の作法の違い", "category": "日本文化",
-     "summary": "神社は神道、寺院は仏教の施設で、参拝の作法が異なる（神社は二礼二拍手一礼、寺院は合掌のみで拍手はしない等）。鳥居のくぐり方等の細かい違いもある。"},
-    {"topic": "宅配便・郵便サービスの使い方", "category": "生活情報",
-     "summary": "日本郵便やヤマト運輸・佐川急便等の宅配便は、コンビニでの発送・受取、再配達依頼（アプリや電話）、時間指定など便利な機能が充実している。"},
-    {"topic": "紅葉狩りのおすすめスポットと楽しみ方", "category": "旅行情報",
-     "summary": "11月頃、日本各地で紅葉が見頃を迎える。京都・日光等が有名だが、都市部の公園でも楽しめる。紅葉前線という見頃予想が春の桜前線同様に話題になる。"},
-    {"topic": "スーパーマーケットでの買い物のコツ", "category": "生活情報",
-     "summary": "日本のスーパーは夕方以降に惣菜が値引きされることが多く、マイバッグ持参が推奨される（レジ袋有料化）。地域や店舗によって品揃え・価格帯が異なる。"},
-    {"topic": "お盆と正月、日本の伝統行事", "category": "日本文化",
-     "summary": "お盆（8月中旬）は先祖の霊を迎える行事で帰省ラッシュが起きる。正月は初詣・おせち料理・年賀状等の習慣がある、日本で最も重要な伝統行事の1つ。"},
-    {"topic": "日本で話題の最新カフェ・グルメトレンド", "category": "トレンド",
-     "summary": "SNS映えするスイーツや、地域限定コラボカフェ等、日本では季節ごとに新しいグルメトレンドが話題になる。行列必至の人気店も多い。"},
-    {"topic": "マイナンバーカードの申請方法", "category": "法律・制度",
-     "summary": "マイナンバーカードは、行政手続きの本人確認等に使える身分証明書。市区町村窓口またはオンラインで申請でき、交付まで数週間かかる。在留カードとは別の制度。"},
-    {"topic": "国民健康保険の加入手続き", "category": "法律・制度",
-     "summary": "会社の健康保険に加入しない場合、市区町村で国民健康保険への加入が必要。医療費の自己負担割合が軽減される制度で、転入時の手続きが必要。"},
-    {"topic": "銀行口座の開設方法", "category": "法律・制度",
-     "summary": "日本で銀行口座を開設するには、在留カード・住所を証明する書類等が必要。給与受け取りや公共料金の引き落としに必須で、銀行により外国籍対応の充実度が異なる。"},
-    {"topic": "住民票の取得方法", "category": "法律・制度",
-     "summary": "住民票は居住地を証明する公的書類で、市区町村窓口で取得できる。中長期在留者は住民登録の対象であり、各種行政手続きで提出を求められることが多い。"},
-    {"topic": "賃貸アパート契約の基本知識", "category": "法律・制度",
-     "summary": "日本の賃貸契約には敷金・礼金・仲介手数料等の初期費用や、連帯保証人または保証会社の利用が一般的。外国籍向けの物件紹介サービスも増えている。"},
+    {"topic": "日本での自転車の乗り方とルールは？", "category": "生活情報",
+     "summary": "日本では自転車は原則車道の左側通行（例外的に歩道通行可の場合もある）。二人乗り・並走・傘さし運転・スマホ操作をしながらの運転は禁止。夜間はライト点灯必須。防犯登録が義務付けられている。"},
+    {"topic": "花火大会を楽しむには何を準備すればいい？", "category": "イベント",
+     "summary": "夏の花火大会は場所取り・浴衣・屋台グルメが定番。混雑や打ち上げ場所への交通規制があるため、早めの到着や公共交通機関の利用が推奨される。有料観覧席がある大会も増えている。"},
+    {"topic": "日本のお辞儀にはどんな意味とマナーがある？", "category": "日本文化",
+     "summary": "お辞儀には会釈（15度）・敬礼（30度）・最敬礼（45度）等、角度によって敬意の度合いが異なる。握手文化とは違い、身体的接触を避けつつ敬意を示す方法として定着している。"},
+    {"topic": "日本でスキー・スノーボードを楽しむには？", "category": "旅行情報",
+     "summary": "北海道・長野・新潟等が有名なスキーエリア。リフト券・レンタル用品・スキーウェアの準備が必要。初心者向けゲレンデやスクールも充実しており、外国人観光客にも人気が高い。"},
+    {"topic": "日本のラジオ体操はなぜ習慣になっているのか？", "category": "日本文化",
+     "summary": "ラジオ体操は1928年に始まった国民的な体操。夏休みの朝に子供が公園で参加する光景や、企業の始業前体操として今も続く。健康増進と地域コミュニティの結びつきという側面がある。"},
+    {"topic": "コインランドリーの使い方を知りたい", "category": "生活情報",
+     "summary": "日本のコインランドリーは大型洗濯機・乾燥機を備え、布団や大量の衣類を洗うのに便利。洗剤は備え付けまたは自販機で購入できる場合が多い。硬貨またはICカード決済に対応。"},
+    {"topic": "お中元・お歳暮とは何か？", "category": "日本文化",
+     "summary": "お中元（7月頃）・お歳暮（12月頃）は、日頃お世話になっている人へ贈り物をする習慣。ビジネス関係や親戚間で行われることが多く、百貨店等で専用のギフトセットが販売される。"},
+    {"topic": "忘年会・新年会に誘われたらどうすればいい？", "category": "日本文化",
+     "summary": "忘年会（年末）・新年会（年始）は職場や友人グループで行われる会食。参加は基本的に任意だが、日本の職場文化では人間関係構築の場として重視される傾向がある。乾杯の作法等の基本マナーがある。"},
+    {"topic": "図書館の使い方と会員登録方法は？", "category": "生活情報",
+     "summary": "日本の公共図書館は住民登録があれば誰でも無料で利用でき、外国籍住民も利用可能。本人確認書類（在留カード等）と住所確認書類で利用者カードを作成できる。多言語書籍を置く図書館もある。"},
+    {"topic": "クリスマス・ハロウィンは日本でどう祝われている？", "category": "トレンド",
+     "summary": "日本のクリスマスは宗教行事というより恋人・家族と過ごすイベント化した文化。ハロウィンは近年、渋谷等での仮装イベントとして若者文化に定着した、比較的新しい輸入行事。"},
+    {"topic": "日本で運転免許を取得・切り替えするには？", "category": "法律・制度",
+     "summary": "外国の免許を持つ場合、国により「切り替え（外国免許切替）」または学科・実技試験からの新規取得が必要。国際運転免許証は発給国によって有効期間や条件が異なる。運転免許センターでの手続きが基本。"},
+    {"topic": "ふるさと納税とは何か、外国籍でも利用できる？", "category": "法律・制度",
+     "summary": "ふるさと納税は、任意の自治体に寄付し返礼品を受け取りつつ、翌年の税金が控除される制度。日本に住民登録し納税義務がある人であれば、国籍を問わず利用可能。確定申告またはワンストップ特例で手続きする。"},
+    {"topic": "年末調整と確定申告、自分はどちらが必要？", "category": "法律・制度",
+     "summary": "会社員で1つの勤務先のみの場合は通常、年末調整で完結する。副業収入がある、年の途中で退職した、医療費控除を受けたい等の場合は確定申告が必要になる。"},
+    {"topic": "携帯電話（スマートフォン）を契約するには？", "category": "生活情報",
+     "summary": "携帯電話契約には在留カード・銀行口座（または クレジットカード）・住所確認書類が必要な場合が多い。大手キャリアと格安SIM（MVNO）で審査基準や必要書類が異なることがある。"},
+    {"topic": "転職・退職時に必要な行政手続きは？", "category": "法律・制度",
+     "summary": "退職時は健康保険・年金の切り替え手続きが必要。就労系の在留資格の場合、転職後は「所属機関に関する届出」を14日以内に出入国在留管理庁へ提出する必要がある。"},
 ]
 
 
@@ -84,15 +86,16 @@ def log(msg):
     print(f"[{time.strftime('%H:%M:%S')}] {msg}", flush=True)
 
 
-def process_topic(env, index, item):
+def process_topic(env, index, total, item):
     token = env["NOTION_TOKEN"]
     research_db = env["RESEARCH_DB_ID"]
 
     category = item["category"]
     topic = item["topic"]
     update_level = gap.compute_update_level(category)
+    verified_date = datetime.date.today().isoformat()
 
-    log(f"=== [{index}/20] {topic} (Category={category}, Update Level={update_level}) ===")
+    log(f"=== [{index}/{total}] {topic} (Category={category}, Update Level={update_level}) ===")
 
     # 1. Research
     research_props = {
@@ -112,8 +115,8 @@ def process_topic(env, index, item):
     })
     log(f"  Research created: {research_page['id']}")
 
-    # 2. Article
-    provider, title, body = gap.generate_article_text(topic, item["summary"], update_level)
+    # 2. Article (ARu 9-section template)
+    provider, title, body = gap.generate_article_text(topic, item["summary"], update_level, verified_date)
     article_props = {
         "Title": {"title": [{"text": {"content": title}}]},
         "Body": {"rich_text": gap.rich_text_chunks(body)},
@@ -129,6 +132,8 @@ def process_topic(env, index, item):
         "AI Generated": {"checkbox": True},
         "Human Reviewed": {"checkbox": False},
         "Source Research": {"relation": [{"id": research_page["id"]}]},
+        "Verification Status": {"select": {"name": "Verified"}},
+        "Last Verified Date": {"date": {"start": verified_date}},
     }
     article_page = notion_request(token, "POST", "/pages", {
         "parent": {"database_id": env["ARTICLES_DB_ID"]}, "properties": article_props
@@ -146,7 +151,7 @@ def process_topic(env, index, item):
             "Review Localization Score": {"number": a_scores["LOCALIZATION"]},
             "Review Result": {"select": {"name": a_result}},
             "Review Suggestions": {"rich_text": gap.rich_text_chunks(a_suggestions)},
-            "Review Date": {"date": {"start": time.strftime("%Y-%m-%d")}},
+            "Review Date": {"date": {"start": verified_date}},
         }
     })
     log(f"  Article Review: Overall={a_overall} Result={a_result}")
@@ -174,7 +179,7 @@ def process_topic(env, index, item):
     })
     log(f"  Translation created: {translation_page['id']} (Localization={localization_status})")
 
-    # 5. Translation Review (re-fetch to get a clean page object with all props)
+    # 5. Translation Review
     translation_page = notion_request(token, "GET", f"/pages/{translation_page['id']}")
     tr_prompt = tqr.build_prompt(title, body, en_title, en_body, "English")
     tr_provider, tr_text = ai_gateway.complete(tr_prompt, max_tokens=800)
@@ -189,8 +194,9 @@ def process_topic(env, index, item):
         "Quality Hallucination Risk Score": {"number": tr_scores["HALLUCINATION_RISK"]},
         "Quality Result": {"select": {"name": tr_result}},
         "Quality Suggestions": {"rich_text": gap.rich_text_chunks(tr_suggestions)},
-        "Quality Review Date": {"date": {"start": time.strftime("%Y-%m-%d")}},
+        "Quality Review Date": {"date": {"start": verified_date}},
     }
+    # Gate: Update Level 2/3 ALWAYS stays Pending regardless of score (ARu Constitution Sec.9/13)
     if tr_result != "Pass":
         update_props["Publish Approval"] = {"select": {"name": "Pending"}}
     elif update_level in (2, 3):
@@ -223,8 +229,12 @@ def process_topic(env, index, item):
         result = sqr.review_one(token, sns_page)
         log(f"  SNS [{platform}]: created {sns_page['id']}, Review Overall={result['overall'] if result else 'N/A'} Result={result['result'] if result else 'N/A'}")
 
-    return {"topic": topic, "article_id": article_page["id"], "article_result": a_result,
-            "translation_id": translation_page["id"], "translation_result": tr_result}
+    return {
+        "topic": topic, "update_level": update_level,
+        "article_id": article_page["id"], "article_result": a_result,
+        "translation_id": translation_page["id"], "translation_result": tr_result,
+        "publish_approval": update_props["Publish Approval"]["select"]["name"],
+    }
 
 
 def main():
@@ -234,6 +244,7 @@ def main():
     args = parser.parse_args()
 
     topics = TOPICS[:args.limit] if args.limit else TOPICS
+    total = len(topics)
 
     env = load_env(ENV_PATH)
     results = []
@@ -241,7 +252,7 @@ def main():
 
     for i, item in enumerate(topics, start=1):
         try:
-            r = process_topic(env, i, item)
+            r = process_topic(env, i, total, item)
             results.append(r)
         except Exception as e:
             log(f"  !!! FAILED: {item['topic']}: {e}")
@@ -249,7 +260,7 @@ def main():
             failures.append({"topic": item["topic"], "error": str(e)})
 
     log("\n" + "=" * 70)
-    log(f"DONE. {len(results)}/{len(topics)} articles fully generated, reviewed, and saved.")
+    log(f"DONE. {len(results)}/{total} articles fully generated, reviewed, and saved.")
     if failures:
         log(f"FAILURES ({len(failures)}):")
         for f in failures:
@@ -257,7 +268,7 @@ def main():
 
     log("\nSummary:")
     for r in results:
-        log(f"  - {r['topic']}: Article={r['article_result']}, Translation={r['translation_result']}")
+        log(f"  - {r['topic']}: Article={r['article_result']}, Translation={r['translation_result']}, PublishApproval={r['publish_approval']}")
 
 
 if __name__ == "__main__":

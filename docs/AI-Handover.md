@@ -33,7 +33,7 @@ Research → Article → Article Review → Translation → Translation Review �
 | 段階 | スクリプト | 入出力 |
 |---|---|---|
 | Research | `sync_source_monitor_to_research.py` | Source Monitor → Research |
-| Article | `generate_article_pipeline.py article` | Research → Articles（実Claude API生成） |
+| Article | `generate_article_pipeline.py article` | Research → Articles（実Claude API生成、**ARu公式テンプレート＝9セクション構成**で統一。`Verification Status`／`Last Verified Date`を必ず保存） |
 | Article Review | `reviewer_agent.py` | Articles（5観点スコアリング：Accuracy/Evidence/Readability/Risk/Localization） |
 | Translation | `generate_article_pipeline.py translation` | Articles → Translation（実Claude API生成、文化的補足を自己評価） |
 | Translation Review | `translation_quality_reviewer.py` | Translation（5観点：Meaning Accuracy/Naturalness/Cultural Adaptation/Terminology/Hallucination Risk） |
@@ -75,6 +75,7 @@ Research → Article → Article Review → Translation → Translation Review �
 - **B3.9** `translation_quality_reviewer.py`：Translation 5観点レビュー＋Publish Approvalゲート
 - **B3.10** `sns_quality_reviewer.py`：SNS 5観点レビュー
 - その他：`daily_briefing.py`（CLI版Dashboard）、`check_translation_gaps.py`、`sync_source_monitor_to_research.py`、`escalate_law_significance.py`、`sync_editorial_calendar_status.py`、`enforce_publish_gate.py`、`research_assistant.py`、`article_assistant.py`
+- **一括生成** `notion-build/bulk_generate_articles.py`（旧`bulk_generate_20_articles.py`）：`TOPICS`リストを差し替えるだけで、Research→Article（9セクションテンプレート）→Review→Translation→Review→SNS×3→Reviewのフルパイプラインを日々再利用できる汎用スクリプト
 
 詳細と実行方法は`docs/Automation-Scripts.md`。
 
