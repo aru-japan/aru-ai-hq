@@ -176,6 +176,14 @@ def run_article(env, keyword, category):
     life_topics = classify_life_topics(title, body)
     print(f"  Life Topics: {life_topics}")
 
+    # Priority/Urgency are set by whoever created the Research (a human, or
+    # Editorial Planner's star-derived values) -- the Article inherits them
+    # rather than getting a hardcoded default, so Ready to Publish / Article
+    # Review Waiting sort meaningfully instead of tying on "Medium" for everyone.
+    research_priority = get_prop(research, "Priority", "select")
+    research_urgency = get_prop(research, "Urgency", "select")
+    print(f"  Inherited from Research: Priority={research_priority}, Urgency={research_urgency}")
+
     article_props = {
         "Title": {"title": [{"text": {"content": title}}]},
         "Body": {"rich_text": rich_text_chunks(body)},
@@ -184,7 +192,6 @@ def run_article(env, keyword, category):
         "Update Level": {"number": update_level},
         "Audience": {"multi_select": [{"name": "観光客"}, {"name": "在住外国人"}]},
         "Season": {"multi_select": [{"name": "通年"}]},
-        "Urgency": {"select": {"name": "Medium"}},
         "Master Language": {"select": {"name": "ja"}},
         "Confidentiality": {"select": {"name": "Public"}},
         "Usage Scope": {"multi_select": [{"name": "Consumer App"}]},
@@ -194,6 +201,8 @@ def run_article(env, keyword, category):
         "Verification Status": {"select": {"name": "Verified"}},
         "Last Verified Date": {"date": {"start": verified_date}},
     }
+    article_props["Priority"] = {"select": {"name": research_priority}} if research_priority else {"select": {"name": "Medium"}}
+    article_props["Urgency"] = {"select": {"name": research_urgency}} if research_urgency else {"select": {"name": "Medium"}}
     if life_topics:
         article_props["Life Topics"] = {"multi_select": [{"name": t} for t in life_topics]}
     article_page = notion_request(token, "POST", "/pages", {

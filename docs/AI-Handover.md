@@ -127,6 +127,7 @@ Research → Article → Article Review → Translation → Translation Review �
 - Publishing Center（Version 4 Phase 3）：Publishing Statusによる公開管理（Draft/Ready to Publish/Published/Needs Update/Archived/Duplicate）、Freshness Monitorとの双方向連携、公開操作の自動記録（Published Date/By）、Dashboard「🚀📚🛠」3セクション（2026-07-14）
 - Articles DB正規化：重複記事15グループ（記事30件）をResearch.Topic単位で検出し、判定基準に基づき各グループ1件を残して残りをArchive（Publishing Status=Duplicate）。削除はしていない（2026-07-14）
 - Duplicate Prevention（Version 4 Phase 4）：「1 Research Topic = 1 Article」を生成**前**にコードで強制（`duplicate_guard.py`）。`bulk_generate_articles.py`は処理ループ開始前にTOPICS全件を事前チェックする設計に変更。Dashboard「🛡 Duplicate Prevention」＋専用ページ（2026-07-14）
+- Dashboard 13セクション全Linked Database Viewを人手で設定完了（2026-07-16）。設定過程でSelect型プロパティ（`Priority`／`Urgency`）の「降順」がオプション定義順の逆——つまり意図と正反対の並びになる不具合を発見し、Articles・Research・Editorial Calendarの3DBでオプション定義順を並べ替えて解消。あわせてArticles.Priority／Urgencyが記事生成時に一度も継承されていなかった問題を修正し、`generate_article_pipeline.py`／`bulk_generate_articles.py`がResearchのPriority／Urgencyを自動継承する設計に変更、既存53記事もバックフィル済み
 
 ## ■ Remaining Tasks
 
@@ -148,6 +149,8 @@ Research → Article → Article Review → Translation → Translation Review �
 
 - **NotionパブリックAPIはViewやTemplateを作成できない。** 手動設定が必要（`docs/View-Template-Guide.md`）
 - **NotionパブリックAPIは「Linked view of database」ブロックを作成できない。** DashboardはPage＋説明文のみで、実際のフィルタ済みビューは手動で埋め込む必要がある
+- **NotionパブリックAPIは既存Linked Viewの設定（Filter／Sort／表示プロパティ）を読み取ることもできない。** AIが「設計書と実際のView設定に差異がないか」を直接検証する手段はなく、確認は人間の目視（またはスクリーンショット共有）に頼る。AIが独立して検証できるのは、①設計書同士の整合性、②同じFilter/Sort条件でDBを直接クエリした際のデータの健全性、の2点まで
+- **Select型プロパティのSortは値の重要度ではなくオプションの定義順に従う。** 「降順」はオプション定義順を逆にしたものであり、意味的な重要度の降順とは限らない（2026-07-16に発見、Priority／Urgencyで実際に逆転していた）。新しくSelect型プロパティを追加してSortに使う場合は、オプションの定義順を「重要度が低い→高い」の順にしておくこと（そうすれば「降順」が直感通り「重要度が高いものが先頭」になる）
 - Notionのrich_textは1項目あたり2000文字制限（`rich_text_chunks()`で分割対応済み）
 - Notion Formulaの構文は不安定な場合がある（`dateBetween()`は動くが、日付プロパティ同士の直接`>`比較が失敗した例がある）
 - GitHubへのPushは、このBash実行環境では非対話認証ができず失敗する。人間が自身のターミナルで`git push`を実行する必要がある（過去、一度認証が通れば以降のPushは成功している）
@@ -181,4 +184,4 @@ Research → Article → Article Review → Translation → Translation Review �
 
 ---
 
-*ARu HQ / Decode Japan — AI Handover Document v1.3 — 2026-07-14*
+*ARu HQ / Decode Japan — AI Handover Document v1.4 — 2026-07-16*

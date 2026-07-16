@@ -4,12 +4,12 @@
 
 | | |
 |---|---|
-| **Date** | 2026-07-14 |
+| **Date** | 2026-07-14（本体）／2026-07-16 追記あり |
 | **対象** | Version 4（Enterprise）準備状況のスナップショット |
 | **最新Commit** | `0eb1fda` |
 | **位置づけ** | [Roadmap](./Roadmap.md)・[AI-Handover](./AI-Handover.md)・[README](../README.md)との整合性を確認済み |
 
-> このレポートは特定時点のスナップショット。「本日」は2026-07-14を指す。数値はすべてNotion実データへの実クエリで取得したもので、推測値ではない。
+> このレポートは特定時点のスナップショット。本体は2026-07-14時点、末尾の「8. Dashboard運用整備」は2026-07-16の追記。数値はすべてNotion実データへの実クエリで取得したもので、推測値ではない。
 
 ---
 
@@ -179,4 +179,15 @@ Version 4本体は**前提条件（Pilot Operation 7日間の実運用完了）�
 
 ---
 
-*ARu HQ / Decode Japan — Version 4 Current Status Report — 2026-07-14*
+## 8. Dashboard運用整備（2026-07-16追記）
+
+Reiと一緒に、Dashboardの全13セクションのLinked Database View設定を完了した（Notion UIでの手動設定、AIが代行できない部分）。設定の過程で2件の不具合を発見・修正した。
+
+1. **Select型プロパティの「降順」が意図と逆だった**：`Priority`／`Urgency`のSelectオプション定義順が「重要度が高い→低い」だったため、Notionの仕様上「降順」がその逆——**重要度が低いものが先頭に来る**、意図と正反対の並びになっていた。Articles・Research・Editorial Calendarの3DBでオプション定義順を並べ替えて解消（データそのものは変更していない）。
+2. **Articles.Priorityが記事生成パイプラインで一度も書き込まれていなかった**：既存53記事中52件が未設定だった。ArticleがResearchの`Priority`／`Urgency`を生成時に自動継承する設計へ変更し（`generate_article_pipeline.py`／`bulk_generate_articles.py`）、既存53記事も一括バックフィル（53件成功）。バックフィル後は全件`Priority=Medium`（Researchが一律Mediumで作成されていたことをそのまま反映、バグではない）。Editorial Planner提案のResearch（★評価に基づきHigh／Critical含む）が今後Article化されれば自然に分散する設計。
+
+詳細は[Automation Scripts](./Automation-Scripts.md)の該当節を参照。**Dashboard 13セクションのLinked View設定・データ側の不具合修正・実データでの動作確認まで完了し、編集長がDashboardのみで公開待ち・翻訳待ち・SNS待ち・Research・要更新記事を運営できる状態になった。**
+
+---
+
+*ARu HQ / Decode Japan — Version 4 Current Status Report — 2026-07-14（8節のみ2026-07-16追記）*

@@ -120,6 +120,13 @@ def process_topic(env, index, total, item):
     # 2. Article (ARu 9-section template)
     provider, title, body = gap.generate_article_text(topic, item["summary"], update_level, verified_date)
     life_topics = classify_life_topics(title, body)
+
+    # Article inherits Priority/Urgency from its Research rather than a hardcoded
+    # default, so sections that sort by them (Ready to Publish, Article Review
+    # Waiting) discriminate meaningfully instead of tying on "Medium" for everyone.
+    research_priority = get_prop(research_page, "Priority", "select") or "Medium"
+    research_urgency = get_prop(research_page, "Urgency", "select") or "Medium"
+
     article_props = {
         "Title": {"title": [{"text": {"content": title}}]},
         "Body": {"rich_text": gap.rich_text_chunks(body)},
@@ -128,7 +135,8 @@ def process_topic(env, index, total, item):
         "Update Level": {"number": update_level},
         "Audience": {"multi_select": [{"name": "観光客"}, {"name": "在住外国人"}]},
         "Season": {"multi_select": [{"name": "通年"}]},
-        "Urgency": {"select": {"name": "Medium"}},
+        "Priority": {"select": {"name": research_priority}},
+        "Urgency": {"select": {"name": research_urgency}},
         "Master Language": {"select": {"name": "ja"}},
         "Confidentiality": {"select": {"name": "Public"}},
         "Usage Scope": {"multi_select": [{"name": "Consumer App"}]},

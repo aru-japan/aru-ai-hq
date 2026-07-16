@@ -1,4 +1,4 @@
-<title>Automation Scripts v1.6</title>
+<title>Automation Scripts v1.7</title>
 
 # Automation Scripts
 ### ARu Studio — Roadmap Version 3 実装記録 ＋ Version 4準備
@@ -502,6 +502,30 @@ Draft 33件のうち大半はUpdate Level 2（法律・制度）でTranslation P
 
 **テスト中に発見・修正したバグ**：`publishing_center.py`は`Publishing Status`の新しい選択肢`Duplicate`を認識しておらず、`Archived`だけを「触らない」対象としていた。このままアーカイブ後に`publishing_center.py`を再実行すると、Duplicateへ移動した15件が評価ロジックに引っかかり、Draft／Ready to Publishへ**意図せず復元されてしまう**バグだった。`sync_publishing_status()`の判定と、`ensure_schema()`が書き込む選択肢一覧の両方に`Duplicate`を追加して修正し、実データで再実行して15件が正しく`Duplicate (untouched)`のまま維持されることを確認した。
 
+---
+
+## Dashboard運用整備で発見・修正した2件の不具合（2026-07-16）
+
+Dashboard の Linked Database View を手動設定する過程で、Rei と一緒にデータ側の不具合を2件発見・修正した。
+
+### ① Select型プロパティの「降順」が意図と逆だった
+
+`Priority`（High／Medium／Low）と`Urgency`（Critical／High／Medium／Low）は、Notionのスキーマ上「重要な選択肢を先に定義する」順（High→Medium→Low等）で作成していた。ところがNotionのSelect型プロパティのSortは、値の重要度ではなく**オプションの定義順**に従う仕様のため、UI上で「降順」を選ぶと定義順を逆にした並び——つまり**Low（最も重要度が低いもの）が先頭に来てしまう**、意図と正反対の挙動になっていた。
+
+Articles・Research・Editorial Calendarの3DBで、`Priority`／`Urgency`のSelectオプション定義順を「Low→Medium→High」「Low→Medium→High→Critical」へ並べ替えて解消（既存の選択値・色は保持したまま順序のみ変更。データそのものは変更していない）。これにより「Today's Research」「Ready to Publish」「Article Review Waiting」「Today's Editorial Calendar」の4セクションすべてで、「降順」が正しく「緊急度・優先度が高いものを先頭に表示する」動作になった。
+
+### ② Articles.Priorityが記事生成パイプラインで一度も書き込まれていなかった
+
+既存53記事のうち52件で`Priority`が未設定（空）だった。原因は`generate_article_pipeline.py`・`bulk_generate_articles.py`のどちらも、ArticleへPriorityを書き込む処理自体が存在しなかったため。`Urgency`も同様に、値そのものは書き込んでいたが`"Medium"`固定のハードコードだった（Researchの実際の値を反映していなかった）。
+
+**恒久対応**：ArticleはResearchの`Priority`・`Urgency`を生成時に自動継承する設計に変更した。
+
+- `generate_article_pipeline.py` `run_article()`：既存の`Converted` Researchから`Priority`／`Urgency`を読み取り、そのままArticleへコピー（値が無い場合のみ`Medium`にフォールバック）
+- `bulk_generate_articles.py` `process_topic()`：その場で作成したResearchの`Priority`／`Urgency`（`research_page`のレスポンスから直接取得、追加API呼び出し不要）をArticleへコピー
+- 既存53記事は、それぞれのSource Researchから`Priority`／`Urgency`を取得し一括バックフィル（実データで実行、53件成功・0件失敗）
+
+**正直な結果報告**：バックフィル後、53記事すべてが`Priority=Medium`（うち1件のみ`Urgency=High`、残りは`Medium`）となった。これはバグではなく、これまでの`bulk_generate_articles.py`のResearch生成コードが`Priority`／`Urgency`を`"Medium"`固定で作成していたことをそのまま反映した結果——**継承の仕組み自体は正しく動作しており**、Editorial Plannerが提案したResearch（★評価に基づき`High`／`Critical`まで幅がある）が今後Article化されていけば、自然にPriorityが分散していく設計になっている。Ready to Publishの並び順は、現時点ではPriority段が全件同点のため実質的にUpdate Level・Last Verified Dateの2段目・3段目が並び順を決めているが、これは①の修正により正しく機能している状態であり、Priority分散が進めば1段目からも効くようになる。
+
 ## 未実施事項（要判断）
 
 - **スケジューリング**：cron／launchd等での定期実行はまだ設定していない。日次実行にするか、Rei自身が手動実行するかは別途判断が必要
@@ -510,4 +534,4 @@ Draft 33件のうち大半はUpdate Level 2（法律・制度）でTranslation P
 
 ---
 
-*ARu HQ / Decode Japan — Automation Scripts v1.6 — 2026-07-14*
+*ARu HQ / Decode Japan — Automation Scripts v1.7 — 2026-07-16*
