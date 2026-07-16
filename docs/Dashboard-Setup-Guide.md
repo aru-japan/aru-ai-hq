@@ -103,6 +103,10 @@ Dashboardページを開き、埋め込みたい見出し（例：「① Publish
 
 ## 完了チェックリスト
 
+- [ ] 🔴 Update Needed
+- [ ] 🚀 Ready to Publish
+- [ ] 📚 Published Articles
+- [ ] 🛠 Needs Update（公開済み）
 - [ ] ① Publish Approval Pending
 - [ ] ② Article Review Waiting
 - [ ] ③ Translation Review Waiting
@@ -113,6 +117,8 @@ Dashboardページを開き、埋め込みたい見出し（例：「① Publish
 - [ ] ⑧ Recent Law Updates
 - [ ] ⑨ Recent Event Calendar
 
+> インタラクティブ版（進捗が保存されるチェックリスト＋Notion画面のモックアップ付き）は [Artifact版 Dashboard Setup Guide](https://claude.ai/code/artifact/22766c12-4f75-40d2-843b-cbf06b9587bf) を参照。
+
 ## よくあるつまずきポイント
 
 - **フィルタの条件名が英語のまま出てくる**：Notionの仕様上、`Is`（である）／`Is not`（ではない）／`Contains`（含む）等はプロパティの型によって選べる条件が変わる。Select型は基本「Is」、Checkbox型は「チェック済み／未チェック」を選ぶ。
@@ -121,4 +127,4 @@ Dashboardページを開き、埋め込みたい見出し（例：「① Publish
 
 ---
 
-*ARu HQ / Decode Japan — Dashboard Setup Guide v1.0 — 2026-07-13*
+*ARu HQ / Decode Japan — Dashboard Setup Guide v1.1 — 2026-07-16*
