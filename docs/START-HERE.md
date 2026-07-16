@@ -83,6 +83,13 @@ Notion上の「ARu Studio Dashboard」ページ（編集長ホーム画面）。
 
 **NotionパブリックAPIは「Linked view of database」を自動作成できないため、🔴〜🛠と①〜⑨の13セクションすべて、Linked View自体は人間が手動で設定する必要がある**（手順：[Dashboard Setup Guide](./Dashboard-Setup-Guide.md)）。📊と📝の2つだけは専用ページへのリンクなので対象外。
 
+**Editor Home／AI Command Center（Version 4 Phase 5、2026-07-16追加）**：上記Dashboardとは別の、ARu Studioルート配下にある2つの独立したナビゲーションハブページ。Dashboardの13 Linked Viewを再現するのではなく、その数値だけを同一フィルタで再計算して見せ、実際の操作はDashboardへのリンクで戻す設計。
+
+- 🏠 **Editor Home**：「今日、人間が決めること」——Ready to Publish／Published／Needs Update／Publish Approval Pending／Article Review Waiting／Translation Review Waiting／SNS Draft Waiting／Today's Editorial Calendar／Today's Researchの9件数
+- 🤖 **AI Command Center**：「AIが監視・検知していること」——Freshness内訳（外部シグナル起因／時間経過起因）、Duplicate Prevention本日の活動、外部監視フィード（Source Monitor／Law Update／Event Calendar）、Coverage Analysis・Editorial Plannerへのポインタ
+
+両ページとも`notion-build/automation/editor_home.py`／`ai_command_center.py`を再実行すれば最新値に上書きされる（ページIDは`.env`の`EDITOR_HOME_PAGE_ID`／`AI_COMMAND_CENTER_PAGE_ID`）。あわせて、Articleページ本文自体も`render_article_layout.py`によりARu公式9セクション（5つは本文フロー、4つはtoggle折りたたみ）としてブロック描画されるようになった（Bodyプロパティは不変、表示専用）。プロパティパネルのグループ化は[Article Property Panel Guide](./Article-Property-Panel-Guide.md)（手動設定、Notion UI機能のためAPI非対応）を参照。
+
 ---
 
 ## 6. Current Workflow（現在のワークフロー）
@@ -127,6 +134,7 @@ README.md ─┬─ START-HERE.md（このファイル。最初に読む）
             ├─ ER-Design.html（データベース設計書）
             ├─ View-Template-Guide.md（Notion UI手動設定手順）
             ├─ Dashboard-Setup-Guide.md（Dashboard初回セットアップ、初心者向け）
+            ├─ Article-Property-Panel-Guide.md（Articleプロパティのグループ化手順、Version 4 Phase 5）
             │
             ├─ Operating-Manual.md（編集長向けSOP）
             ├─ Pilot-Operation-Guide.md（7日間実運用の手順）
@@ -137,4 +145,4 @@ README.md ─┬─ START-HERE.md（このファイル。最初に読む）
 
 ---
 
-*ARu HQ / Decode Japan — START HERE — 2026-07-14*
+*ARu HQ / Decode Japan — START HERE — 2026-07-14（Dashboard節・ドキュメント階層は2026-07-16追記）*

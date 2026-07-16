@@ -83,6 +83,8 @@ Research → Article → Article Review → Translation → Translation Review �
 - **Version 4 Phase 2** `editorial_planner.py`：Coverage Analyzerのデータから★1〜5の優先編集プランを生成（★の算出はLife Topic Impact×記事数の決定論的ロジック、AIはReason／タイトル案／Expected Categoryの生成のみ担当）。`--generate-research`で選択したプラン項目のResearchレコードを自動作成（新規プロパティなし、Research DB既存の`Gap Engine`／`AI Suggested`選択肢を利用）。Dashboard「📝 Editorial Planner」＋専用Notionページに反映
 - **Version 4 Phase 3** `publishing_center.py`：Articlesに`Publishing Status`等を追加し、Review Result／Translation Quality Result・Publish Approval／Freshness Status／必須項目からDraft⇄Ready to Publishを自動同期。**Publishedへは常に人間が変更し、AIは自動公開しない**。Freshness Monitorと双方向連携（Published→Needs Update、鮮度回復で自動復帰）。`enforce_publish_gate.py`もPublishing Status=Publishedを監視するよう拡張。Dashboard「🚀 Ready to Publish」「📚 Published Articles」「🛠 Needs Update」に反映
 - **Version 4 Phase 4** `duplicate_guard.py`（＋`duplicate_prevention_report.py`）：**「1 Research Topic = 1 Article」**をコードで強制。生成**前**にResearch.Topic→Article→Translation→SNSの存在を順に確認し、既存なら生成せず「Already Exists」（どの段階まで存在したか付き）として記録する。`bulk_generate_articles.py`は処理ループを始める前にTOPICS全件を事前チェックし除外する設計（検知ではなく防止）。Dashboard「🛡 Duplicate Prevention」に本日の生成件数・スキップ件数・Already Exists一覧を反映
+- **Version 4 Phase 5（Editor Experience）** `render_article_layout.py`：Articles.Body（1つのrich_textにARu公式9セクションが`**見出し**`形式で入っているだけ）を、Article**ページの実ブロック**として描画するレンダラー。Question/Basic Answer/More Details/Why Does Japan Do This?/ARu Tipの5つを本文フローに、残る4セクション（Practical Steps and Cautions/Latest Information/Related Questions/Mentor Support）は「その他の詳細」というtoggleブロックにまとめて折りたたむ。プロパティ・スキーマは一切変更しない、Bodyプロパティを唯一の原本としたまま表示だけを整形する完全追加レイヤー（既存スクリプトはどれもArticleページのブロック子要素を読み書きしていないことを全リポジトリgrepで確認済み）。`generate_article_pipeline.py`／`bulk_generate_articles.py`のArticle保存直後にフック済み（失敗してもArticleレコード自体の保存は妨げないnon-fatal設計）。既存Articles全38件（Archived除く）に一括バックフィル済み（0件失敗）
+- **Version 4 Phase 5（Editor Experience）** `editor_home.py`／`ai_command_center.py`：編集長向けに「今日決めること」（Editor Home：Ready to Publish／Published／Needs Update／Publish Approval Pending／Article Review Waiting／Translation Review Waiting／SNS Draft Waiting／Today's Editorial Calendar／Today's Researchの9件数）と「AIが監視していること」（AI Command Center：Freshness内訳・Duplicate Prevention本日の活動・外部監視フィード3種・Coverage Analysis/Editorial Plannerへのポインタ）を分離した2つの専用Notionページ（ナビゲーションハブ、Dashboardの13 Linked Viewを再現するのではなくリンクで戻す設計）。フィルタは`docs/Dashboard-Setup-Guide.md`の設定一覧と完全に同一の条件を使い、数値が実際のDashboard表示とずれないようにしている
 
 詳細と実行方法は`docs/Automation-Scripts.md`。
 
@@ -128,6 +130,7 @@ Research → Article → Article Review → Translation → Translation Review �
 - Articles DB正規化：重複記事15グループ（記事30件）をResearch.Topic単位で検出し、判定基準に基づき各グループ1件を残して残りをArchive（Publishing Status=Duplicate）。削除はしていない（2026-07-14）
 - Duplicate Prevention（Version 4 Phase 4）：「1 Research Topic = 1 Article」を生成**前**にコードで強制（`duplicate_guard.py`）。`bulk_generate_articles.py`は処理ループ開始前にTOPICS全件を事前チェックする設計に変更。Dashboard「🛡 Duplicate Prevention」＋専用ページ（2026-07-14）
 - Dashboard 13セクション全Linked Database Viewを人手で設定完了（2026-07-16）。設定過程でSelect型プロパティ（`Priority`／`Urgency`）の「降順」がオプション定義順の逆——つまり意図と正反対の並びになる不具合を発見し、Articles・Research・Editorial Calendarの3DBでオプション定義順を並べ替えて解消。あわせてArticles.Priority／Urgencyが記事生成時に一度も継承されていなかった問題を修正し、`generate_article_pipeline.py`／`bulk_generate_articles.py`がResearchのPriority／Urgencyを自動継承する設計に変更、既存53記事もバックフィル済み
+- Version 4 Phase 5（Editor Experience、2026-07-16）：Version 4のスキーマ・プロパティ・自動化を一切変更せず、表示とナビゲーションだけを編集長ファーストへ改善。①`render_article_layout.py`でArticleページ本文をARu公式9セクション（5つ本文フロー＋4つtoggle折りたたみ）として実ブロック描画（既存38記事に一括バックフィル済み、両生成パイプラインにフック済み）。②`editor_home.py`「今日決めること」9項目（合計92件、実データ確認済み）。③`ai_command_center.py`「AIが監視していること」（Freshness内訳2件、Duplicate Prevention本日2件生成、外部監視フィード3種、AI分析ページへのポインタ）。④Articleページのプロパティパネルを【本文】【公開情報】【関連情報】【AI Review】【System】へグループ化する手順を`docs/Article-Property-Panel-Guide.md`として文書化（Notion UI機能のためAPIから設定不可、View設定と同じ制約）。全既存自動化（Freshness Monitor／Publishing Center／Coverage Analyzer／Editorial Planner／Duplicate Prevention／Publish Gate）を再実行し、挙動に変化がないことを確認済み
 
 ## ■ Remaining Tasks
 
@@ -150,6 +153,7 @@ Research → Article → Article Review → Translation → Translation Review �
 - **NotionパブリックAPIはViewやTemplateを作成できない。** 手動設定が必要（`docs/View-Template-Guide.md`）
 - **NotionパブリックAPIは「Linked view of database」ブロックを作成できない。** DashboardはPage＋説明文のみで、実際のフィルタ済みビューは手動で埋め込む必要がある
 - **NotionパブリックAPIは既存Linked Viewの設定（Filter／Sort／表示プロパティ）を読み取ることもできない。** AIが「設計書と実際のView設定に差異がないか」を直接検証する手段はなく、確認は人間の目視（またはスクリーンショット共有）に頼る。AIが独立して検証できるのは、①設計書同士の整合性、②同じFilter/Sort条件でDBを直接クエリした際のデータの健全性、の2点まで
+- **NotionパブリックAPIはページのプロパティパネルのグループ化・折りたたみを設定できない。** ViewやTemplateと同じ制約カテゴリ。Articleページのプロパティを【本文】【公開情報】【AI Review】【System】等へグループ化する作業（`docs/Article-Property-Panel-Guide.md`）は人間が手動で行う必要がある
 - **Select型プロパティのSortは値の重要度ではなくオプションの定義順に従う。** 「降順」はオプション定義順を逆にしたものであり、意味的な重要度の降順とは限らない（2026-07-16に発見、Priority／Urgencyで実際に逆転していた）。新しくSelect型プロパティを追加してSortに使う場合は、オプションの定義順を「重要度が低い→高い」の順にしておくこと（そうすれば「降順」が直感通り「重要度が高いものが先頭」になる）
 - Notionのrich_textは1項目あたり2000文字制限（`rich_text_chunks()`で分割対応済み）
 - Notion Formulaの構文は不安定な場合がある（`dateBetween()`は動くが、日付プロパティ同士の直接`>`比較が失敗した例がある）
@@ -184,4 +188,4 @@ Research → Article → Article Review → Translation → Translation Review �
 
 ---
 
-*ARu HQ / Decode Japan — AI Handover Document v1.4 — 2026-07-16*
+*ARu HQ / Decode Japan — AI Handover Document v1.5 — 2026-07-16*

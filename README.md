@@ -30,6 +30,7 @@ ARu HQ（AI編集部）の運営思想・設計・実装を1つにまとめた�
 | [Pilot Operation Guide](docs/Pilot-Operation-Guide.md) | Version 3.5：AI編集部を7日間実運用するための手順 |
 | [Operation Checklist](docs/Operation-Checklist.md) | 7日間分の日次チェックリスト＋Operation Log記入欄 |
 | [Version 4 Status Report](docs/Version4-Status.md) | Version 4準備状況のスナップショット（実装機能／記事数等のコンテンツ量／完成率／課題／次にやること） |
+| [Article Property Panel Guide](docs/Article-Property-Panel-Guide.md) | Articleページのプロパティを【本文】【公開情報】【AI Review】【System】へグループ化する手動Notion UI手順（Version 4 Phase 5） |
 
 ## 実装
 
@@ -41,4 +42,4 @@ ARu HQ（AI編集部）の運営思想・設計・実装を1つにまとめた�
 
 ## 現在地
 
-Roadmap Version 1・2・3は完了（一部Deferred）。Version 3.5（Pilot Operation：7日間実運用）Day 2まで完了。Update Level 1の自動公開経路（Publish Approval→Not Required）を実証済み。記事本文はARu公式テンプレート（9セクション構成）に統一し、`bulk_generate_articles.py`で日々の一括生成に対応（2026-07-14）。Version 4準備として、Article Freshness Monitor（既存記事の鮮度自動チェック＋Dashboard「🔴 Update Needed」）、Coverage Analyzer（生活トピック別の記事数・不足分析・おすすめ新規テーマをAIが提案、Dashboard「📊 Coverage Analysis」）、Editorial Planner（★1〜5の優先編集プランを自動生成し、`--generate-research`でResearchレコードまで自動作成、Dashboard「📝 Editorial Planner」）、Publishing Center（Publishing Statusで公開管理、Dashboard「🚀 Ready to Publish」「📚 Published Articles」「🛠 Needs Update」。AIによる自動公開は行わず、Publishedは常に人間の操作）、およびDuplicate Prevention（「1 Research Topic = 1 Article」を生成前に強制、Dashboard「🛡 Duplicate Prevention」）を先行実装（2026-07-14、新規DBなし）。Articles DBの重複記事15件を検出・アーカイブし正規化済み。Version 4（Enterprise）本体はPilot完了後、別途方針確認のうえ着手する。詳細は [Roadmap](docs/Roadmap.md) を参照。
+Roadmap Version 1・2・3は完了（一部Deferred）。Version 3.5（Pilot Operation：7日間実運用）Day 2まで完了。Update Level 1の自動公開経路（Publish Approval→Not Required）を実証済み。記事本文はARu公式テンプレート（9セクション構成）に統一し、`bulk_generate_articles.py`で日々の一括生成に対応（2026-07-14）。Version 4準備として、Article Freshness Monitor（既存記事の鮮度自動チェック＋Dashboard「🔴 Update Needed」）、Coverage Analyzer（生活トピック別の記事数・不足分析・おすすめ新規テーマをAIが提案、Dashboard「📊 Coverage Analysis」）、Editorial Planner（★1〜5の優先編集プランを自動生成し、`--generate-research`でResearchレコードまで自動作成、Dashboard「📝 Editorial Planner」）、Publishing Center（Publishing Statusで公開管理、Dashboard「🚀 Ready to Publish」「📚 Published Articles」「🛠 Needs Update」。AIによる自動公開は行わず、Publishedは常に人間の操作）、およびDuplicate Prevention（「1 Research Topic = 1 Article」を生成前に強制、Dashboard「🛡 Duplicate Prevention」）を先行実装（2026-07-14、新規DBなし）。Articles DBの重複記事15件を検出・アーカイブし正規化済み。Dashboard全13セクションのLinked View設定も完了（2026-07-16）。続けてVersion 4 Phase 5（Editor Experience、2026-07-16）として、スキーマ・自動化を一切変更せずArticleページ本文をブロック描画する`render_article_layout.py`（既存38記事に一括バックフィル済み）、「今日決めること」「AIが監視していること」をそれぞれ集約するEditor Home／AI Command Centerの2ナビゲーションハブページ、Articleプロパティパネルのグループ化手順書を実装。Version 4（Enterprise）本体はPilot完了後、別途方針確認のうえ着手する。詳細は [Roadmap](docs/Roadmap.md) を参照。

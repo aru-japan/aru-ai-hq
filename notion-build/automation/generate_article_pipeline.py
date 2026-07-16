@@ -25,6 +25,7 @@ from notion_api import load_env, notion_request, query_database, get_prop  # noq
 import ai_gateway  # noqa: E402
 from life_topics import classify_life_topics  # noqa: E402
 from duplicate_guard import check_before_generate, log_generated  # noqa: E402
+import render_article_layout  # noqa: E402
 
 ENV_PATH = os.path.join(NOTION_BUILD_DIR, ".env")
 
@@ -210,6 +211,13 @@ def run_article(env, keyword, category):
     })
     print(f"  SAVED Article: {article_page['id']}")
     log_generated(topic, article_page["id"])
+
+    try:
+        result = render_article_layout.render_article(env, article_page["id"], title=title, body=body)
+        print(f"  Rendered {result['block_count']} article page block(s) ({len(result['found'])}/9 sections found)")
+    except Exception as e:
+        print(f"  WARNING: article page rendering failed (non-fatal, Article record itself is saved): {e}")
+
     return article_page["id"]
 
 

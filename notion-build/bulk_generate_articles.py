@@ -46,6 +46,7 @@ import translation_quality_reviewer as tqr  # noqa: E402
 import sns_quality_reviewer as sqr  # noqa: E402
 from life_topics import classify_life_topics  # noqa: E402
 from duplicate_guard import check_before_generate, log_generated  # noqa: E402
+import render_article_layout as ral  # noqa: E402
 
 ENV_PATH = os.path.join(NOTION_BUILD_DIR, ".env")
 
@@ -153,6 +154,12 @@ def process_topic(env, index, total, item):
     })
     log(f"  Article created: {article_page['id']} ({title[:40]}...)")
     log_generated(topic, article_page["id"])
+
+    try:
+        render_result = ral.render_article(env, article_page["id"], title=title, body=body)
+        log(f"  Article page blocks rendered ({render_result['block_count']} blocks, {len(render_result['found'])}/9 sections found)")
+    except Exception as e:
+        log(f"  WARNING: article page rendering failed (non-fatal): {e}")
 
     # 3. Article Review
     a_provider, a_scores, a_overall, a_result, a_suggestions = ra.review_article(article_page)

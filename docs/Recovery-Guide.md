@@ -52,6 +52,8 @@
 
 Notionで「ARu Studio」ルートページ配下の「ARu Studio Dashboard」ページを開く（Page IDは`.env`の`DASHBOARD_PAGE_ID`）。上から🔴 Update Needed → 📊 Coverage Analysis → 📝 Editorial Planner → 🚀 Ready to Publish → 📚 Published Articles → 🛠 Needs Update → ①〜⑨の順。**Linked Viewが空白／未設定の場合は[Dashboard Setup Guide](./Dashboard-Setup-Guide.md)の手順で再設定する**（NotionパブリックAPIでは自動復元できない、人間の手作業が必要な部分）。
 
+あわせて、Version 4 Phase 5で追加した2つのナビゲーションハブページも確認する（Page IDは`.env`の`EDITOR_HOME_PAGE_ID`／`AI_COMMAND_CENTER_PAGE_ID`）：🏠 Editor Home（今日、人間が決めること）、🤖 AI Command Center（AIが監視・検知していること）。この2ページはLinked Viewではなく`editor_home.py`／`ai_command_center.py`が毎回ブロックを上書き生成する専用ページなので、Dashboardと違って手動再設定は不要——スクリプトを再実行すれば復元される。
+
 ### Step 7：Notionデータベースを確認する
 
 10個のデータベース（Articles／Research／Translation／Source Library／Editorial Calendar／Experience Intelligence／Source Monitor／Law Update／Event Calendar／SNS Queue）が実際に存在し、レコードが読めるか確認する。`.env`にDB IDが揃っていれば、以下で件数を確認できる（**値ではなく件数のみを出力する**、安全なコマンド）。

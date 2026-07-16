@@ -1,12 +1,12 @@
-<title>Automation Scripts v1.7</title>
+<title>Automation Scripts v1.8</title>
 
 # Automation Scripts
-### ARu Studio — Roadmap Version 3 実装記録 ＋ Version 4準備
+### ARu Studio — Roadmap Version 3 実装記録 ＋ Version 4準備 ＋ Version 4 Phase 5（Editor Experience）
 
 | | |
 |---|---|
-| **Status** | Active — Notion自動化16スクリプト＋AI Gateway＋Article Freshness Monitor＋Coverage Analyzer＋Editorial Planner＋Publishing Center＋Duplicate Prevention実装・実データ／実API（Claude）でテスト済み |
-| **Date** | 2026-07-14 |
+| **Status** | Active — Notion自動化19スクリプト＋AI Gateway＋Article Freshness Monitor＋Coverage Analyzer＋Editorial Planner＋Publishing Center＋Duplicate Prevention＋Editor Experience（Article Layout Renderer／Editor Home／AI Command Center）実装・実データ／実API（Claude）でテスト済み |
+| **Date** | 2026-07-16 |
 | **位置づけ** | [AI Agent Workflow](./AI-Agent-Workflow.md)に定めた処理を、新規DB（AI Agents／Prompt Library／Automation）を追加せず、既存10DBに対するPythonスクリプトとして実装したもの |
 | **場所** | `notion-build/automation/` |
 
@@ -37,6 +37,9 @@
 | `publishing_center.py` | Editor-in-Chief（公開管理） | Articles全件のPublishing Status（Draft／Ready to Publish／Published／Needs Update／Archived／Duplicate）を、Review Result・Translation Quality Result／Publish Approval・Freshness Status・必須項目の充足状況から同期。Published判定は必ず人間が行い、AIは自動公開しない。Dashboard「🚀 Ready to Publish」「📚 Published Articles」「🛠 Needs Update」に反映（詳細後述） |
 | `duplicate_guard.py` | Editor-in-Chief（生成前ゲート） | 生成開始**前**にResearch.Topic／Article／Translation／SNSの存在を順に確認し、既存なら生成せず「Already Exists」として記録する。「1 Research Topic = 1 Article」原則をコードで強制（詳細後述） |
 | `duplicate_prevention_report.py` | Editor-in-Chief（公開管理） | `duplicate_guard.py`のログから本日の生成件数・スキップ件数・Already Exists一覧を集計。Dashboard「🛡 Duplicate Prevention」＋専用Notionページに反映（詳細後述） |
+| `render_article_layout.py` | Editor-in-Chief（Editor Experience） | Articles.Bodyの9セクションテンプレートを、Articleページの実ブロック（見出し＋段落、4セクションはtoggle折りたたみ）として描画。スキーマ・プロパティは無変更（詳細後述） |
+| `editor_home.py` | Editor-in-Chief（Editor Experience） | 「今日、人間が決めること」9項目の件数をDashboardと同一フィルタで集計し、専用Notionページ（ナビゲーションハブ）に反映（詳細後述） |
+| `ai_command_center.py` | Editor-in-Chief（Editor Experience） | Freshness内訳・Duplicate Prevention本日の活動・外部監視フィード・AI分析ページへのポインタを専用Notionページ（ナビゲーションハブ）に反映（詳細後述） |
 
 ## 実行方法
 
@@ -526,6 +529,56 @@ Articles・Research・Editorial Calendarの3DBで、`Priority`／`Urgency`のSel
 
 **正直な結果報告**：バックフィル後、53記事すべてが`Priority=Medium`（うち1件のみ`Urgency=High`、残りは`Medium`）となった。これはバグではなく、これまでの`bulk_generate_articles.py`のResearch生成コードが`Priority`／`Urgency`を`"Medium"`固定で作成していたことをそのまま反映した結果——**継承の仕組み自体は正しく動作しており**、Editorial Plannerが提案したResearch（★評価に基づき`High`／`Critical`まで幅がある）が今後Article化されていけば、自然にPriorityが分散していく設計になっている。Ready to Publishの並び順は、現時点ではPriority段が全件同点のため実質的にUpdate Level・Last Verified Dateの2段目・3段目が並び順を決めているが、これは①の修正により正しく機能している状態であり、Priority分散が進めば1段目からも効くようになる。
 
+---
+
+## Version 4 Phase 5（Editor Experience、2026-07-16）
+
+**目的**：Reiから「編集長が記事を開いた瞬間に、必要な情報だけを見られるようにしたい」との要望。ただし**Version 4のデータベーススキーマ・プロパティ名・リレーション・Formula・自動化は一切変更しない**という明示的な制約付き。表示（レイアウト）とナビゲーション（導線）だけを改善する、という限定スコープで実施。
+
+事前調査で分かった2つの前提：
+1. 編集長が挙げた「Question／Basic Answer／…」等の見出しは**プロパティではなく**、Articles.Bodyという1つのrich_textプロパティの中に`**見出し**`形式で入っているテキストにすぎない（既存のARu公式9セクションテンプレート）。これまでこれらを実際の見出しブロックとして表示するコードは存在しなかった。
+2. Notionページのプロパティパネルの「グループ化・折りたたみ」設定は、View／Templateと同じくNotionパブリックAPIに公開されていない機能。コードでは設定できず、人間の手動作業が必要（`docs/Article-Property-Panel-Guide.md`参照）。
+
+### `render_article_layout.py`
+
+**場所**：`notion-build/automation/render_article_layout.py`
+
+**処理内容**：Articles.Bodyを`**見出し**`単位でパースし（正規化＋近似マッチで多少の表記ゆれを許容）、Article**ページの実ブロック**として描画する。Question／Basic Answer／More Details／Why Does Japan Do This?／ARu Tipの5つは本文フローに直接、残る4つ（Practical Steps and Cautions／Latest Information／Related Questions／Mentor Support）は「その他の詳細」というtoggleブロックへ折りたたむ。9セクションテンプレート導入前の古い記事（見出しが1つも見つからない場合）は、本文をそのまま1つの段落として表示するフォールバックを用意。Bodyプロパティ自体は一切書き換えない、表示専用の追加レイヤー。
+
+**安全性の裏付け**：既存の全自動化スクリプトをリポジトリ全体でgrepし、Articleページのブロック子要素（`/blocks/{id}/children`）を読み書きするスクリプトが他に1つも存在しないことを確認済み。このレンダラーが触る領域は完全に新規・独立しており、Freshness Monitor・Publishing Center・Reviewer Agent・Coverage Analyzer・Editorial Planner・Duplicate Prevention・Publish Gateのいずれにも影響しない。
+
+**パイプライン統合**：`generate_article_pipeline.py`（`run_article()`）・`bulk_generate_articles.py`（`process_topic()`）の両方で、Article保存直後にフック。レンダリング失敗はtry/exceptでnon-fatal扱いとし、Articleレコード自体の保存（プロパティ書き込み）を妨げない設計。
+
+**テスト結果（実データ）**：
+- `backfill --dry-run`で全38記事（Archived除く）を事前確認 → 9セクションテンプレート導入後の15記事は7〜9/9セクションを正しく検出、導入前の記事はすべて0/9検出（想定どおり、フォールバック経路に入る）
+- 実記事1件をレンダリング → 14ブロック生成、Notion側でtoggleのネストされたchildren（見出し3＋段落×4）が正しく作成されることをAPI読み取りで確認
+- 同じ記事を再レンダリング → ブロック数14で一致（冪等性を確認）
+- `generate_article_pipeline.py article`／`bulk_generate_articles.py`をそれぞれ実際に1回ずつ実行し、新規Article生成直後にレンダリングが正しく動作することを確認（テスト用Article・Researchはいずれも検証後Archived）
+- 全38記事に対する本番バックフィル実行 → **38件処理、0件失敗**
+
+### `editor_home.py` ／ `ai_command_center.py`
+
+**場所**：`notion-build/automation/editor_home.py`、`notion-build/automation/ai_command_center.py`
+
+**設計方針**：既存Dashboardの13個のLinked Database View（Notion UIで手動設定済み）を再現するのではなく、その数値だけを毎回再計算して見せる**ナビゲーションハブ**として新規作成（既存Dashboardには一切触れない）。数値を計算するフィルタは`docs/Dashboard-Setup-Guide.md`の13セクション設定一覧と**完全に同一の条件**を使用し、実際のDashboard表示と数値がずれないようにしている。
+
+- **Editor Home**（「今日、人間が決めること」）：🚀 Ready to Publish／📚 Published Articles／🛠 Needs Update／① Publish Approval Pending／② Article Review Waiting／③ Translation Review Waiting／④ SNS Draft Waiting／⑤ Today's Editorial Calendar／⑥ Today's Researchの9項目の件数とDashboardへのリンクを表示
+- **AI Command Center**（「AIが監視・検知していること」）：🔴 Freshness内訳（外部シグナル起因／時間経過起因を`article_freshness_monitor.FORCE_FLAG_URGENCY_SCORE`定数で分離）、🛡 Duplicate Prevention本日の活動（`duplicate_prevention_report.py`の関数を直接再利用、再実装なし）、⑦〜⑨ 外部監視フィード（Source Monitor Alerts／Recent Law Updates／Recent Event Calendar）、📊 Coverage Analysis・📝 Editorial Plannerへのポインタ（最終更新日時＋リンクのみ、AI分析内容の再計算はしない＝AI Gateway呼び出しを増やさない）
+
+**テスト結果（実データ、2026-07-16）**：
+- Editor Home：Ready to Publish 11／Published 0／Needs Update 0／Publish Approval Pending 15／Article Review Waiting 38／Translation Review Waiting 1／SNS Draft Waiting 8／Today's Editorial Calendar 0／Today's Research 19（合計92件）を正しく集計し、専用Notionページへ反映
+- AI Command Center：Freshness内訳（合計2件、外部シグナル起因2件／時間経過起因0件）、Duplicate Prevention本日（生成2件／スキップ0件）、Source Monitor Alerts 1／Recent Law Updates 1／Recent Event Calendar 1、Coverage Analysis・Editorial Plannerへのポインタ（最終更新日時付き）を正しく反映
+
+### Article Property Panel Guide
+
+**場所**：`docs/Article-Property-Panel-Guide.md`
+
+**内容**：Articleページのプロパティを【本文】【公開情報】【関連情報】【AI Review】【System】の4〜5グループへ分け、上位2グループは常に展開・下位2グループは折りたたむための手動Notion UI手順書（`docs/Dashboard-Setup-Guide.md`と同じ構成）。対象プロパティ名は各自動化スクリプトのコードから実際に書き込んでいるものだけを実名で確認して掲載（未使用のスコア系プロパティも明記）。
+
+### 既存自動化への影響確認（回帰テスト、2026-07-16）
+
+Phase 5実装後、以下を実データに対して1回ずつ再実行し、挙動に変化がないことを確認した：`article_freshness_monitor.py`／`publishing_center.py`／`coverage_analyzer.py`／`editorial_planner.py`／`duplicate_prevention_report.py`／`enforce_publish_gate.py`。いずれもエラーなく完走し、既存ロジックどおりの結果を返した（スキーマ・プロパティへの新規書き込みはFreshness Monitor・Publishing Centerが従来から行っている範囲内のみで、Phase 5のコードに起因する変化はゼロ）。
+
 ## 未実施事項（要判断）
 
 - **スケジューリング**：cron／launchd等での定期実行はまだ設定していない。日次実行にするか、Rei自身が手動実行するかは別途判断が必要
@@ -534,4 +587,4 @@ Articles・Research・Editorial Calendarの3DBで、`Priority`／`Urgency`のSel
 
 ---
 
-*ARu HQ / Decode Japan — Automation Scripts v1.7 — 2026-07-16*
+*ARu HQ / Decode Japan — Automation Scripts v1.8 — 2026-07-16*

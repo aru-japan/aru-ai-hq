@@ -188,6 +188,19 @@ Reiと一緒に、Dashboardの全13セクションのLinked Database View設定�
 
 詳細は[Automation Scripts](./Automation-Scripts.md)の該当節を参照。**Dashboard 13セクションのLinked View設定・データ側の不具合修正・実データでの動作確認まで完了し、編集長がDashboardのみで公開待ち・翻訳待ち・SNS待ち・Research・要更新記事を運営できる状態になった。**
 
+## 9. Version 4 Phase 5（Editor Experience、2026-07-16）
+
+Reiから「編集長が記事を開いた瞬間に必要な情報だけを見られるようにしたい」との要望を受け実施。**制約：Version 4のデータベーススキーマ・プロパティ名・リレーション・Formula・既存自動化は一切変更しない。表示とナビゲーションだけを改善する。**
+
+1. **`render_article_layout.py`**：Articles.Bodyの9セクションテンプレートを、Articleページの実ブロック（見出し＋段落、4セクションはtoggle折りたたみ）として描画。Bodyプロパティ自体は不変、表示専用の追加レイヤー。全リポジトリgrepで「他のスクリプトはArticleページのブロック子要素を一切読み書きしていない」ことを確認済みのため、安全に追加できると判断。既存Articles全38件（Archived除く）へ一括バックフィル実行 → **38件処理、0件失敗**。`generate_article_pipeline.py`／`bulk_generate_articles.py`双方にフック済み（レンダリング失敗はnon-fatal）。
+2. **`editor_home.py`**：「今日、人間が決めること」9項目（Ready to Publish／Published／Needs Update／Publish Approval Pending／Article Review Waiting／Translation Review Waiting／SNS Draft Waiting／Today's Editorial Calendar／Today's Research）をDashboardと完全に同一のフィルタで集計し、専用Notionページ（ナビゲーションハブ）に反映。実データで合計92件を確認。
+3. **`ai_command_center.py`**：「AIが監視・検知していること」（Freshness内訳、Duplicate Prevention本日の活動、外部監視フィード3種、Coverage Analysis／Editorial Plannerへのポインタ）を専用Notionページに反映。AI分析内容自体の再計算はしない設計（AI Gateway呼び出しを増やさない）。
+4. **`docs/Article-Property-Panel-Guide.md`**：Articleページのプロパティを【本文】【公開情報】【関連情報】【AI Review】【System】へグループ化する手動Notion UI手順書。View設定と同じくAPIから設定不可なため人間の作業として文書化。
+
+**回帰テスト（実データ、2026-07-16）**：`article_freshness_monitor.py`／`publishing_center.py`／`coverage_analyzer.py`／`editorial_planner.py`／`duplicate_prevention_report.py`／`enforce_publish_gate.py`を再実行し、いずれもエラーなく完走、既存ロジックどおりの結果を確認。**Dashboard互換性100%・既存自動化のすべてが引き続き正常動作することを実証した。**
+
+詳細は[Automation Scripts](./Automation-Scripts.md)の該当節を参照。
+
 ---
 
-*ARu HQ / Decode Japan — Version 4 Current Status Report — 2026-07-14（8節のみ2026-07-16追記）*
+*ARu HQ / Decode Japan — Version 4 Current Status Report — 2026-07-14（8〜9節は2026-07-16追記）*
