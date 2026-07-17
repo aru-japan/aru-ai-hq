@@ -85,6 +85,7 @@ Research → Article → Article Review → Translation → Translation Review �
 - **Version 4 Phase 4** `duplicate_guard.py`（＋`duplicate_prevention_report.py`）：**「1 Research Topic = 1 Article」**をコードで強制。生成**前**にResearch.Topic→Article→Translation→SNSの存在を順に確認し、既存なら生成せず「Already Exists」（どの段階まで存在したか付き）として記録する。`bulk_generate_articles.py`は処理ループを始める前にTOPICS全件を事前チェックし除外する設計（検知ではなく防止）。Dashboard「🛡 Duplicate Prevention」に本日の生成件数・スキップ件数・Already Exists一覧を反映
 - **Version 4 Phase 5（Editor Experience）** `render_article_layout.py`：Articles.Body（1つのrich_textにARu公式9セクションが`**見出し**`形式で入っているだけ）を、Article**ページの実ブロック**として描画するレンダラー。Question/Basic Answer/More Details/Why Does Japan Do This?/ARu Tipの5つを本文フローに、残る4セクション（Practical Steps and Cautions/Latest Information/Related Questions/Mentor Support）は「その他の詳細」というtoggleブロックにまとめて折りたたむ。プロパティ・スキーマは一切変更しない、Bodyプロパティを唯一の原本としたまま表示だけを整形する完全追加レイヤー（既存スクリプトはどれもArticleページのブロック子要素を読み書きしていないことを全リポジトリgrepで確認済み）。`generate_article_pipeline.py`／`bulk_generate_articles.py`のArticle保存直後にフック済み（失敗してもArticleレコード自体の保存は妨げないnon-fatal設計）。既存Articles全38件（Archived除く）に一括バックフィル済み（0件失敗）
 - **Version 4 Phase 5（Editor Experience）** `editor_home.py`／`ai_command_center.py`：編集長向けに「今日決めること」（Editor Home：Ready to Publish／Published／Needs Update／Publish Approval Pending／Article Review Waiting／Translation Review Waiting／SNS Draft Waiting／Today's Editorial Calendar／Today's Researchの9件数）と「AIが監視していること」（AI Command Center：Freshness内訳・Duplicate Prevention本日の活動・外部監視フィード3種・Coverage Analysis/Editorial Plannerへのポインタ）を分離した2つの専用Notionページ（ナビゲーションハブ、Dashboardの13 Linked Viewを再現するのではなくリンクで戻す設計）。フィルタは`docs/Dashboard-Setup-Guide.md`の設定一覧と完全に同一の条件を使い、数値が実際のDashboard表示とずれないようにしている
+- **ARu Intelligence Phase 1** `source_watcher.py`：Source Library（既存DB）の公式情報源URLを`Check Frequency`に従って定期フェッチし、本文テキストのSHA-256ハッシュを前回値（新設プロパティ`Last Content Hash`のみ）と比較して**実際の変化検知**を行う。変化を検知した場合のみSource Monitorレコードを新規作成（`Change Detected=true`、Tier×Source Typeから導出した`Impact Level`、AI Gateway生成の`Diff Summary`）。これまでこのパイプラインの下流（Research自動起票・Article強制フラグ・Publishing Center連携・Dashboard・AI Command Center）はすべて実装済みだったが、`Change Detected`を実際にtrueにする仕組み自体が存在しなかった（手動チェックボックスのみ）——Phase 1はその欠けていた1ピースだけを実装。政府・自治体系情報源の変化はSource Monitorへのフラグ立てのみで止め、Law Updateレコードは自動作成しない（人間が判断、Reiと確認済みの設計）。`article_freshness_monitor.py`の`find_source_monitor_signals()`に、Source Library.Related Research経由の2つ目の検知経路を追加（関数シグネチャは無変更）。新規スキーマはSource Libraryへの1プロパティ追加のみ
 
 詳細と実行方法は`docs/Automation-Scripts.md`。
 
@@ -131,6 +132,7 @@ Research → Article → Article Review → Translation → Translation Review �
 - Duplicate Prevention（Version 4 Phase 4）：「1 Research Topic = 1 Article」を生成**前**にコードで強制（`duplicate_guard.py`）。`bulk_generate_articles.py`は処理ループ開始前にTOPICS全件を事前チェックする設計に変更。Dashboard「🛡 Duplicate Prevention」＋専用ページ（2026-07-14）
 - Dashboard 13セクション全Linked Database Viewを人手で設定完了（2026-07-16）。設定過程でSelect型プロパティ（`Priority`／`Urgency`）の「降順」がオプション定義順の逆——つまり意図と正反対の並びになる不具合を発見し、Articles・Research・Editorial Calendarの3DBでオプション定義順を並べ替えて解消。あわせてArticles.Priority／Urgencyが記事生成時に一度も継承されていなかった問題を修正し、`generate_article_pipeline.py`／`bulk_generate_articles.py`がResearchのPriority／Urgencyを自動継承する設計に変更、既存53記事もバックフィル済み
 - Version 4 Phase 5（Editor Experience、2026-07-16）：Version 4のスキーマ・プロパティ・自動化を一切変更せず、表示とナビゲーションだけを編集長ファーストへ改善。①`render_article_layout.py`でArticleページ本文をARu公式9セクション（5つ本文フロー＋4つtoggle折りたたみ）として実ブロック描画（既存38記事に一括バックフィル済み、両生成パイプラインにフック済み）。②`editor_home.py`「今日決めること」9項目（合計92件、実データ確認済み）。③`ai_command_center.py`「AIが監視していること」（Freshness内訳2件、Duplicate Prevention本日2件生成、外部監視フィード3種、AI分析ページへのポインタ）。④Articleページのプロパティパネルを【本文】【公開情報】【関連情報】【AI Review】【System】へグループ化する手順を`docs/Article-Property-Panel-Guide.md`として文書化（Notion UI機能のためAPIから設定不可、View設定と同じ制約）。全既存自動化（Freshness Monitor／Publishing Center／Coverage Analyzer／Editorial Planner／Duplicate Prevention／Publish Gate）を再実行し、挙動に変化がないことを確認済み
+- ARu Intelligence Phase 1（2026-07-16）：「記事を増やす」ではなく「既存コンテンツを常に最新・信頼できる状態に保つ」ことが目的。`source_watcher.py`を新規実装し、これまで手動チェックボックスでしかなかったSource Monitor.Change Detectedを、実際のURLフェッチ＋内容ハッシュ比較による本物の変化検知に置き換えた。下流（Research自動起票／Article強制フラグ／Publishing Center連携／Dashboard／AI Command Center）はすべて既存・既テストのまま、フラグに実データが流れるようになっただけ。新規スキーマはSource Libraryへの`Last Content Hash`（rich_text）1プロパティのみ。政府・自治体系情報源の変化はフラグ立てのみで、Law Updateの自動作成はしない（人間が判断、Constitutionの人間レビュー最優先原則に整合）。実データテストで、変化検知パス・AI生成Diff Summary・Dashboard/AI Command Centerへの反映（新規UIコードなし）まで確認済み。Reiの指示により、このセッションではLaw Update／Research／Article／Translation／SNS Queueへの新規レコード自動作成は一切実行していない
 
 ## ■ Remaining Tasks
 
@@ -154,6 +156,8 @@ Research → Article → Article Review → Translation → Translation Review �
 - **NotionパブリックAPIは「Linked view of database」ブロックを作成できない。** DashboardはPage＋説明文のみで、実際のフィルタ済みビューは手動で埋め込む必要がある
 - **NotionパブリックAPIは既存Linked Viewの設定（Filter／Sort／表示プロパティ）を読み取ることもできない。** AIが「設計書と実際のView設定に差異がないか」を直接検証する手段はなく、確認は人間の目視（またはスクリーンショット共有）に頼る。AIが独立して検証できるのは、①設計書同士の整合性、②同じFilter/Sort条件でDBを直接クエリした際のデータの健全性、の2点まで
 - **NotionパブリックAPIはページのプロパティパネルのグループ化・折りたたみを設定できない。** ViewやTemplateと同じ制約カテゴリ。Articleページのプロパティを【本文】【公開情報】【AI Review】【System】等へグループ化する作業（`docs/Article-Property-Panel-Guide.md`）は人間が手動で行う必要がある
+- **`source_watcher.py`の実運用上の網羅範囲はSource Libraryへの実URL投入量に依存する。** 2026-07-16時点でSource Libraryの実データは1件（DB作成時のテストレコード）のみ。コード自体は完成・実証済みだが、実際に多数の公式情報源を監視するには、Reiが実URLをSource Libraryへ登録していく作業が前提になる
+- **ページ全文のハッシュ比較による変化検知は粗い。** 広告や「最終更新日」表示など本質的でない変化でも誤検知（false positive）しうる。JavaScriptで本文を描画するSPA型サイトは、stdlibのみのフェッチでは意味のあるテキストが取得できない可能性がある。実運用でのfalse positive発生率を見てから、ソースごとのCSSセレクタ指定等の精緻化を検討する（Phase 2候補）
 - **Select型プロパティのSortは値の重要度ではなくオプションの定義順に従う。** 「降順」はオプション定義順を逆にしたものであり、意味的な重要度の降順とは限らない（2026-07-16に発見、Priority／Urgencyで実際に逆転していた）。新しくSelect型プロパティを追加してSortに使う場合は、オプションの定義順を「重要度が低い→高い」の順にしておくこと（そうすれば「降順」が直感通り「重要度が高いものが先頭」になる）
 - Notionのrich_textは1項目あたり2000文字制限（`rich_text_chunks()`で分割対応済み）
 - Notion Formulaの構文は不安定な場合がある（`dateBetween()`は動くが、日付プロパティ同士の直接`>`比較が失敗した例がある）
@@ -188,4 +192,4 @@ Research → Article → Article Review → Translation → Translation Review �
 
 ---
 
-*ARu HQ / Decode Japan — AI Handover Document v1.5 — 2026-07-16*
+*ARu HQ / Decode Japan — AI Handover Document v1.6 — 2026-07-16*

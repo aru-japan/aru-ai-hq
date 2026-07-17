@@ -143,7 +143,15 @@ def find_event_calendar_signals(token, event_calendar_db_id):
 
 
 def find_source_monitor_signals(token, source_monitor_db_id, research_db_id):
-    """article_id -> list of (source_name, diff_summary) via Source Monitor -> Research -> Articles."""
+    """article_id -> list of (source_name, diff_summary) via Source Monitor -> Research -> Articles.
+
+    Two independent paths to Research, merged (ARu Intelligence Phase 1):
+    (a) Source Monitor.Triggered Research -- set when sync_source_monitor_to_research.py
+        auto-drafted a new Research record for this change.
+    (b) Source Monitor.Source -> Source Library.Related Research -- catches Research a
+        human already linked to that source *before* this change was detected, which
+        (a) alone would miss since Triggered Research is never retroactively backfilled.
+    """
     pages = query_database(token, source_monitor_db_id, filter_obj={
         "property": "Change Detected", "checkbox": {"equals": True}
     })
@@ -151,7 +159,16 @@ def find_source_monitor_signals(token, source_monitor_db_id, research_db_id):
     for page in pages:
         monitor_name = get_prop(page, "Monitor Entry", "title") or "(無題の監視エントリ)"
         diff_summary = get_prop(page, "Diff Summary", "rich_text") or get_prop(page, "Change Summary", "rich_text") or ""
-        for research_id in get_prop(page, "Triggered Research", "relation"):
+
+        research_ids = set(get_prop(page, "Triggered Research", "relation"))
+        for source_id in get_prop(page, "Source", "relation"):
+            try:
+                source_page = notion_request(token, "GET", f"/pages/{source_id}")
+            except RuntimeError:
+                continue
+            research_ids.update(get_prop(source_page, "Related Research", "relation"))
+
+        for research_id in research_ids:
             try:
                 research_page = notion_request(token, "GET", f"/pages/{research_id}")
             except RuntimeError:

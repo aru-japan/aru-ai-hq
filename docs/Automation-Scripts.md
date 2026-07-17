@@ -1,11 +1,11 @@
-<title>Automation Scripts v1.8</title>
+<title>Automation Scripts v1.9</title>
 
 # Automation Scripts
-### ARu Studio — Roadmap Version 3 実装記録 ＋ Version 4準備 ＋ Version 4 Phase 5（Editor Experience）
+### ARu Studio — Roadmap Version 3 実装記録 ＋ Version 4準備 ＋ Version 4 Phase 5（Editor Experience）＋ ARu Intelligence Phase 1
 
 | | |
 |---|---|
-| **Status** | Active — Notion自動化19スクリプト＋AI Gateway＋Article Freshness Monitor＋Coverage Analyzer＋Editorial Planner＋Publishing Center＋Duplicate Prevention＋Editor Experience（Article Layout Renderer／Editor Home／AI Command Center）実装・実データ／実API（Claude）でテスト済み |
+| **Status** | Active — Notion自動化20スクリプト＋AI Gateway＋Article Freshness Monitor＋Coverage Analyzer＋Editorial Planner＋Publishing Center＋Duplicate Prevention＋Editor Experience（Article Layout Renderer／Editor Home／AI Command Center）＋ARu Intelligence Phase 1（Source Watcher）実装・実データ／実API（Claude）でテスト済み |
 | **Date** | 2026-07-16 |
 | **位置づけ** | [AI Agent Workflow](./AI-Agent-Workflow.md)に定めた処理を、新規DB（AI Agents／Prompt Library／Automation）を追加せず、既存10DBに対するPythonスクリプトとして実装したもの |
 | **場所** | `notion-build/automation/` |
@@ -40,6 +40,7 @@
 | `render_article_layout.py` | Editor-in-Chief（Editor Experience） | Articles.Bodyの9セクションテンプレートを、Articleページの実ブロック（見出し＋段落、4セクションはtoggle折りたたみ）として描画。スキーマ・プロパティは無変更（詳細後述） |
 | `editor_home.py` | Editor-in-Chief（Editor Experience） | 「今日、人間が決めること」9項目の件数をDashboardと同一フィルタで集計し、専用Notionページ（ナビゲーションハブ）に反映（詳細後述） |
 | `ai_command_center.py` | Editor-in-Chief（Editor Experience） | Freshness内訳・Duplicate Prevention本日の活動・外部監視フィード・AI分析ページへのポインタを専用Notionページ（ナビゲーションハブ）に反映（詳細後述） |
+| `source_watcher.py` | Editor-in-Chief（情報源監視） | Source Libraryの公式情報源URLを定期フェッチし、内容ハッシュの変化から本物の変化検知を行い、Source Monitorレコードを自動作成（詳細後述） |
 
 ## 実行方法
 
@@ -579,6 +580,47 @@ Articles・Research・Editorial Calendarの3DBで、`Priority`／`Urgency`のSel
 
 Phase 5実装後、以下を実データに対して1回ずつ再実行し、挙動に変化がないことを確認した：`article_freshness_monitor.py`／`publishing_center.py`／`coverage_analyzer.py`／`editorial_planner.py`／`duplicate_prevention_report.py`／`enforce_publish_gate.py`。いずれもエラーなく完走し、既存ロジックどおりの結果を返した（スキーマ・プロパティへの新規書き込みはFreshness Monitor・Publishing Centerが従来から行っている範囲内のみで、Phase 5のコードに起因する変化はゼロ）。
 
+---
+
+## Source Watcher（ARu Intelligence Phase 1、2026-07-16）
+
+**目的**：Reiから「記事を増やすことではなく、ARuが常に最新・信頼できる情報を保っていること」を目的としたPhase 1の依頼。①公式情報源の監視、②変化検知、③影響を受けるResearch／Articleの特定、④編集者への更新候補提示、の4点。既存のFreshness Monitor／Source Monitor／Law Update／Dashboard／Publishing Centerを最大限再利用する制約付き。
+
+**実装前調査で判明した事実**：このパイプラインの下流側（Change Detected=trueを起点にResearchを自動起票する`sync_source_monitor_to_research.py`、Source Monitor/Law Update/Event Calendarの変化からArticleを強制的に要再レビューへ倒す`article_freshness_monitor.py`のクロスDB検知、Publishing Centerとの連携、Dashboardの「⑦ Source Monitor Alerts」「🔴 Update Needed」セクション、AI Command Centerの外部監視フィード表示）はすべてすでに実装・テスト済みだった。欠けていたのは唯一、**「Source Monitor.Change Detectedを実際に自動でtrueにする仕組み」**——リポジトリ全体を`urllib|requests\.|fetch\(|diff|scrape`等でgrepしても、外部URLを実際にフェッチして変化を検知するコードは1件も存在しなかった（`Change Detected`はこれまで完全に手動チェックボックスだった）。
+
+**場所**：`notion-build/automation/source_watcher.py`（新規）
+
+**処理内容**：
+1. Source Library（既存DB、情報源の静的マスター台帳）から、`URL`が設定済み かつ `Check Frequency`（Daily/Weekly/Monthly/Quarterly）の間隔が経過した「チェック期限が来た」レコードを抽出
+2. 各URLをstdlibの`urllib.request`のみでフェッチ（`robots.txt`の許可確認付き、15秒タイムアウト、リクエスト間1.5秒のディレイ、1回の実行あたり最大20件のキャップ——政府サイト等への配慮）
+3. stdlibの`HTMLParser`でscript/style/nav/footerを除いた本文テキストを抽出し、SHA-256でハッシュ化
+4. 初回チェック（保存済みハッシュなし）→ ハッシュを保存するだけ（誤検知を防ぐため、初回では「変化あり」を出さない）
+5. ハッシュが前回と一致 → `Last Checked`のみ更新
+6. ハッシュが変化 → **Source Monitorレコードを新規作成**（`Change Detected=true`、`Impact Level`はTier×Source Typeから導出、`Diff Summary`はAI Gateway経由で1〜2文の日本語要約を生成、`Status=Changed`）。Source Libraryの`Last Checked`・`Last Content Hash`（新設プロパティ）も更新
+
+**スキーマ変更はSource Libraryへの1プロパティ追加のみ**：`Last Content Hash`（rich_text）。Source Monitor・Law Update・Research・Articlesなど他のDBは一切変更していない。
+
+**政府・自治体系情報源の扱い（Reiと確認済みの設計判断）**：変化を検知しても、Law Updateレコードを**自動作成しない**。Source Monitorレコードを作成してフラグを立てるところまでで止め、Law Updateを起票するかどうかは人間の編集者が判断する。Law Updateは法律・ビザ等のUpdate Level 2/3に相当する法的重みを持つため、Constitutionの「人間レビュー最優先」原則に沿って、Researchの自動起票（既存の`sync_source_monitor_to_research.py`、影響度の低い新規テーマ発見という性質のため既に許容されている）よりも一段階慎重に扱う。
+
+**`article_freshness_monitor.py`への1件の追加的拡張**：`find_source_monitor_signals()`が従来`Source Monitor → Triggered Research → Research.Converted Article`の経路しか辿っていなかったため、`sync_source_monitor_to_research.py`が自動起票した以外の——つまり人間が既にSource Libraryへ`Related Research`として紐づけていた——既存Researchが変化検知の対象から漏れる問題があった。`Source Monitor → Source → Source Library.Related Research → Research.Converted Article`という2つ目の経路を同じ関数内に追加し、両方の結果を1つの`signals`辞書へマージするよう変更（関数のシグネチャ・呼び出し元は無変更）。
+
+**テスト結果（実データ、2026-07-16）**：
+- Source Library実データ：現時点で1件のみ（DB作成時のテストレコード、実際の出入国在留管理庁公式サイトの実URL`https://www.moj.go.jp/isa/`を保持）。**Source Library全体への実URL投入はまだこれからで、Phase 1の実運用上の網羅範囲は現時点ではこの1件のみ**——これは正直に報告する実運用上の前提であり、コード側の欠陥ではない
+- 本文抽出・ハッシュ化の安定性：同じページを2回連続フェッチし、ハッシュが完全一致することを確認
+- 初回実行（本番）：1件中1件を正しく「baseline established」として処理、誤った`Change Detected`は0件
+- 2回目実行（即時再実行）：`Check Frequency=Weekly`のため「まだ期限が来ていない」と正しくスキップ
+- 変化検知パスの実証：対象レコードの保存済みハッシュを意図的に不一致な値へ書き換え、`Check Frequency`が経過した状態を作った上で再実行 → Source Monitorレコードが実際に作成され、`Impact Level=Critical`（Tier=高×Source Type=政府）、AI生成の`Diff Summary`（実際のページ本文から生成された妥当な日本語要約）を確認。実行後、Source Libraryのハッシュは実際の最新ハッシュへ正しく復元された（テスト起因の不整合は残らない設計）
+- `find_source_monitor_signals()`の拡張：本番データを一切変更せず、`unittest.mock`によるローカルモックテストで新旧2経路が正しくマージされることを確認（旧経路＝Triggered Research由来のarticle、新経路＝Source Library.Related Research由来のarticle、両方が`signals`に反映されることを実証）。その後`article_freshness_monitor.py`を実データに対して再実行し、既存の検知結果（Needs Update 1件）に変化がないことを確認（回帰なし）
+- 回帰テスト：`publishing_center.py`／`coverage_analyzer.py`／`editorial_planner.py`／`duplicate_prevention_report.py`／`enforce_publish_gate.py`を実データに対して再実行し、いずれもエラーなく完走、既存ロジックどおりの結果を確認
+- 提示層（Dashboard／AI Command Center）の無変更確認：`ai_command_center.py`を再実行したところ、「⑦ Source Monitor Alerts」の件数が1件→2件（新規検知分を含む）へ自動的に反映された。Dashboardの「⑦ Source Monitor Alerts」Linked Viewと同一のFilter条件（`Change Detected=true`）で直接クエリし、同じ2件が返ることも確認——**新しいUIコード・新しいLinked Viewは一切追加していない**
+
+**このセッションで明示的に自動化しなかったこと（Reiの指示）**：`sync_source_monitor_to_research.py`（Research自動起票）・Law Update・Article・Translation・SNS Queueへの新規レコード作成は、このセッションでは実行していない。`source_watcher.py`自体もこれらのDBへは一切書き込まない（Source LibraryとSource Monitorのみ）。`sync_source_monitor_to_research.py`はコード自体は無変更で、これまで通り編集者が実行すれば正しく動作する状態のまま。
+
+**既知の制約**：
+- JavaScriptで本文を描画するSPA型の政府サイトは、stdlibのみのフェッチでは意味のあるテキストが取得できない可能性がある
+- ページ全文のハッシュ比較は粗い検知方式であり、広告・「最終更新日」表示など本質的でない変化でも誤検知（false positive）しうる。実運用でのfalse positive発生率を見てから、Phase 2でソースごとのCSSセレクタ指定等の精緻化を検討する
+- **Source Library内の実URL投入がPhase 1の実効性の前提条件**：現時点で実URLを持つレコードは1件のみ。Reiが実際の政府・自治体・観光協会等のURLをSource Libraryへ登録していくことで、初めてPhase 1が実運用上の価値を持つ
+
 ## 未実施事項（要判断）
 
 - **スケジューリング**：cron／launchd等での定期実行はまだ設定していない。日次実行にするか、Rei自身が手動実行するかは別途判断が必要
@@ -587,4 +629,4 @@ Phase 5実装後、以下を実データに対して1回ずつ再実行し、挙
 
 ---
 
-*ARu HQ / Decode Japan — Automation Scripts v1.8 — 2026-07-16*
+*ARu HQ / Decode Japan — Automation Scripts v1.9 — 2026-07-16*
