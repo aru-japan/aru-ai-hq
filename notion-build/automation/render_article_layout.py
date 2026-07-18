@@ -1,6 +1,7 @@
-"""Article Page Layout Renderer -- Version 4 Phase 5 (Editor Experience).
+"""Article Page Layout Renderer -- Version 4 Phase 5 (Editor Experience),
+updated for the ARu Official Article Template (Rei's 11-item structure).
 
-Renders the ARu 9-section article template out of the Articles.Body property
+Renders the ARu official article template out of the Articles.Body property
 (one long rich_text blob with `**Heading**` markers) into actual Notion page
 BLOCKS, so an editor opening an Article sees the article laid out with real
 headings instead of one wall of text in the property panel.
@@ -17,37 +18,32 @@ Publish Gate.
 Layout produced on the Article page:
     [meta callout: last rendered timestamp]
     ---
-    ## Question
-    <paragraph>
-    ## Basic Answer
-    <paragraph>
-    ## More Details
-    <paragraph>
-    ## Why Does Japan Do This?
-    <paragraph>
-    ## ARu Tip
-    <paragraph>
+    ## Basic Answer / More Details / Cultural Background / ARu Tip / Things to Know
+    <paragraph each>
     ---
     > toggle: その他の詳細
-        ### Practical Steps and Cautions
+        ### FAQ
+    ---
+    > toggle: 💎 Premium Section
         <paragraph>
-        ### Latest Information
-        <paragraph>
-        ### Related Questions
-        <paragraph>
-        ### Mentor Support
-        <paragraph>
+    ---
+    ### Sources
+    <paragraph>
+    ---
+    Related Articles (from Knowledge Links relation) / Last Updated (from
+    Last Verified Date / Updated Date) -- these two are property-driven, never
+    parsed out of Body.
 
-Body's format is an AI *prompt instruction* (see ARU_ARTICLE_TEMPLATE_INSTRUCTIONS
-in generate_article_pipeline.py), not code-enforced -- so parsing here is
-best-effort: normalized exact match first, fuzzy match as a fallback, and any
-section not found is simply omitted rather than raising.
+SECTION_ORDER/parsing now live in article_template.py (single source of
+truth shared with generate_article_pipeline.py and reviewer_agent.py) --
+Body's format is still an AI *prompt instruction*, not code-enforced, so
+parsing here remains best-effort: normalized exact match first, fuzzy match
+as a fallback, and any section not found is simply omitted rather than
+raising.
 """
 import os
-import re
 import sys
 import time
-import difflib
 import argparse
 import datetime
 
@@ -59,6 +55,10 @@ sys.path.insert(0, os.path.join(REPO_ROOT, "scripts"))
 sys.path.insert(0, AUTOMATION_DIR)
 
 from notion_api import load_env, notion_request, query_database, get_prop  # noqa: E402
+from article_template import (  # noqa: E402
+    SECTION_ORDER, PRIMARY_SECTIONS, SECONDARY_SECTIONS, PREMIUM_SECTION,
+    SOURCES_SECTION, parse_body_sections,
+)
 
 ENV_PATH = os.path.join(NOTION_BUILD_DIR, ".env")
 
@@ -67,64 +67,14 @@ def rich_text_chunks(content, chunk_size=1990):
     """Same helper as generate_article_pipeline.py's -- duplicated locally rather
     than imported, since generate_article_pipeline.py imports this module too
     (to trigger rendering right after Article creation) and a cross-import would
-    be circular."""
+    be circular. article_template.py has no dependency on either module, so
+    importing SECTION_ORDER etc. from there doesn't introduce a new cycle."""
     chunks = [content[i:i + chunk_size] for i in range(0, len(content), chunk_size)] or [""]
     return [{"text": {"content": c}} for c in chunks]
-
-SECTION_ORDER = [
-    "Question", "Basic Answer", "More Details", "Why Does Japan Do This?",
-    "Practical Steps and Cautions", "Latest Information", "ARu Tip",
-    "Related Questions", "Mentor Support",
-]
-PRIMARY_SECTIONS = ["Question", "Basic Answer", "More Details", "Why Does Japan Do This?", "ARu Tip"]
-SECONDARY_SECTIONS = ["Practical Steps and Cautions", "Latest Information", "Related Questions", "Mentor Support"]
-
-_HEADING_RE = re.compile(r"\*\*\s*([^\*]{2,80}?)\s*\*\*")
 
 
 def log(msg):
     print(f"[{time.strftime('%H:%M:%S')}] {msg}", flush=True)
-
-
-def _normalize(text):
-    text = text.strip().lower()
-    text = re.sub(r"[?？:：]+$", "", text)
-    text = re.sub(r"\s+", " ", text)
-    return text
-
-
-_CANONICAL_BY_NORMALIZED = {_normalize(s): s for s in SECTION_ORDER}
-
-
-def _match_canonical(raw_heading):
-    norm = _normalize(raw_heading)
-    if norm in _CANONICAL_BY_NORMALIZED:
-        return _CANONICAL_BY_NORMALIZED[norm]
-    close = difflib.get_close_matches(norm, _CANONICAL_BY_NORMALIZED.keys(), n=1, cutoff=0.6)
-    if close:
-        return _CANONICAL_BY_NORMALIZED[close[0]]
-    return None
-
-
-def parse_body_sections(body_text):
-    """Best-effort split of the 9-section Body text into {canonical_name: content}.
-    Unrecognized bold spans are ignored. Missing sections are simply absent from
-    the returned dict -- callers must .get() rather than assume all 9 exist."""
-    if not body_text:
-        return {}
-
-    matches = list(_HEADING_RE.finditer(body_text))
-    sections = {}
-    for i, m in enumerate(matches):
-        canonical = _match_canonical(m.group(1))
-        if not canonical or canonical in sections:
-            continue  # unrecognized heading, or a duplicate -- keep the first occurrence
-        start = m.end()
-        end = matches[i + 1].start() if i + 1 < len(matches) else len(body_text)
-        content = body_text[start:end].strip()
-        if content:
-            sections[canonical] = content
-    return sections
 
 
 def _heading_block(text, level=2):
@@ -136,10 +86,22 @@ def _paragraph_block(text):
     return {"paragraph": {"rich_text": rich_text_chunks(text)}}
 
 
-def build_article_blocks(sections, body_text=None):
+def _fetch_related_articles(token, knowledge_links_ids):
+    related = []
+    for rid in knowledge_links_ids:
+        try:
+            page = notion_request(token, "GET", f"/pages/{rid}")
+        except RuntimeError:
+            continue
+        related.append({"title": get_prop(page, "Title", "title") or "(無題)", "url": page.get("url")})
+    return related
+
+
+def build_article_blocks(sections, body_text=None, related_articles=None, last_updated=None):
     now = datetime.datetime.now().strftime("%Y-%m-%d %H:%M")
     found = [s for s in SECTION_ORDER if s in sections]
     missing = [s for s in SECTION_ORDER if s not in sections]
+    related_articles = related_articles or []
 
     blocks = [
         {"callout": {
@@ -150,15 +112,16 @@ def build_article_blocks(sections, body_text=None):
     ]
 
     if not found:
-        # Pre-dates the 9-section template (older article) -- nothing to split,
+        # Pre-dates the official template (older article) -- nothing to split,
         # so show the raw Body text as-is rather than leaving the page empty.
         blocks.append({"callout": {
-            "rich_text": [{"text": {"content": "この記事はARu公式9セクションテンプレート導入以前に生成されたため、セクション分割ができません。本文をそのまま表示しています。"}}],
+            "rich_text": [{"text": {"content": "この記事はARu公式テンプレート導入以前に生成されたため、セクション分割ができません。本文をそのまま表示しています。"}}],
             "icon": {"type": "emoji", "emoji": "ℹ️"},
         }})
         blocks.append({"divider": {}})
         if body_text:
             blocks.append(_paragraph_block(body_text))
+        _append_trailing_blocks(blocks, related_articles, last_updated)
         return blocks, found, missing
 
     for name in PRIMARY_SECTIONS:
@@ -178,6 +141,18 @@ def build_article_blocks(sections, body_text=None):
             "children": toggle_children,
         }})
 
+    if PREMIUM_SECTION in sections:
+        blocks.append({"divider": {}})
+        blocks.append({"toggle": {
+            "rich_text": [{"text": {"content": "💎 Premium Section"}}],
+            "children": [_paragraph_block(sections[PREMIUM_SECTION])],
+        }})
+
+    if SOURCES_SECTION in sections:
+        blocks.append({"divider": {}})
+        blocks.append(_heading_block(SOURCES_SECTION, level=3))
+        blocks.append(_paragraph_block(sections[SOURCES_SECTION]))
+
     if missing:
         blocks.append({"divider": {}})
         blocks.append({"callout": {
@@ -185,7 +160,28 @@ def build_article_blocks(sections, body_text=None):
             "icon": {"type": "emoji", "emoji": "⚠️"},
         }})
 
+    _append_trailing_blocks(blocks, related_articles, last_updated)
     return blocks, found, missing
+
+
+def _append_trailing_blocks(blocks, related_articles, last_updated):
+    """Related Articles and Last Updated are property-driven (Knowledge Links,
+    Last Verified Date/Updated Date) -- never parsed out of Body, always
+    appended regardless of whether Body-section parsing succeeded."""
+    blocks.append({"divider": {}})
+    blocks.append(_heading_block("Related Articles", level=3))
+    if related_articles:
+        for r in related_articles:
+            text = r["title"]
+            blocks.append({"bulleted_list_item": {
+                "rich_text": [{"text": {"content": text, "link": {"url": r["url"]} if r["url"] else None}}],
+            }})
+    else:
+        blocks.append({"paragraph": {"rich_text": rich_text_chunks("（関連記事は未設定です。Knowledge Linksで設定できます）")}})
+
+    blocks.append({"paragraph": {
+        "rich_text": rich_text_chunks(f"Last Updated: {last_updated or '未設定'}"),
+    }})
 
 
 def clear_article_blocks(token, article_id):
@@ -196,13 +192,19 @@ def clear_article_blocks(token, article_id):
 
 def render_article(env, article_id, title=None, body=None):
     token = env["NOTION_TOKEN"]
+    page = notion_request(token, "GET", f"/pages/{article_id}")
     if body is None:
-        page = notion_request(token, "GET", f"/pages/{article_id}")
         title = get_prop(page, "Title", "title")
         body = get_prop(page, "Body", "rich_text")
 
+    knowledge_links = get_prop(page, "Knowledge Links", "relation") or []
+    last_updated = get_prop(page, "Last Verified Date", "date") or get_prop(page, "Updated Date", "date")
+    related_articles = _fetch_related_articles(token, knowledge_links)
+
     sections = parse_body_sections(body)
-    blocks, found, missing = build_article_blocks(sections, body_text=body)
+    blocks, found, missing = build_article_blocks(
+        sections, body_text=body, related_articles=related_articles, last_updated=last_updated
+    )
 
     clear_article_blocks(token, article_id)
     for i in range(0, len(blocks), 90):
@@ -231,7 +233,7 @@ def run_backfill(env, limit=None, dry_run=False):
             sections = parse_body_sections(body)
             found = [s for s in SECTION_ORDER if s in sections]
             missing = [s for s in SECTION_ORDER if s not in sections]
-            log(f"  {title[:50]}: {len(found)}/9 sections found" + (f" (missing: {missing})" if missing else ""))
+            log(f"  {title[:50]}: {len(found)}/{len(SECTION_ORDER)} sections found" + (f" (missing: {missing})" if missing else ""))
             if not dry_run:
                 result = render_article(env, page["id"], title=title, body=body)
                 log(f"    -> rendered {result['block_count']} block(s)")
@@ -260,7 +262,7 @@ def main():
 
     if args.cmd == "article":
         result = render_article(env, args.article_id)
-        log(f"Rendered {result['block_count']} block(s) for '{result['title']}' ({len(result['found'])}/9 sections found)")
+        log(f"Rendered {result['block_count']} block(s) for '{result['title']}' ({len(result['found'])}/{len(SECTION_ORDER)} sections found)")
         if result["missing"]:
             log(f"  Missing: {result['missing']}")
     elif args.cmd == "backfill":

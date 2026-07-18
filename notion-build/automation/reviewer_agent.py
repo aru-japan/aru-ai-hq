@@ -1,8 +1,19 @@
-"""Phase B3.8: Reviewer Agent.
+"""Phase B3.8: Reviewer Agent, extended for the ARu Official Article Template.
 
 Scores an Article across 5 dimensions (Accuracy / Evidence / Readability / Risk /
 Localization) using the real AI Gateway, writes the scores + suggestions back onto
 the Article page, and sets Review Result (Pass / Needs Revision / Fail).
+
+Template compliance is checked in two layers, both folded into the existing
+Review Suggestions field (no new review properties):
+  - Deterministic (this file, reusing article_template.validate_sections):
+    which of the 8 official sections are present/missing -- cannot hallucinate
+    a false pass, since it's a straight parse of Body, not an AI judgment call.
+  - AI-judged (the review prompt below): whether Premium Section adds real
+    value beyond the free sections, whether any sections are duplicated, and
+    whether claims are clearly distinguished as fact vs. interpretation vs.
+    recommendation -- these require judgment, so they stay in the AI's
+    existing SUGGESTIONS output rather than becoming new deterministic checks.
 
 Gate: Update Level >= 2 articles must have Review Result = Pass before they may be
 moved to Status = Published (enforced here and re-checked in enforce_publish_gate.py).
@@ -17,15 +28,36 @@ NOTION_BUILD_DIR = os.path.dirname(AUTOMATION_DIR)
 REPO_ROOT = os.path.dirname(NOTION_BUILD_DIR)
 sys.path.insert(0, NOTION_BUILD_DIR)
 sys.path.insert(0, os.path.join(REPO_ROOT, "scripts"))
+sys.path.insert(0, AUTOMATION_DIR)
 
 from notion_api import load_env, notion_request, query_database, get_prop  # noqa: E402
 import ai_gateway  # noqa: E402
+from article_template import SECTION_ORDER, parse_body_sections, validate_sections  # noqa: E402
 
 ENV_PATH = os.path.join(NOTION_BUILD_DIR, ".env")
 
 DIMENSIONS = ["ACCURACY", "EVIDENCE", "READABILITY", "RISK", "LOCALIZATION"]
 PASS_OVERALL_THRESHOLD = 70
 PASS_RISK_THRESHOLD = 60  # Risk is safety-critical: a low Risk score cannot be offset by other dimensions
+
+
+def build_template_compliance_note(body):
+    """Deterministic (not AI-guessed) section-presence check, reusing the same
+    parser render_article_layout.py and template_migration_report.py use --
+    so this can never report a false pass on a section that isn't really
+    there."""
+    sections = parse_body_sections(body)
+    missing, mandatory_missing = validate_sections(sections)
+    if not missing:
+        return "【テンプレート準拠】全8セクション確認済み。"
+    parts = []
+    for name in SECTION_ORDER:
+        status = "欠落" if name in missing else "OK"
+        parts.append(f"{name}: {status}")
+    note = "【テンプレート準拠】" + "／".join(parts)
+    if mandatory_missing:
+        note += f" ※必須セクション欠落: {', '.join(mandatory_missing)}"
+    return note
 
 
 def build_review_prompt(title, body, update_level):
@@ -38,6 +70,11 @@ def build_review_prompt(title, body, update_level):
 4. Risk（リスクの低さ）：個別の法的・医療的助言と誤解される断定的表現がないか、免責が適切か（Update Level={update_level}）
 5. Localization（文化的配慮）：一般化・ステレオタイプがなく、文化的背景の説明があるか
 
+以下の観点もSUGGESTIONSに含めてください：
+- Premium Sectionは無料部分の繰り返しではなく、実用的な新しい価値（場所・タイミング・費用・予約・アクセス・現地マナー・よくある間違い等）を追加できているか
+- セクション間で内容が重複していないか
+- 事実（fact）・解釈（interpretation）・推奨（recommendation）が文章上区別できる書き方になっているか
+
 記事タイトル：{title}
 
 記事本文：
@@ -49,7 +86,7 @@ EVIDENCE: <0-100の数値>
 READABILITY: <0-100の数値>
 RISK: <0-100の数値>
 LOCALIZATION: <0-100の数値>
-SUGGESTIONS: <改善提案。300文字程度。具体的に>
+SUGGESTIONS: <改善提案。300文字程度。具体的に。Premium Sectionの価値・重複・fact/interpretation/recommendationの区別についても触れること>
 """
 
 
@@ -83,6 +120,9 @@ def review_article(article):
 
     if any(v is None for v in scores.values()):
         raise RuntimeError(f"Could not parse all 5 scores from AI response:\n{text}")
+
+    compliance_note = build_template_compliance_note(body)
+    suggestions = f"{compliance_note}\n\n{suggestions}" if suggestions else compliance_note
 
     overall = round(sum(scores.values()) / 5)
     risk = scores["RISK"]

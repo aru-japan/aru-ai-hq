@@ -188,13 +188,36 @@ python3 ai_command_center.py
 ## 8. Publishing Workflow（公開フロー）
 
 ```
-Research → Article（Update Level判定・9セクションテンプレート・Priority/Urgency自動継承）
-  → Article Review（5観点スコアリング）
+Research → Article（Update Level判定・公式テンプレート8セクション・Priority/Urgency自動継承）
+  → Article Review（5観点スコアリング＋テンプレート準拠チェック）
   → Translation → Translation Review（5観点）
   → SNS×3 → SNS Review（5観点）
   → Publish Gate（enforce_publish_gate.py） → Publishing Center（publishing_center.py）
   → Dashboard「🚀 Ready to Publish」 → 編集長が手動でPublished判定
 ```
+
+### ARu公式記事テンプレート（8セクション、2026-07-18改訂）
+
+`article_template.py`が単一の情報源。Body内で太字見出しとして生成される8セクションは：
+
+| セクション | 内容 | 無料／プレミアム |
+|---|---|---|
+| Basic Answer | 3〜5行の短い直接回答 | 無料（単独で読める） |
+| More Details | 主な説明・背景・具体例 | 無料 |
+| Cultural Background | 日本独自の文化的背景（ARuの核となる差別化要素） | 無料 |
+| **ARu Tip** | 実践的アドバイス。**必須——生成パイプラインは欠落時に警告を出す** | 無料 |
+| Things to Know | 注意点・ローカルルール・よくある誤解 | 無料 |
+| FAQ | 現実的な質問3〜5件 | 無料（「その他の詳細」トグルに格納） |
+| Premium Section | 場所・タイミング・費用・予約・アクセス・現地マナー等の実用的付加価値。**確信が持てない情報は捏造せず「編集者による追加取材が必要」と明記** | プレミアム（独自トグルに格納） |
+| Sources | 信頼できる情報源。**出典を捏造しない**——検証済み情報源がない場合は編集部確認待ちと明記 | 無料（常時表示、折りたたまない） |
+
+Title（記事タイトル）・Related Articles（`Knowledge Links`リレーション）・Last Updated（`Last Verified Date`）はBodyに含めず、既存プロパティからそのまま扱う。
+
+**ARu Tipの検証**：`generate_article_pipeline.py`は記事生成直後にBodyを解析し、ARu Tipが見つからない場合は目立つWARNINGをログ出力する（記事自体は保存される——非破壊的設計）。`reviewer_agent.py`も同じチェックを再度行い、`Review Suggestions`の先頭に「【テンプレート準拠】」として8セクションそれぞれの有無を機械的に記録する（AIの判断ではなく決定論的な解析結果のため、誤ったPass判定が起きない）。
+
+**編集者によるレビュー方法**：`python3 reviewer_agent.py --article-id <id>`を実行すると、既存の5観点スコア（Accuracy/Evidence/Readability/Risk/Localization）に加え、①テンプレート準拠（決定論的）②Premium Sectionが無料部分の繰り返しでなく実用的価値を追加できているか③セクション間の重複④事実・解釈・推奨の区別——をAIが評価し、すべて`Review Suggestions`に記録される。
+
+**既存記事の移行**：既存記事を自動的に書き換えることはしない。`python3 template_migration_report.py`を実行すると、全記事の`Template Status`（Up to Date／Update Needed）が更新され、Publishing Status・Priority・Urgencyで優先順位付けされた「Template Migration Report」ページが生成される。編集者はこのレポートを見て、優先度の高い記事から手動で（またはAI支援で）改訂する。
 
 ### 生成コマンド
 
@@ -271,4 +294,4 @@ python3 bulk_generate_articles.py                                  # TOPICSリ�
 
 ---
 
-*ARu HQ / Decode Japan — ARu Intelligence Operating Manual v4.0 — 2026-07-18*
+*ARu HQ / Decode Japan — ARu Intelligence Operating Manual v4.1 — 2026-07-18*

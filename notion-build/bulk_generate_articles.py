@@ -15,10 +15,10 @@ For each topic:
 All content is generated via the real Claude API (same prompts/quality bar as the
 rest of ARu Studio -- reviewer_agent.py / translation_quality_reviewer.py /
 sns_quality_reviewer.py's own scoring logic is reused, not reimplemented). Article
-bodies follow the ARu 9-section template (Question / Basic Answer / More Details /
-Why Does Japan Do This? / Practical Steps and Cautions / Latest Information / ARu
-Tip / Related Questions / Mentor Support) via generate_article_pipeline.py's shared
-ARU_ARTICLE_TEMPLATE_INSTRUCTIONS, and every Article gets Verification Status=Verified
+bodies follow the ARu official article template (Basic Answer / More Details /
+Cultural Background / ARu Tip / Things to Know / FAQ / Premium Section / Sources)
+via article_template.py's shared ARU_ARTICLE_TEMPLATE_INSTRUCTIONS (imported through
+generate_article_pipeline.py), and every Article gets Verification Status=Verified
 + Last Verified Date=today regardless of Update Level.
 
 Everything is saved at AI Draft / Pending / Not Published; nothing is auto-published.
@@ -157,7 +157,7 @@ def process_topic(env, index, total, item):
 
     try:
         render_result = ral.render_article(env, article_page["id"], title=title, body=body)
-        log(f"  Article page blocks rendered ({render_result['block_count']} blocks, {len(render_result['found'])}/9 sections found)")
+        log(f"  Article page blocks rendered ({render_result['block_count']} blocks, {len(render_result['found'])}/8 sections found)")
     except Exception as e:
         log(f"  WARNING: article page rendering failed (non-fatal): {e}")
 

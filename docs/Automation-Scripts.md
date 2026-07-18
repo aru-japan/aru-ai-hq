@@ -1,11 +1,11 @@
-<title>Automation Scripts v2.1</title>
+<title>Automation Scripts v2.2</title>
 
 # Automation Scripts
-### ARu Studio — Roadmap Version 3 実装記録 ＋ Version 4準備 ＋ Version 4 Phase 5（Editor Experience）＋ ARu Intelligence Phase 1/2/3
+### ARu Studio — Roadmap Version 3 実装記録 ＋ Version 4準備 ＋ Version 4 Phase 5（Editor Experience）＋ ARu Intelligence Phase 1/2/3 ＋ ARu公式記事テンプレート再設計
 
 | | |
 |---|---|
-| **Status** | Active — Notion自動化24スクリプト＋AI Gateway＋Article Freshness Monitor＋Coverage Analyzer＋Editorial Planner＋Publishing Center＋Duplicate Prevention＋Editor Experience（Article Layout Renderer／Editor Home／AI Command Center）＋ARu Intelligence Phase 1（Source Watcher）＋Phase 2（Source Library Expansion／Bulk Import）＋Phase 3（Research Prioritizer／Today's Opportunities／Editorial Intelligence）実装・実データ／実API（Claude）でテスト済み |
+| **Status** | Active — Notion自動化26スクリプト＋AI Gateway＋Article Freshness Monitor＋Coverage Analyzer＋Editorial Planner＋Publishing Center＋Duplicate Prevention＋Editor Experience（Article Layout Renderer／Editor Home／AI Command Center）＋ARu Intelligence Phase 1（Source Watcher）＋Phase 2（Source Library Expansion／Bulk Import）＋Phase 3（Research Prioritizer／Today's Opportunities／Editorial Intelligence）＋ARu公式記事テンプレート再設計（article_template.py／Template Migration Report）実装・実データ／実API（Claude）でテスト済み |
 | **Date** | 2026-07-18 |
 | **位置づけ** | [AI Agent Workflow](./AI-Agent-Workflow.md)に定めた処理を、新規DB（AI Agents／Prompt Library／Automation）を追加せず、既存10DBに対するPythonスクリプトとして実装したもの |
 | **場所** | `notion-build/automation/` |
@@ -37,7 +37,9 @@
 | `publishing_center.py` | Editor-in-Chief（公開管理） | Articles全件のPublishing Status（Draft／Ready to Publish／Published／Needs Update／Archived／Duplicate）を、Review Result・Translation Quality Result／Publish Approval・Freshness Status・必須項目の充足状況から同期。Published判定は必ず人間が行い、AIは自動公開しない。Dashboard「🚀 Ready to Publish」「📚 Published Articles」「🛠 Needs Update」に反映（詳細後述） |
 | `duplicate_guard.py` | Editor-in-Chief（生成前ゲート） | 生成開始**前**にResearch.Topic／Article／Translation／SNSの存在を順に確認し、既存なら生成せず「Already Exists」として記録する。「1 Research Topic = 1 Article」原則をコードで強制（詳細後述） |
 | `duplicate_prevention_report.py` | Editor-in-Chief（公開管理） | `duplicate_guard.py`のログから本日の生成件数・スキップ件数・Already Exists一覧を集計。Dashboard「🛡 Duplicate Prevention」＋専用Notionページに反映（詳細後述） |
-| `render_article_layout.py` | Editor-in-Chief（Editor Experience） | Articles.Bodyの9セクションテンプレートを、Articleページの実ブロック（見出し＋段落、4セクションはtoggle折りたたみ）として描画。スキーマ・プロパティは無変更（詳細後述） |
+| `render_article_layout.py` | Editor-in-Chief（Editor Experience） | Articles.Bodyの公式テンプレート（8セクション）を、Articleページの実ブロック（見出し＋段落、FAQ・Premium Sectionはtoggle折りたたみ、Related Articles・Last Updatedは既存プロパティから追加）として描画。スキーマ・プロパティは無変更（詳細後述） |
+| `article_template.py` | — | 公式記事テンプレート（8セクション）の定義・生成プロンプト・パーサーの単一の情報源。`generate_article_pipeline.py`／`render_article_layout.py`／`reviewer_agent.py`／`template_migration_report.py`が共通で参照 |
+| `template_migration_report.py` | Editor-in-Chief（テンプレート移行管理） | 全記事をスキャンし`Template Status`（Up to Date／Update Needed）を設定、Publishing Status・Priority・Urgencyで優先順位付けした移行レポートを生成（詳細後述） |
 | `editor_home.py` | Editor-in-Chief（Editor Experience） | 「今日、人間が決めること」9項目の件数をDashboardと同一フィルタで集計し、専用Notionページ（ナビゲーションハブ）に反映（詳細後述） |
 | `ai_command_center.py` | Editor-in-Chief（Editor Experience） | Freshness内訳・Duplicate Prevention本日の活動・外部監視フィード・AI分析ページへのポインタを専用Notionページ（ナビゲーションハブ）に反映（詳細後述） |
 | `source_watcher.py` | Editor-in-Chief（情報源監視） | Source Libraryの公式情報源URLを定期フェッチし、SimHash指紋の変化から本物の変化検知を行い、Source Monitorレコードを自動作成。Importance優先度順で処理し、Update Classificationを自動分類（詳細後述） |
@@ -759,6 +761,43 @@ Source → Watcher → Source Monitor → Editor Review → Research → Article
 - `ai_command_center.py`再構成後：Today's Opportunities／Critical Updates（バグ修正後2件）／Top Research Candidates（5件）／Publishing Queue（11件）／Recently Updated Articles（5件）まで、実データで正しく表示・Notionページへの書き込みを確認
 - 回帰テスト：`article_freshness_monitor.py`／`publishing_center.py`／`enforce_publish_gate.py`／`duplicate_prevention_report.py`／`editor_home.py`／`coverage_analyzer.py`／`editorial_planner.py`／`source_watcher.py`／`bulk_import_sources.py`（重複スキップ経路含む）を実データに対して再実行し、いずれもエラーなく完走、既存ロジックどおりの結果を確認
 
+## ARu公式記事テンプレート再設計（2026-07-18）
+
+**目的**：Reiの依頼——ブランド品質の標準化。新機能ではなく、既存の生成・レビュー・翻訳・SNSパイプラインをそのまま使い、記事本文の構成だけを刷新する。旧9セクションテンプレート（Question／Basic Answer／More Details／Why Does Japan Do This?／Practical Steps and Cautions／Latest Information／ARu Tip／Related Questions／Mentor Support）を、新しい8セクション構成へ置き換えた。
+
+**新しい公式構成（Body内、太字見出し）**：Basic Answer／More Details／Cultural Background／ARu Tip（**必須**）／Things to Know／FAQ／Premium Section／Sources。Title（記事タイトル）・Related Articles（`Knowledge Links`リレーション）・Last Updated（`Last Verified Date`／`Updated Date`）の3つはBodyに含めず、既存プロパティからそのまま扱う——新規プロパティ・新規リレーションは作成していない。
+
+**場所**：`notion-build/automation/article_template.py`（新規、単一の情報源）、`render_article_layout.py`（更新）、`generate_article_pipeline.py`（更新）、`reviewer_agent.py`（更新）、`template_migration_report.py`（新規）
+
+### `article_template.py`（新規、共有モジュール）
+
+これまで`generate_article_pipeline.py`の`ARU_ARTICLE_TEMPLATE_INSTRUCTIONS`と`render_article_layout.py`の`SECTION_ORDER`が別々に定義され重複していたものを、1つのモジュールに統合した（`life_topics.py`と同じ「1つの情報源」設計）。`SECTION_ORDER`（8セクション）、`PRIMARY_SECTIONS`（常時表示5つ）、`SECONDARY_SECTIONS`（FAQ、トグル格納）、`PREMIUM_SECTION`（独自トグル）、`SOURCES_SECTION`（常時表示、信頼性のため折りたたまない）、`MANDATORY_SECTIONS=["ARu Tip"]`、生成プロンプト本文、`parse_body_sections()`／`validate_sections()`を保持する。
+
+**実装中に発見・修正したバグ**：旧パーサーは「太字（`**...**`）が出現するたびに、それが正規のセクション名かどうかに関わらずセクション境界とみなす」設計だった。AIがARu Tip等の箇条書き内で「**浴衣を着てみましょう**：...」のようなインライン太字を使うと、そこで本来のセクションが強制的に途切れてしまう不具合があった（旧テンプレートにも存在した潜在バグだったが、今回の実データ生成テストで初めて顕在化）。正規のセクション名に一致した太字だけを境界として扱うよう修正し、実データで全文が正しく保持されることを確認した。
+
+### `render_article_layout.py`（更新）
+
+`SECTION_ORDER`等を`article_template.py`からimportするよう変更（`rich_text_chunks()`のローカル重複は既存の循環import回避策のまま維持）。Premium Sectionは「その他の詳細」とは別の「💎 Premium Section」という独自のtoggleで描画。Related ArticlesとLast Updatedは、Bodyの解析結果に関わらず常に末尾へ追加される——`Knowledge Links`（Articles既存の自己リレーション）から関連記事のタイトル・リンクを取得し、`Last Verified Date`（優先）／`Updated Date`（フォールバック）を表示する。テンプレート導入以前の記事（0/8セクション）は、これまでどおり本文をそのまま1段落として表示するフォールバック経路を維持。
+
+### `generate_article_pipeline.py`（更新）
+
+`ARU_ARTICLE_TEMPLATE_INSTRUCTIONS`を`article_template.py`からimportするよう変更（重複定義を解消）。`run_article()`内、生成直後に`validate_sections()`でARu Tipの有無を確認し、欠落していれば目立つWARNINGをログ出力する（Articleレコード自体の保存は妨げない、既存の非破壊的設計を踏襲）。翻訳・SNS生成関数（`generate_translation_text`／`generate_sns_caption_text`）は、どちらもBody全体を1つの文字列として扱う構造非依存の設計であることを確認済みのため、**変更なし**。
+
+### `reviewer_agent.py`（更新）
+
+既存の5観点スコアリング（Accuracy/Evidence/Readability/Risk/Localization）はそのまま。新たに2層のテンプレート準拠チェックを追加——①決定論的チェック（`article_template.validate_sections()`を再利用し、8セクションそれぞれの有無を`Review Suggestions`の先頭に付記。AIの判断に依存しないため誤ったPass判定が起きない）、②AIレビュープロンプトへの追加指示（Premium Sectionが無料部分の繰り返しでなく実用的価値を追加できているか、セクション間の重複がないか、事実・解釈・推奨の区別が明確か——これらは判断を要するためAIのSUGGESTIONS出力に含める）。**新しいレビュープロパティは追加していない**——既存の`Review Suggestions`フィールドを拡張しただけ。
+
+### `template_migration_report.py`（新規）
+
+既存記事を自動的に書き換えることはしない。代わりに、①`Articles.Template Status`（新規プロパティ、Select：Up to Date／Update Needed）を追加、②全非Archived記事を`parse_body_sections()`でスキャンし判定・反映、③`Publishing Status=Published`を最優先、次に既存の`Priority`／`Urgency`で優先順位付け（`research_prioritizer.py`と同じ決定論的な考え方、新規AI呼び出しなし）、④CLIレポート＋専用Notionページ「Template Migration Report」（Coverage Analysis等と同じページ管理パターン）を生成する。
+
+**実データでのテスト結果（2026-07-18）**：
+- 実記事1件をテスト生成 → 8/8セクション検出、ARu Tip正常検出、インライン太字バグ修正後に全文が正しく保持されることを確認（テスト記事・テストResearchは検証後Archived／Rejectedへ退避、削除なし）
+- `render_article_layout.py`で実際にページをレンダリング → 「その他の詳細」「💎 Premium Section」の2つのtoggleにそれぞれ正しい内容がネストされ、Related Articles・Last Updatedが末尾に正しく追加されることをAPI読み取りで確認
+- `reviewer_agent.py`を実際の既存記事（旧9セクションテンプレートで生成）に対して実行 → 決定論的チェックが「Cultural Background: 欠落／Things to Know: 欠落／FAQ: 欠落／Premium Section: 欠落／Sources: 欠落」を正しく検出し、AIの5観点スコアリングと共存することを確認
+- `template_migration_report.py`を全38件（Archived除く）の実記事に対して実行 → **全38件がUpdate Needed（Up to Date: 0件）**——正直な結果であり、新テンプレート導入前に生成された記事は必然的にすべて旧構成のため、コード側の不具合ではない
+- 移行用リビジョン生成：指定されたテスト記事「日本のカフェ文化が変わった理由｜季節ごとに話題になる新しいグルメトレンドを楽しむ」の実際の既存本文をもとに、新8セクション構成へ再編成した改訂版を生成（既存の実質的内容——季節トレンドが起きる理由・実例・楽しむコツ——を保持しつつ、不足していたCultural Background／Things to Know／FAQ／Premium Section／Sourcesを補完）。**本番記事は上書きしていない**——Rei承認後にのみ反映する
+
 ## 未実施事項（要判断）
 
 - **スケジューリング**：cron／launchd等での定期実行はまだ設定していない。日次実行にするか、Rei自身が手動実行するかは別途判断が必要
@@ -767,4 +806,4 @@ Source → Watcher → Source Monitor → Editor Review → Research → Article
 
 ---
 
-*ARu HQ / Decode Japan — Automation Scripts v2.1 — 2026-07-18*
+*ARu HQ / Decode Japan — Automation Scripts v2.2 — 2026-07-18*
