@@ -1,5 +1,23 @@
 """ARu Official Article Template -- single source of truth.
 
+G3-A (Article Template Framework, standard-only): this module is now
+organized around a TEMPLATES registry so that a future template (e.g. an
+Event-specific one, G3-B) can be added as a second entry without touching
+this file's existing behavior. This phase intentionally registers exactly
+one template, "standard" -- no other template exists yet.
+
+The public names below (SECTION_ORDER, PRIMARY_SECTIONS, SECONDARY_SECTIONS,
+PREMIUM_SECTION, SOURCES_SECTION, MANDATORY_SECTIONS,
+ARU_ARTICLE_TEMPLATE_INSTRUCTIONS) are unchanged in name, value, and object
+identity from before this refactor -- they are views onto
+TEMPLATES["standard"], not independent definitions, so every existing
+consumer (generate_article_pipeline.py, reviewer_agent.py,
+render_article_layout.py, template_migration_report.py) keeps working
+without any change on their side. parse_body_sections()/validate_sections()
+gained an optional `template=` argument (default "standard") so a future
+template can be parsed/validated the same way; every existing call site
+omits it and therefore behaves exactly as before.
+
 Replaces the prior duplication between generate_article_pipeline.py's
 ARU_ARTICLE_TEMPLATE_INSTRUCTIONS and render_article_layout.py's own copy of
 SECTION_ORDER -- both now import from here. This is a brand-quality
@@ -18,39 +36,10 @@ Last Verified Date / Updated Date properties).
 import re
 import difflib
 
-SECTION_ORDER = [
-    "Basic Answer",
-    "More Details",
-    "Cultural Background",
-    "ARu Tip",
-    "Things to Know",
-    "FAQ",
-    "Premium Section",
-    "Sources",
-]
-
-# Always visible in the main page flow.
-PRIMARY_SECTIONS = ["Basic Answer", "More Details", "Cultural Background", "ARu Tip", "Things to Know"]
-
-# Folded into the existing "その他の詳細" toggle.
-SECONDARY_SECTIONS = ["FAQ"]
-
-# Rendered in its own distinct toggle -- premium content is conceptually
-# separate from the free sections above, not just "more of the same detail."
-PREMIUM_SECTION = "Premium Section"
-
-# Rendered as a visible (non-toggled) heading -- trust/credibility signal,
-# not something to hide behind a click for a platform built on "Decode Japan."
-SOURCES_SECTION = "Sources"
-
-# ARu Tip must always be present; the pipeline warns loudly if it's missing
-# rather than silently generating an incomplete article.
-MANDATORY_SECTIONS = ["ARu Tip"]
-
 PREMIUM_ENRICHMENT_PLACEHOLDER = "この記事にはまだ十分なプレミアム情報がありません。編集者による追加取材・加筆が必要です。"
 SOURCES_VERIFICATION_PLACEHOLDER = "出典は編集部による確認が必要です（自動生成時点で検証済みの一次情報源が見つかりませんでした）。"
 
-ARU_ARTICLE_TEMPLATE_INSTRUCTIONS = """記事は必ず以下のARu公式テンプレート（8セクション）の構成で書いてください。各セクションの見出しはそのまま太字（**見出し**）で示し、8つすべてを含めてください。
+_STANDARD_INSTRUCTIONS = """記事は必ず以下のARu公式テンプレート（8セクション）の構成で書いてください。各セクションの見出しはそのまま太字（**見出し**）で示し、8つすべてを含めてください。
 
 1. **Basic Answer** — 3〜5行程度の短い直接回答。まずユーザーが知りたい結論を先に示す、無料部分として単独で読める内容にする
 2. **More Details** — 基本回答だけでは分からない主な説明・背景・具体例・実際の文脈
@@ -66,6 +55,53 @@ Title・Related Articles・Last Updatedは本文（Body）には含めない—�
     sources_placeholder=SOURCES_VERIFICATION_PLACEHOLDER,
 )
 
+TEMPLATES = {
+    "standard": {
+        "section_order": [
+            "Basic Answer",
+            "More Details",
+            "Cultural Background",
+            "ARu Tip",
+            "Things to Know",
+            "FAQ",
+            "Premium Section",
+            "Sources",
+        ],
+        # Always visible in the main page flow.
+        "primary_sections": ["Basic Answer", "More Details", "Cultural Background", "ARu Tip", "Things to Know"],
+        # Folded into the existing "その他の詳細" toggle.
+        "secondary_sections": ["FAQ"],
+        # Rendered in its own distinct toggle -- premium content is conceptually
+        # separate from the free sections above, not just "more of the same detail."
+        "premium_section": "Premium Section",
+        # Rendered as a visible (non-toggled) heading -- trust/credibility signal,
+        # not something to hide behind a click for a platform built on "Decode Japan."
+        "sources_section": "Sources",
+        # ARu Tip must always be present; the pipeline warns loudly if it's missing
+        # rather than silently generating an incomplete article.
+        "mandatory_sections": ["ARu Tip"],
+        "instructions": _STANDARD_INSTRUCTIONS,
+    },
+}
+
+
+def get_template(name="standard"):
+    """Look up a registered article template definition by name."""
+    return TEMPLATES[name]
+
+
+# Backward-compatible module-level exports. Every existing consumer imports
+# these names directly; they are views onto TEMPLATES["standard"] (same list
+# objects, same string), not independent definitions, so nothing about their
+# value or identity changed as part of this refactor.
+SECTION_ORDER = TEMPLATES["standard"]["section_order"]
+PRIMARY_SECTIONS = TEMPLATES["standard"]["primary_sections"]
+SECONDARY_SECTIONS = TEMPLATES["standard"]["secondary_sections"]
+PREMIUM_SECTION = TEMPLATES["standard"]["premium_section"]
+SOURCES_SECTION = TEMPLATES["standard"]["sources_section"]
+MANDATORY_SECTIONS = TEMPLATES["standard"]["mandatory_sections"]
+ARU_ARTICLE_TEMPLATE_INSTRUCTIONS = TEMPLATES["standard"]["instructions"]
+
 _HEADING_RE = re.compile(r"\*\*\s*([^\*]{2,80}?)\s*\*\*")
 
 
@@ -76,23 +112,25 @@ def _normalize(text):
     return text
 
 
-_CANONICAL_BY_NORMALIZED = {_normalize(s): s for s in SECTION_ORDER}
-
-
-def _match_canonical(raw_heading):
+def _match_canonical(raw_heading, canonical_by_normalized):
     norm = _normalize(raw_heading)
-    if norm in _CANONICAL_BY_NORMALIZED:
-        return _CANONICAL_BY_NORMALIZED[norm]
-    close = difflib.get_close_matches(norm, _CANONICAL_BY_NORMALIZED.keys(), n=1, cutoff=0.6)
+    if norm in canonical_by_normalized:
+        return canonical_by_normalized[norm]
+    close = difflib.get_close_matches(norm, canonical_by_normalized.keys(), n=1, cutoff=0.6)
     if close:
-        return _CANONICAL_BY_NORMALIZED[close[0]]
+        return canonical_by_normalized[close[0]]
     return None
 
 
-def parse_body_sections(body_text):
-    """Best-effort split of the 8-section Body text into {canonical_name: content}.
+def parse_body_sections(body_text, template="standard"):
+    """Best-effort split of a template's Body text into {canonical_name: content}.
     Unrecognized bold spans are ignored. Missing sections are simply absent from
-    the returned dict -- callers must .get() rather than assume all 8 exist.
+    the returned dict -- callers must .get() rather than assume all sections exist.
+
+    `template` selects which registered template's section list to parse
+    against (default "standard"); every existing call site omits this
+    argument and therefore parses against the standard 8 sections exactly as
+    before this function was parametrized.
 
     Only bold spans that resolve to a canonical section name are treated as
     section boundaries -- inline bold emphasis inside a section's own content
@@ -105,9 +143,12 @@ def parse_body_sections(body_text):
     if not body_text:
         return {}
 
+    section_order = TEMPLATES[template]["section_order"]
+    canonical_by_normalized = {_normalize(s): s for s in section_order}
+
     canonical_matches = []
     for m in _HEADING_RE.finditer(body_text):
-        canonical = _match_canonical(m.group(1))
+        canonical = _match_canonical(m.group(1), canonical_by_normalized)
         if canonical and canonical not in {c for c, _, _ in canonical_matches}:
             canonical_matches.append((canonical, m.start(), m.end()))
 
@@ -121,10 +162,13 @@ def parse_body_sections(body_text):
     return sections
 
 
-def validate_sections(sections):
+def validate_sections(sections, template="standard"):
     """Returns (missing, mandatory_missing) -- both lists of canonical section
-    names. mandatory_missing is a subset of missing, restricted to
-    MANDATORY_SECTIONS (currently just ARu Tip)."""
-    missing = [s for s in SECTION_ORDER if s not in sections]
-    mandatory_missing = [s for s in MANDATORY_SECTIONS if s not in sections]
+    names for the given template (default "standard"). mandatory_missing is a
+    subset of missing, restricted to that template's mandatory sections
+    (currently just ARu Tip for "standard")."""
+    section_order = TEMPLATES[template]["section_order"]
+    mandatory_sections = TEMPLATES[template]["mandatory_sections"]
+    missing = [s for s in section_order if s not in sections]
+    mandatory_missing = [s for s in mandatory_sections if s not in sections]
     return missing, mandatory_missing

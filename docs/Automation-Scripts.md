@@ -1,7 +1,7 @@
-<title>Automation Scripts v2.2</title>
+<title>Automation Scripts v2.3</title>
 
 # Automation Scripts
-### ARu Studio — Roadmap Version 3 実装記録 ＋ Version 4準備 ＋ Version 4 Phase 5（Editor Experience）＋ ARu Intelligence Phase 1/2/3 ＋ ARu公式記事テンプレート再設計
+### ARu Studio — Roadmap Version 3 実装記録 ＋ Version 4準備 ＋ Version 4 Phase 5（Editor Experience）＋ ARu Intelligence Phase 1/2/3 ＋ ARu公式記事テンプレート再設計 ＋ Article Template Framework（G3-A）
 
 | | |
 |---|---|
@@ -798,6 +798,30 @@ Source → Watcher → Source Monitor → Editor Review → Research → Article
 - `template_migration_report.py`を全38件（Archived除く）の実記事に対して実行 → **全38件がUpdate Needed（Up to Date: 0件）**——正直な結果であり、新テンプレート導入前に生成された記事は必然的にすべて旧構成のため、コード側の不具合ではない
 - 移行用リビジョン生成：指定されたテスト記事「日本のカフェ文化が変わった理由｜季節ごとに話題になる新しいグルメトレンドを楽しむ」の実際の既存本文をもとに、新8セクション構成へ再編成した改訂版を生成（既存の実質的内容——季節トレンドが起きる理由・実例・楽しむコツ——を保持しつつ、不足していたCultural Background／Things to Know／FAQ／Premium Section／Sourcesを補完）。**本番記事は上書きしていない**——Rei承認後にのみ反映する
 
+## Article Template Framework — G3-A（Standardのみ、2026-07-18）
+
+**目的**：`docs/Architecture-Specification-v1.0.md`のアーキテクチャ議論で合意した「Article Template Framework」（Standard／Event／Law／Guide／Medical等、複数テンプレートを共通の枠組みで扱う設計）の第一段階。リスクを分離するため、G3-A（本節）ではフレームワークの骨格をStandardテンプレートだけで検証し、Eventテンプレートの追加（G3-B）は別セッションへ切り出した。
+
+**場所**：`notion-build/automation/article_template.py`（リファクタリング）。`generate_article_pipeline.py`／`reviewer_agent.py`／`render_article_layout.py`／`template_migration_report.py`は**無改修**。
+
+### 変更内容
+
+`SECTION_ORDER`／`PRIMARY_SECTIONS`／`SECONDARY_SECTIONS`／`PREMIUM_SECTION`／`SOURCES_SECTION`／`MANDATORY_SECTIONS`／`ARU_ARTICLE_TEMPLATE_INSTRUCTIONS`を、`TEMPLATES = {"standard": {...}}`という辞書（レジストリ）の1エントリへ集約し、`get_template(name="standard")`で参照できるようにした。モジュールレベルの同名定数はレジストリの値をそのまま指す変数として残し（別の実体ではなく同一オブジェクト）、既存4スクリプトのimport文・呼び出し方は一切変更していない。`parse_body_sections(body_text, template="standard")`／`validate_sections(sections, template="standard")`は`template`引数を新設したが、全既存呼び出し箇所は引数を省略しているため、デフォルト値経由でリファクタ前と同じ`"standard"`向けロジックがそのまま実行される。
+
+**この時点でEventテンプレートは存在しない**。`TEMPLATES`辞書のキーは`"standard"`の1つのみ。
+
+### 実データでのテスト結果（2026-07-18）
+
+- **決定論的な同一性確認**：`parse_body_sections`／`validate_sections`を、リファクタ前のコード（git履歴から取得）とリファクタ後のコードの両方に対し、5パターンの固定テスト入力（正常な8セクション本文／箇条書き内のインライン太字を含む本文／ARu Tip欠落／空文字列／見出しに句読点や大文字小文字ゆれがある表記）で実行し、**出力が完全一致することを確認**。あわせてモジュールレベル定数9個（`SECTION_ORDER`等）もリファクタ前後で完全一致
+- **新規生成での実証**：検証用にResearchレコードを1件新規作成し（Topic「【テスト・G3A検証用】ゴミの分別ルールについて知りたい」）、`generate_article_pipeline.py article`で実際に記事を生成 → **8/8セクション検出**（ARu Tip含む）。検証後、テストArticle・Research双方をArchived／Rejectedへ退避（削除なし）
+- **既存記事での実証**：実際の既存記事1件に対し`render_article_layout.py article`を実行 → 3/8セクション検出（旧テンプレート由来の記事のため想定どおり）、エラーなし。同じ記事に対し`reviewer_agent.py --article-id`を実行（実Claude API呼び出し）→ 5観点スコアリング・決定論的テンプレート準拠チェックのいずれも正常動作
+- **全件での回帰確認**：`template_migration_report.py`を全39件（Archived除く）の実記事に対して再実行 → Update Needed 39／Up to Date 0、リファクタ前と同じ分類パターンを維持（記事数が38→39なのは他セッションでの通常のコンテンツ増加によるもので、リファクタとは無関係）
+- **既存7スクリプトの回帰テスト**：`article_freshness_monitor.py`／`publishing_center.py`／`enforce_publish_gate.py`／`coverage_analyzer.py`／`editorial_planner.py`／`duplicate_prevention_report.py`／`source_watcher.py`をすべて実データに対して再実行し、エラーなく完走、既存ロジックどおりの結果を確認（このうちいずれの回帰テストスクリプトも実際には`article_template.py`をimportしていないため、この確認は「他モジュールを壊していないか」の一般的な健全性チェックとして実施したもの）
+
+### 次段階（未着手）
+
+G3-B（Eventテンプレートを`TEMPLATES`の2つ目のエントリとして追加）は、本セッションのスコープに含めていない。次のArchitecture Sessionで**ARu User Journey Specification**を定義してから、実装の是非・順序を改めて計画する（Rei決定、2026-07-18）。
+
 ## 未実施事項（要判断）
 
 - **スケジューリング**：cron／launchd等での定期実行はまだ設定していない。日次実行にするか、Rei自身が手動実行するかは別途判断が必要
@@ -806,4 +830,4 @@ Source → Watcher → Source Monitor → Editor Review → Research → Article
 
 ---
 
-*ARu HQ / Decode Japan — Automation Scripts v2.2 — 2026-07-18*
+*ARu HQ / Decode Japan — Automation Scripts v2.3 — 2026-07-18*
