@@ -48,9 +48,9 @@ Research → Article → Article Review → Translation → Translation Review �
 - **Level 1**（イベント・観光・文化・生活情報等）：レビューPass＋Localization Status=Culturally Adaptedが揃えば、Translation.Publish Approvalは**AIが自動で`Not Required`へ**遷移させてよい（実証済み、Day 2）
 - **Level 2・3**（法律・ビザ・税金・医療・重要な法改正等）：レビューが何点でも、Publish Approvalは**必ずPendingのまま**。人間（編集長Reiまたは専門家）の承認を経て初めてPublished
 
-## ■ Current Database Structure（既存10DBのみ）
+## ■ Current Database Structure（既存11DB）
 
-すべて実際にNotion上に作成済み。**新規データベースは追加しない**のが原則（後述）。
+すべて実際にNotion上に作成済み。**新規データベースは追加しない**のが原則（後述）——Story Bankは、Rei自身の明示的な指示（Implementation Session、2026-07-18）にもとづく、この原則の正式な例外である。
 
 | Database | 役割 |
 |---|---|
@@ -64,6 +64,7 @@ Research → Article → Article Review → Translation → Translation Review �
 | Law Update | 法改正の編集管理DB |
 | Event Calendar | 祭り・イベント等の体験編集DB |
 | SNS Queue | Instagram/Threads/X/Facebook/LinkedIn/TikTok投稿管理 |
+| **Story Bank**（2026-07-18新設） | 編集アイデアの起点となるDB。Story Bank→QA Card→Article→Deep Guide→Instagram→Threadsというパイプラインの最上流。詳細は本文書■ Current Automationおよび[Automation Scripts](./Automation-Scripts.md)参照 |
 
 **まだ存在しないDB（Deferred、削除ではなく保留）**：Language Master、Region Master、Mentor、AI Agents、Prompt Library、Automation。これらは実運用で必要性が確認できてから個別に追加する方針（`docs/Roadmap.md`参照）。**新しいAIがこれらを勝手に作らないこと。**
 
@@ -92,6 +93,8 @@ Research → Article → Article Review → Translation → Translation Review �
 
 - **Article Template Framework（G3-A、Standardのみ、2026-07-18）** `article_template.py`を単一テンプレート実装から`TEMPLATES`レジストリ（現状`"standard"`のみ登録）へリファクタリング。`get_template(name="standard")`で参照し、`parse_body_sections()`／`validate_sections()`は`template=`引数（既定`"standard"`）を追加。既存4スクリプト（`generate_article_pipeline.py`／`reviewer_agent.py`／`render_article_layout.py`／`template_migration_report.py`）はimport文・呼び出し方を一切変更せず、モジュールレベル定数（`SECTION_ORDER`等）がレジストリのビューになったことで動作を維持——リスク最小化のためあえて4スクリプト側は無改修とした。実データで検証：①`parse_body_sections`／`validate_sections`が固定テスト入力5パターン（正常系／箇条書き内インライン太字／ARu Tip欠落／空文字列／表記ゆれ見出し）でリファクタ前後バイトレベルで完全一致、②新規テストResearch/Articleを生成し8/8セクション検出（ARu Tip含む、検証後Archived／Rejectedへ退避）、③既存記事1件に対する`render_article_layout.py`実行・`reviewer_agent.py`実行（実Claude API呼び出し）がいずれも正常動作、④`template_migration_report.py`を全39記事に対して再実行し分類結果に変化なし（Update Needed 39/39、パターン不変）、⑤標準7スクリプト回帰テスト（`article_freshness_monitor.py`等）すべて正常完走。**目的はG3-B（Eventテンプレート）以降を、Standardテンプレートの安定動作を壊すリスクなしで低コストに追加できるようにすること。この時点でEventテンプレートは未実装、レジストリには`"standard"`のみ登録。**
 - **Article Template Framework（G3-B、Eventテンプレート追加、2026-07-18）** `article_template.py`の`TEMPLATES`レジストリへ`"event"`を第2エントリとして追加（Before You Go／What to Expect／Cultural Background／Who This Is For／ARu Tip／Cautions & Accessibility／Premium Section／Sources、必須＝Before You Go・ARu Tip）。新規`template_for_category(category)`がCategory→テンプレート名の対応を一元化（Category=`イベント`→`"event"`、それ以外→`"standard"`）。Option 1（G4のEvent Calendarスキーマ拡張を待たない）で実装：費用・現金対応・英語対応など既存プロパティで確認できない項目は、Premium Section／Sourcesと同じ「捏造せず個別に未確認と明記する」方針をBefore You Go内でも踏襲。既存4スクリプト（`generate_article_pipeline.py`／`reviewer_agent.py`／`render_article_layout.py`／`template_migration_report.py`）はいずれもCategoryから`template_for_category()`でテンプレートを解決してから`parse_body_sections()`／`validate_sections()`等へ`template=`を渡す形に更新（G3-Aとは異なりこの4スクリプトも変更対象）。実データで検証：①Standardテンプレートの`TEMPLATES["standard"]`エントリがG3-A時点とバイトレベルで完全一致（無変更を確認）、②新規テストResearch（Category=イベント）から実際にArticleを生成し**Before You Go**から本文が始まる（Basic Answerへのフォールバックなし）8/8セクション検出を確認、③同記事に対する`render_article_layout.py`（`[event]`表示）・`reviewer_agent.py`（実Claude API、`【テンプレート準拠：event】全8セクション確認済み`）がいずれも正常動作、④`template_migration_report.py`実行で当該記事のみ`Up to Date`（他39件のStandard記事は`Update Needed`のまま不変）、⑤標準7スクリプト回帰テストすべて正常完走。テスト記事・テストResearchは検証後Archived／Rejectedへ退避。**Reiが追加指示したRollback Criterion（Event記事が必須セクションを欠くか、誤ってStandard構成にフォールバックした場合は全面ロールバック）を満たすことを実データで確認済み。**
+
+- **Story Bank Database v1.0（2026-07-18、新規DB）** `notion-build/create_story_bank.py`：Story Bank→QA Card→Article→Deep Guide→Instagram→Threadsというパイプラインの最上流となる新規データベース。プロパティ：Title／Category（Research既存の7分類を再利用）／Subcategory（現状「花火大会」のみ、今後有機的に追加）／Season／Region（Source Libraryと同じ地方区分）／Priority（S/A/B/C、オプション定義順をC→Sの低→高にして降順ソートでSが先頭に来るようにした——2026-07-16のPriority/Urgency降順バグと同じ教訓を先取り適用）／Target User／Evergreen／Premium Candidate／Event Month／Source Status／Story Status。リレーションは実在するDBのみに設定（`Generated Article`→Articles、`Related SNS Posts`→SNS Queue、いずれも双方向relationとして実データで確認済み）。QA Card・Deep Guideへのリレーションは、両者ともまだ保存モデルが未決定のため意図的に追加していない。View（Story Backlog／High Priority／Summer／Autumn／Evergreen／Premium Candidates／Ready for Production）はNotion公開APIの制約により作成できず、[Story-Bank-View-Setup-Guide.md](./Story-Bank-View-Setup-Guide.md)として手動設定手順を文書化した。**[Knowledge-Lifecycle-Architecture-v1.0.md](./Knowledge-Lifecycle-Architecture-v1.0.md)のOpen Question #3（Story BankをExperience Intelligence拡張ではなく独立DBとして実装するか）は、本実装によって「独立DB」で確定した。** 実データ投入（National Fireworks Top 50）は、実際のデータセットがこのセッション内で提供されなかったため未実施——スキーマ検証用のテストレコード1件のみ作成済み（要Archive）
 
 詳細と実行方法は`docs/Automation-Scripts.md`。
 
@@ -147,6 +150,7 @@ Research → Article → Article Review → Translation → Translation Review �
 - **Architecture Phase完了（`2ff1064`、2026-07-18）**：3回のArchitecture Sessionの成果として、[Architecture-Specification-v1.0.md](./Architecture-Specification-v1.0.md)（Knowledge Architecture／Universal Properties／Category・Sub Category／Generation Rules等の技術仕様、Glossary・Architecture Decision Log付き）、[User-Journey-Architecture-v1.0.md](./User-Journey-Architecture-v1.0.md)（Mission／User Journey／Content Ladder／Content Domains／Story Bank／Human Layer／Editorial Principles）、[Knowledge-Lifecycle-Architecture-v1.0.md](./Knowledge-Lifecycle-Architecture-v1.0.md)（Story／Knowledge Lifecycle、User・Mentorフィードバックループ、Article／Deep Guide進化、AI Learning Boundaries、Human Knowledge Integration、Long-term Content Maintenance）の3文書を追加。G3-B着手前に編集哲学・ユーザー体験・知識循環を実装より先に定義する方針（Rei決定）にもとづくもので、コード・スキーマの変更は含まない
 - Article Template Framework（G3-B、2026-07-18）：`TEMPLATES`レジストリへ`"event"`を追加し、`template_for_category()`によるCategory→テンプレートの一元的な振り分けを実装。Standardテンプレートの既存動作は無変更（バイトレベルで確認）。既存4スクリプトすべてをCategoryベースでテンプレートを解決する形に更新。実データで、Category=イベントのテスト記事が正しくEventテンプレート（Before You Goから開始、8/8セクション）で生成され、Standardへフォールバックしないことを確認——Reiが追加したRollback Criterionを満たす（詳細は本文書■ Current Automation、[Automation Scripts](./Automation-Scripts.md)参照）。G4（Event Calendarスキーマ拡張）は依存させず、未確認情報は個別に「未確認」と明記する既存の捏造防止方針で対応
 - **Version4 Completion Report作成（`c4b473d`、2026-07-18）**：Version4準備作業・Architecture Phase・G3-A／G3-Bを対象とした公式クロージングレポート[Version4-Completion-Report.md](./Version4-Completion-Report.md)を作成。`Roadmap.md`の「Version 4 — Enterprise」（対外的な事業判断を要する本体、引き続き0/5）とは異なるスコープであることを明記済み
+- **Story Bank Database v1.0（2026-07-18、新規DB）**：Rei明示的承認によりNo New Database原則の例外として実装。詳細は本文書■ Current Automation・[Story-Bank-View-Setup-Guide.md](./Story-Bank-View-Setup-Guide.md)を参照。実データ（National Fireworks Top 50）の投入は本セッションでは未実施（データセット未提供のため、下記■ Remaining Tasks参照）
 
 ## ■ Remaining Tasks
 
@@ -163,6 +167,8 @@ Research → Article → Article Review → Translation → Translation Review �
 - Deferred中の6DB（Language Master等）
 - Audit Logの永続化（現状はGitコミット履歴とターミナル出力のみ）
 - AI Gatewayのopenaiプロバイダ経路は未検証（Claudeのみ実績あり）
+- **Story Bankへの「National Fireworks Top 50」データ投入が未実施**：実データセットがこのセッションでは提供されなかった。Reiが実際のリスト（またはその所在）を提供次第、投入する
+- **Story Bank内のテストレコード1件（【テスト・Story Bank検証用】隅田川花火大会）が未Archive**：実データ投入時にArchiveすること
 
 ## ■ Known Limitations
 

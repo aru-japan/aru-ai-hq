@@ -1,7 +1,7 @@
-<title>Automation Scripts v2.4</title>
+<title>Automation Scripts v2.5</title>
 
 # Automation Scripts
-### ARu Studio — Roadmap Version 3 実装記録 ＋ Version 4準備 ＋ Version 4 Phase 5（Editor Experience）＋ ARu Intelligence Phase 1/2/3 ＋ ARu公式記事テンプレート再設計 ＋ Article Template Framework（G3-A／G3-B）
+### ARu Studio — Roadmap Version 3 実装記録 ＋ Version 4準備 ＋ Version 4 Phase 5（Editor Experience）＋ ARu Intelligence Phase 1/2/3 ＋ ARu公式記事テンプレート再設計 ＋ Article Template Framework（G3-A／G3-B）＋ Story Bank Database v1.0
 
 | | |
 |---|---|
@@ -853,6 +853,51 @@ G3-B（Eventテンプレートを`TEMPLATES`の2つ目のエントリとして�
 - G4（Event Calendarスキーマ拡張：`Cost`／`Cash Only`／`English Support`／`Push Notification Priority`／`Social Hook`／`Next Estimated Occurrence`・`Dormant`ステータス）は引き続き将来の拡張として保留
 - Law／Guide／Medicalテンプレート（[User-Journey-Architecture-v1.0.md](./User-Journey-Architecture-v1.0.md)・[Architecture-Specification-v1.0.md](./Architecture-Specification-v1.0.md)が言及する将来の specialization）は未設計・未着手
 
+## Story Bank Database v1.0（新規DB、2026-07-18）
+
+**目的**：Story Bank→QA Card→Article→Deep Guide→Instagram→Threadsという編集パイプラインの最上流となる、編集アイデアそのものを管理するデータベースを新設する。Rei明示の指示による「No New Database」原則の正式な例外実装。この実装により、[Knowledge-Lifecycle-Architecture-v1.0.md](./Knowledge-Lifecycle-Architecture-v1.0.md)のOpen Question #3（Story BankをExperience Intelligence拡張ではなく独立DBとして実装するか）は「独立DB」として確定した。
+
+**場所**：`notion-build/create_story_bank.py`（新規）。既存の記事生成ロジック（`generate_article_pipeline.py`等）は無改修。
+
+### スキーマ
+
+| プロパティ | 型 | 内容 |
+|---|---|---|
+| Title | title | Story名 |
+| Category | select | Research既存の7分類（法律・制度／イベント／日本文化／旅行情報／生活情報／ニュース／トレンド）をそのまま再利用 |
+| Subcategory | select | 現状「花火大会」のみ登録。今後のStory追加にあわせて有機的に選択肢が増える設計（Notionは書き込み時に未知の値を自動追加する） |
+| Season | multi_select | 春／夏／秋／冬／通年（既存DBと共通のvocabulary） |
+| Region | select | 北海道／東北／関東／中部／近畿／中国／四国／九州・沖縄／全国／海外（Source Libraryと同じ区分） |
+| Priority | select | S／A／B／C。**オプション定義順をC→B→A→Sの低→高で登録**——2026-07-16にDashboardで発見・修正したPriority/Urgency降順バグ（オプション定義順の逆が「降順」になる）と同じ罠を、今回は先に回避した |
+| Target User | select | Resident／Tourist／Both |
+| Evergreen | checkbox | — |
+| Premium Candidate | checkbox | — |
+| Event Month | multi_select | 1月〜12月 |
+| Source Status | select | Unverified／Verified／Needs Recheck（既存のVerification Status語彙を再利用） |
+| Story Status | select | New／Approved／In Production／Published／Archived。パイプラインの5段階すべてに対応する専用フィールドは持たせていない——QA Card・Deep Guideは保存モデル自体が未決定のため |
+| Generated Article | relation | → Articles（双方向、実データで確認済み） |
+| Related SNS Posts | relation | → SNS Queue（双方向、実データで確認済み） |
+
+### 意図的に含めなかったもの
+
+- **QA Card・Deep Guideへのリレーション**：[User-Journey-Architecture-v1.0.md](./User-Journey-Architecture-v1.0.md)のOpen Questionsが指摘するとおり、どちらも保存モデル（専用DBか、Articleの一部か等）が未決定のため、存在しないものへのリレーションは作成していない
+- **Universal Properties（Record ID／Tags／Trust Score／AI Generated等）**：他4つのKnowledge Domainと共通のUniversal Propertiesパターン（[Architecture-Specification-v1.0.md](./Architecture-Specification-v1.0.md) Sec.5）とは異なり、今回はRei指定の12プロパティのみに絞って実装した。将来的にStory BankをKnowledge Domainファミリーへ正式に組み込む場合は、Universal Propertiesの追加を別途検討する
+
+### Views（未作成、手動設定が必要）
+
+NotionパブリックAPIはViewを作成できないため、Story Backlog／High Priority／Summer／Autumn／Evergreen／Premium Candidates／Ready for Productionの7ビューは[Story-Bank-View-Setup-Guide.md](./Story-Bank-View-Setup-Guide.md)として手動設定手順を文書化した（[Dashboard Setup Guide](./Dashboard-Setup-Guide.md)と同じパターン）。
+
+### 実データでのテスト結果（2026-07-18）
+
+- データベース作成 → 実際にNotion上で14プロパティすべてが意図した型で存在することをAPI経由で確認
+- リレーションの双方向性を確認：Articles側に`Related to Story Bank (Generated Article)`、SNS Queue側に`Related to Story Bank (Related SNS Posts)`が自動生成されていることを確認
+- スキーマ検証用のテストレコード1件（「【テスト・Story Bank検証用】隅田川花火大会」）を作成し、全プロパティへの書き込みが成功することを確認。**実データ投入時にArchiveする必要がある**
+
+### 未実施事項（本セッションのスコープ外）
+
+- **National Fireworks Top 50の実データ投入**：本セッションでは実際のデータセットが提供されなかったため未実施。QA Card・Articleの生成もこれに伴い未着手（指示どおり）
+- 上記7ビューの手動設定（Rei側の作業）
+
 ## 未実施事項（要判断）
 
 - **スケジューリング**：cron／launchd等での定期実行はまだ設定していない。日次実行にするか、Rei自身が手動実行するかは別途判断が必要
@@ -861,4 +906,4 @@ G3-B（Eventテンプレートを`TEMPLATES`の2つ目のエントリとして�
 
 ---
 
-*ARu HQ / Decode Japan — Automation Scripts v2.4 — 2026-07-18*
+*ARu HQ / Decode Japan — Automation Scripts v2.5 — 2026-07-18*
