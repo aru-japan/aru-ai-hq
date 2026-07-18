@@ -26,7 +26,7 @@ import ai_gateway  # noqa: E402
 from life_topics import classify_life_topics  # noqa: E402
 from duplicate_guard import check_before_generate, log_generated  # noqa: E402
 from article_template import (  # noqa: E402
-    ARU_ARTICLE_TEMPLATE_INSTRUCTIONS, parse_body_sections, validate_sections,
+    get_template, template_for_category, parse_body_sections, validate_sections,
 )
 import render_article_layout  # noqa: E402
 
@@ -59,11 +59,11 @@ def find_research(token, research_db_id, keyword):
     return results[0] if results else None
 
 
-def generate_article_text(topic, research_summary, update_level, verified_date):
+def generate_article_text(topic, research_summary, update_level, verified_date, template_instructions):
     prompt = f"""あなたはARu（外国籍の方向け日本生活サポートメディア）のWriter Agentです。
 ARu Constitutionの原則に従ってください：「何をすべきか」だけでなく「なぜそうするのか」という文化的・制度的背景を書く。Update Level={update_level}のコンテンツです（2以上は法律・制度系として一般的情報にとどめ断定的な個別助言をせず免責事項を1文入れる。1は文化・イベント・生活情報として温かく書く）。
 
-{ARU_ARTICLE_TEMPLATE_INSTRUCTIONS}
+{template_instructions}
 
 以下のリサーチ内容をもとに、テーマ「{topic}」について記事を書いてください（最終確認日：{verified_date}）。
 
@@ -156,18 +156,22 @@ def run_article(env, keyword, category):
         print(f"  Status: Already Exists (stage={existing['stage']}, article_id={existing['article_id']}). Skipping generation.")
         return existing["article_id"]
 
+    template_name = template_for_category(category)
+    template_def = get_template(template_name)
+    print(f"  Template: {template_name}")
+
     verified_date = __import__("datetime").date.today().isoformat()
     print(f"[Article] Generating via AI Gateway (Category={category}, Update Level={update_level})...")
-    provider, title, body = generate_article_text(topic, summary, update_level, verified_date)
+    provider, title, body = generate_article_text(topic, summary, update_level, verified_date, template_def["instructions"])
     print(f"  provider={provider}")
     print(f"  Title: {title}")
     print(f"  Body ({len(body)} chars): {body[:120]}...")
 
-    sections = parse_body_sections(body)
-    missing, mandatory_missing = validate_sections(sections)
+    sections = parse_body_sections(body, template=template_name)
+    missing, mandatory_missing = validate_sections(sections, template=template_name)
     if mandatory_missing:
         print(f"  WARNING: mandatory section(s) missing from generated Body: {mandatory_missing} "
-              f"-- ARu Tip is required by the official template. Article is still saved; "
+              f"-- required by the {template_name} template. Article is still saved; "
               f"flag this for editorial review.")
     elif missing:
         print(f"  Note: optional section(s) not found: {missing}")
@@ -212,7 +216,7 @@ def run_article(env, keyword, category):
 
     try:
         result = render_article_layout.render_article(env, article_page["id"], title=title, body=body)
-        print(f"  Rendered {result['block_count']} article page block(s) ({len(result['found'])}/8 sections found)")
+        print(f"  Rendered {result['block_count']} article page block(s) ({len(result['found'])}/{result['total_sections']} sections found)")
     except Exception as e:
         print(f"  WARNING: article page rendering failed (non-fatal, Article record itself is saved): {e}")
 

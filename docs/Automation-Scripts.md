@@ -1,7 +1,7 @@
-<title>Automation Scripts v2.3</title>
+<title>Automation Scripts v2.4</title>
 
 # Automation Scripts
-### ARu Studio — Roadmap Version 3 実装記録 ＋ Version 4準備 ＋ Version 4 Phase 5（Editor Experience）＋ ARu Intelligence Phase 1/2/3 ＋ ARu公式記事テンプレート再設計 ＋ Article Template Framework（G3-A）
+### ARu Studio — Roadmap Version 3 実装記録 ＋ Version 4準備 ＋ Version 4 Phase 5（Editor Experience）＋ ARu Intelligence Phase 1/2/3 ＋ ARu公式記事テンプレート再設計 ＋ Article Template Framework（G3-A／G3-B）
 
 | | |
 |---|---|
@@ -818,9 +818,40 @@ Source → Watcher → Source Monitor → Editor Review → Research → Article
 - **全件での回帰確認**：`template_migration_report.py`を全39件（Archived除く）の実記事に対して再実行 → Update Needed 39／Up to Date 0、リファクタ前と同じ分類パターンを維持（記事数が38→39なのは他セッションでの通常のコンテンツ増加によるもので、リファクタとは無関係）
 - **既存7スクリプトの回帰テスト**：`article_freshness_monitor.py`／`publishing_center.py`／`enforce_publish_gate.py`／`coverage_analyzer.py`／`editorial_planner.py`／`duplicate_prevention_report.py`／`source_watcher.py`をすべて実データに対して再実行し、エラーなく完走、既存ロジックどおりの結果を確認（このうちいずれの回帰テストスクリプトも実際には`article_template.py`をimportしていないため、この確認は「他モジュールを壊していないか」の一般的な健全性チェックとして実施したもの）
 
+### 次段階（G3-Bで実施済み、下記参照）
+
+G3-B（Eventテンプレートを`TEMPLATES`の2つ目のエントリとして追加）は、3回のArchitecture Session（[Architecture-Specification-v1.0.md](./Architecture-Specification-v1.0.md)／[User-Journey-Architecture-v1.0.md](./User-Journey-Architecture-v1.0.md)／[Knowledge-Lifecycle-Architecture-v1.0.md](./Knowledge-Lifecycle-Architecture-v1.0.md)）を経てから実施した。
+
+## Article Template Framework — G3-B（Eventテンプレート追加、2026-07-18）
+
+**目的**：G3-Aで検証したフレームワークの骨格に、Eventテンプレートを2つ目のテンプレートとして追加する。Category=`イベント`の記事が、Standardとは異なる8セクション構成（日時・場所等の実用情報を前面に出す構成）で生成・レビュー・レンダリング・移行判定されるようにする。
+
+**スコープの決定（Option 1）**：本来の依存関係案ではG4（Event Calendarスキーマへの`Cost`／`Cash Only`／`English Support`等の追加）を先に済ませる想定だったが、実装直前に再検討し、**G4を待たずに着手した**。理由：Event Calendarの既存プロパティ（`Location`／`Rain Policy`／`Reservation Required`／`Accessibility`／`Repeat Schedule`／`AI Highlight`）だけでBefore You Goセクションの大半を構成でき、確認できない個別項目（費用・現金対応・英語対応）はPremium Section／Sourcesと同じ「捏造せず個別に未確認と明記する」既存方針をそのまま転用できるため、G4はG3-Bの必須依存ではなく将来の拡張と位置づけた（Rei承認、2026-07-18）。
+
+**場所**：`notion-build/automation/article_template.py`（`"event"`エントリ追加）。`generate_article_pipeline.py`／`reviewer_agent.py`／`render_article_layout.py`／`template_migration_report.py`（**いずれも変更**——G3-Aでは無改修だった4スクリプトが、今回はCategoryベースのテンプレート解決のために変更対象になった）。
+
+### 変更内容
+
+- **`article_template.py`**：`TEMPLATES`に`"event"`を追加（section_order: Before You Go／What to Expect／Cultural Background／Who This Is For／ARu Tip／Cautions & Accessibility／Premium Section／Sources、mandatory: Before You Go・ARu Tip）。新規`BEFORE_YOU_GO_UNCERTAIN_PLACEHOLDER`定数と、Event専用の生成プロンプト（`_EVENT_INSTRUCTIONS`）を追加。新規`template_for_category(category)`関数がCategory→テンプレート名の対応を一元管理（`イベント`→`"event"`、それ以外→`"standard"`）——4スクリプトが個別に判定ロジックを持たないようにするための共通化
+- **`generate_article_pipeline.py`**：`generate_article_text()`が固定の`ARU_ARTICLE_TEMPLATE_INSTRUCTIONS`ではなく、`template_for_category()`で解決したテンプレートの`instructions`を受け取るシグネチャに変更。`parse_body_sections`／`validate_sections`へ`template=`を明示的に渡す
+- **`reviewer_agent.py`**：`build_template_compliance_note(body, template="standard")`に変更し、Categoryから解決したテンプレートに対して決定論的チェックを行う。出力に`【テンプレート準拠：event】`のようにテンプレート名を明記するよう改善
+- **`render_article_layout.py`**：`build_article_blocks()`・`render_article()`・`run_backfill()`がいずれもページのCategoryからテンプレートを解決し、そのテンプレートの`section_order`／`primary_sections`／`secondary_sections`／`premium_section`／`sources_section`でレンダリングする。CautionsAndAccessibilityはStandardのFAQと同じ「その他の詳細」トグルへ折りたたむ
+- **`template_migration_report.py`**：`scan_articles()`が記事ごとにCategoryからテンプレートを解決し、正しい`section_order`に対して準拠判定する。レポート表示に`[template]`を併記するよう変更
+
+### 実データでのテスト結果（2026-07-18）
+
+- **Standardテンプレートの無変更確認**：`TEMPLATES["standard"]`の全エントリが、G3-A時点のコードとバイトレベルで完全一致することを確認
+- **Event記事の新規生成**：テスト用Researchレコード（Topic「【テスト・G3B検証用】隅田川花火大会に行く前に知っておきたいこと」、Category=イベント）から`generate_article_pipeline.py article --category イベント`を実行 → 生成された本文は**`**Before You Go**`から開始**（`Basic Answer`へのフォールバックなし）、**8/8セクション検出**。費用・日程等の未確定情報は「現地公式サイト等での要確認事項です」と個別に明記され、捏造は確認されなかった。検証後、テストArticle・Research双方をArchived／Rejectedへ退避
+- **`render_article_layout.py`**：同記事に対し`article`サブコマンドを実行 → `[event] (8/8 sections found)`
+- **`reviewer_agent.py`**：同記事に対し実Claude APIでレビュー実行 → `【テンプレート準拠：event】全8セクション確認済み。`を確認、5観点スコアリングも正常動作（OVERALL 70、RESULT Pass）
+- **`template_migration_report.py`**：実行結果で当該Event記事のみ`Up to Date`（1件）、既存39件のStandard記事は`Update Needed`のまま変化なし——テンプレートの取り違えが起きていないことを確認
+- **標準7スクリプトの回帰テスト**：`article_freshness_monitor.py`／`publishing_center.py`／`enforce_publish_gate.py`／`coverage_analyzer.py`／`editorial_planner.py`／`duplicate_prevention_report.py`／`source_watcher.py`をすべて実データに対して再実行し、エラーなく完走
+- **Rollback Criterion（Rei追加指示）の充足確認**：「生成されたEvent記事が必須セクションを欠く、またはStandard構成に誤ってフォールバックした場合は全面ロールバックする」という基準に対し、実際の生成結果が必須セクション（Before You Go・ARu Tip）を含み、Standardのセクション名（Basic Answer等）が一切出現しないことを確認したため、ロールバックは発生しなかった
+
 ### 次段階（未着手）
 
-G3-B（Eventテンプレートを`TEMPLATES`の2つ目のエントリとして追加）は、本セッションのスコープに含めていない。次のArchitecture Sessionで**ARu User Journey Specification**を定義してから、実装の是非・順序を改めて計画する（Rei決定、2026-07-18）。
+- G4（Event Calendarスキーマ拡張：`Cost`／`Cash Only`／`English Support`／`Push Notification Priority`／`Social Hook`／`Next Estimated Occurrence`・`Dormant`ステータス）は引き続き将来の拡張として保留
+- Law／Guide／Medicalテンプレート（[User-Journey-Architecture-v1.0.md](./User-Journey-Architecture-v1.0.md)・[Architecture-Specification-v1.0.md](./Architecture-Specification-v1.0.md)が言及する将来の specialization）は未設計・未着手
 
 ## 未実施事項（要判断）
 
@@ -830,4 +861,4 @@ G3-B（Eventテンプレートを`TEMPLATES`の2つ目のエントリとして�
 
 ---
 
-*ARu HQ / Decode Japan — Automation Scripts v2.3 — 2026-07-18*
+*ARu HQ / Decode Japan — Automation Scripts v2.4 — 2026-07-18*

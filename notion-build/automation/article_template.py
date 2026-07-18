@@ -1,22 +1,26 @@
 """ARu Official Article Template -- single source of truth.
 
-G3-A (Article Template Framework, standard-only): this module is now
-organized around a TEMPLATES registry so that a future template (e.g. an
-Event-specific one, G3-B) can be added as a second entry without touching
-this file's existing behavior. This phase intentionally registers exactly
-one template, "standard" -- no other template exists yet.
+G3-A (Article Template Framework, standard-only) organized this module
+around a TEMPLATES registry so a future template could be added as a second
+entry without touching the standard template's existing behavior.
+
+G3-B adds that second entry: "event", for Category="イベント" content
+(Option 1 scope -- built against the existing Event Calendar/Research
+schema, no new Notion properties. Facts this template can't yet source from
+a dedicated property, such as exact cost or confirmed English support,
+are handled the same way Premium Section/Sources already handle
+uncertainty: the model is instructed to write an explicit "not confirmed"
+placeholder per item rather than fabricate or omit the section).
+`template_for_category(category)` centralizes the Category -> template
+name mapping so every consumer resolves it the same way.
 
 The public names below (SECTION_ORDER, PRIMARY_SECTIONS, SECONDARY_SECTIONS,
 PREMIUM_SECTION, SOURCES_SECTION, MANDATORY_SECTIONS,
-ARU_ARTICLE_TEMPLATE_INSTRUCTIONS) are unchanged in name, value, and object
-identity from before this refactor -- they are views onto
-TEMPLATES["standard"], not independent definitions, so every existing
-consumer (generate_article_pipeline.py, reviewer_agent.py,
-render_article_layout.py, template_migration_report.py) keeps working
-without any change on their side. parse_body_sections()/validate_sections()
-gained an optional `template=` argument (default "standard") so a future
-template can be parsed/validated the same way; every existing call site
-omits it and therefore behaves exactly as before.
+ARU_ARTICLE_TEMPLATE_INSTRUCTIONS) remain views onto TEMPLATES["standard"]
+specifically -- they still exist, unchanged, for any code that hasn't been
+made template-aware. parse_body_sections()/validate_sections() take an
+optional `template=` argument (default "standard"); every pre-G3-B call site
+omits it and therefore behaves exactly as before G3-B, too.
 
 Replaces the prior duplication between generate_article_pipeline.py's
 ARU_ARTICLE_TEMPLATE_INSTRUCTIONS and render_article_layout.py's own copy of
@@ -38,6 +42,7 @@ import difflib
 
 PREMIUM_ENRICHMENT_PLACEHOLDER = "この記事にはまだ十分なプレミアム情報がありません。編集者による追加取材・加筆が必要です。"
 SOURCES_VERIFICATION_PLACEHOLDER = "出典は編集部による確認が必要です（自動生成時点で検証済みの一次情報源が見つかりませんでした）。"
+BEFORE_YOU_GO_UNCERTAIN_PLACEHOLDER = "現地公式サイト等での要確認事項です（自動生成時点で確認できませんでした）。"
 
 _STANDARD_INSTRUCTIONS = """記事は必ず以下のARu公式テンプレート（8セクション）の構成で書いてください。各セクションの見出しはそのまま太字（**見出し**）で示し、8つすべてを含めてください。
 
@@ -51,6 +56,23 @@ _STANDARD_INSTRUCTIONS = """記事は必ず以下のARu公式テンプレート�
 8. **Sources** — 公式・信頼できる情報源（政府・自治体・公式団体等を優先）を記載する。**出典を捏造しないこと**。リサーチ内容に実際の一次情報源の記載がない場合は、代わりに「{sources_placeholder}」とだけ書く
 
 Title・Related Articles・Last Updatedは本文（Body）には含めない——これらはNotionの既存プロパティ（記事タイトル・Knowledge Links・Last Verified Date）から自動的に扱われる。""".format(
+    premium_placeholder=PREMIUM_ENRICHMENT_PLACEHOLDER,
+    sources_placeholder=SOURCES_VERIFICATION_PLACEHOLDER,
+)
+
+_EVENT_INSTRUCTIONS = """記事は必ず以下のARu Eventテンプレート（8セクション）の構成で書いてください。各セクションの見出しはそのまま太字（**見出し**）で示し、8つすべてを含めてください。標準テンプレート（Basic Answer等）とは異なるセクション名です——標準テンプレートの見出しを使わないこと。
+
+1. **Before You Go** — 日時・場所・費用・予約要否・現金対応・英語対応・荒天時の対応方針など、読者が行く前に知っておくべき実用的な事実を簡潔な箇条書きで示す。**このセクションは必須——省略しないこと**。費用・現金対応・英語対応など、情報源に明記がなく確信が持てない項目は、断定せず項目ごとに「{before_you_go_placeholder}」と書くこと。**捏造しないこと**
+2. **What to Expect** — このイベント・体験の内容、雰囲気、見どころ
+3. **Cultural Background** — このイベントの背景にある日本独自の文化的理由・歴史・慣習（ARuの核となる差別化要素）
+4. **Who This Is For** — 観光客／在住外国人／家族連れ／学生など、どのような読者に向いているかを示す
+5. **ARu Tip** — 外国籍の住民・訪日者向けの実践的なアドバイス（穴場、混雑回避等）。Before You Goの繰り返しは避ける。**このセクションは必須——省略しないこと**
+6. **Cautions & Accessibility** — 荒天時の中止基準、混雑レベル、バリアフリー対応等の注意点
+7. **Premium Section** — 該当する場合のみ、穴場スポット・詳しい交通手段・タイミングの助言等の実用的付加価値を含める。**確信を持てる情報がない場合は絶対に内容を創作しないこと**。その場合は代わりに「{premium_placeholder}」とだけ書く
+8. **Sources** — 公式・信頼できる情報源（イベント公式サイト・実行委員会・自治体観光協会等を優先）を記載する。**出典を捏造しないこと**。実際の一次情報源の記載がない場合は、代わりに「{sources_placeholder}」とだけ書く
+
+Title・Related Articles・Last Updatedは本文（Body）には含めない——これらはNotionの既存プロパティ（記事タイトル・Knowledge Links・Last Verified Date）から自動的に扱われる。""".format(
+    before_you_go_placeholder=BEFORE_YOU_GO_UNCERTAIN_PLACEHOLDER,
     premium_placeholder=PREMIUM_ENRICHMENT_PLACEHOLDER,
     sources_placeholder=SOURCES_VERIFICATION_PLACEHOLDER,
 )
@@ -82,12 +104,48 @@ TEMPLATES = {
         "mandatory_sections": ["ARu Tip"],
         "instructions": _STANDARD_INSTRUCTIONS,
     },
+    "event": {
+        "section_order": [
+            "Before You Go",
+            "What to Expect",
+            "Cultural Background",
+            "Who This Is For",
+            "ARu Tip",
+            "Cautions & Accessibility",
+            "Premium Section",
+            "Sources",
+        ],
+        "primary_sections": ["Before You Go", "What to Expect", "Cultural Background", "Who This Is For", "ARu Tip"],
+        # Folded into the same "その他の詳細" toggle render_article_layout.py
+        # already renders for the standard template's FAQ.
+        "secondary_sections": ["Cautions & Accessibility"],
+        "premium_section": "Premium Section",
+        "sources_section": "Sources",
+        # Before You Go is this template's defining section (date/location/cost/
+        # etc. is the entire reason an Event template exists rather than reusing
+        # Standard); ARu Tip stays mandatory for brand consistency across every
+        # template.
+        "mandatory_sections": ["Before You Go", "ARu Tip"],
+        "instructions": _EVENT_INSTRUCTIONS,
+    },
 }
 
 
 def get_template(name="standard"):
     """Look up a registered article template definition by name."""
     return TEMPLATES[name]
+
+
+def template_for_category(category):
+    """Maps an Article/Research Category to the template name that should
+    generate/parse/render/migrate-check it. Centralized here so every
+    consumer (generation, review, rendering, migration reporting) resolves
+    the same Category -> template mapping rather than each re-implementing
+    it -- a repeat of the Category/Sub Category naming-consistency lesson
+    from the Architecture Specification."""
+    if category == "イベント":
+        return "event"
+    return "standard"
 
 
 # Backward-compatible module-level exports. Every existing consumer imports

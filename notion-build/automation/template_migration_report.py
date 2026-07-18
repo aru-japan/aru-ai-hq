@@ -31,7 +31,7 @@ sys.path.insert(0, os.path.join(REPO_ROOT, "scripts"))
 sys.path.insert(0, AUTOMATION_DIR)
 
 from notion_api import load_env, notion_request, query_database, get_prop, set_env_value  # noqa: E402
-from article_template import SECTION_ORDER, parse_body_sections, validate_sections  # noqa: E402
+from article_template import get_template, template_for_category, parse_body_sections, validate_sections  # noqa: E402
 
 ENV_PATH = os.path.join(NOTION_BUILD_DIR, ".env")
 
@@ -62,12 +62,17 @@ def scan_articles(token, articles_db_id):
     for page in pages:
         title = get_prop(page, "Title", "title")
         body = get_prop(page, "Body", "rich_text")
-        sections = parse_body_sections(body)
-        missing, mandatory_missing = validate_sections(sections)
+        category = get_prop(page, "Category", "select")
+        template = template_for_category(category)
+        section_order = get_template(template)["section_order"]
+        sections = parse_body_sections(body, template=template)
+        missing, mandatory_missing = validate_sections(sections, template=template)
         results.append({
             "id": page["id"],
             "title": title,
-            "found": len(SECTION_ORDER) - len(missing),
+            "template": template,
+            "total_sections": len(section_order),
+            "found": len(section_order) - len(missing),
             "missing": missing,
             "mandatory_missing": mandatory_missing,
             "up_to_date": not missing,
@@ -109,7 +114,7 @@ def build_page_blocks(results, up_to_date, needs_update):
     for r in needs_update[:20]:
         rows.append(table_row([
             r["title"][:60],
-            f"{r['found']}/{len(SECTION_ORDER)}",
+            f"{r['found']}/{r['total_sections']} [{r['template']}]",
             r["publishing_status"] or "-",
             f"{r['priority'] or '-'}/{r['urgency'] or '-'}",
             "、".join(r["missing"]),
@@ -182,7 +187,7 @@ def print_report(results, up_to_date, needs_update):
     print(f"  Update Needed: {len(needs_update)}件")
     print("\n優先更新リスト（上位10件）:")
     for r in needs_update[:10]:
-        print(f"  [{r['found']}/{len(SECTION_ORDER)}] {r['title'][:50]} "
+        print(f"  [{r['found']}/{r['total_sections']} {r['template']}] {r['title'][:50]} "
               f"(Publishing={r['publishing_status']}, Priority={r['priority']}, Urgency={r['urgency']})")
         print(f"      欠落: {', '.join(r['missing'])}")
     print()

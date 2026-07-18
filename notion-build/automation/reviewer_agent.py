@@ -32,7 +32,7 @@ sys.path.insert(0, AUTOMATION_DIR)
 
 from notion_api import load_env, notion_request, query_database, get_prop  # noqa: E402
 import ai_gateway  # noqa: E402
-from article_template import SECTION_ORDER, parse_body_sections, validate_sections  # noqa: E402
+from article_template import get_template, template_for_category, parse_body_sections, validate_sections  # noqa: E402
 
 ENV_PATH = os.path.join(NOTION_BUILD_DIR, ".env")
 
@@ -41,20 +41,24 @@ PASS_OVERALL_THRESHOLD = 70
 PASS_RISK_THRESHOLD = 60  # Risk is safety-critical: a low Risk score cannot be offset by other dimensions
 
 
-def build_template_compliance_note(body):
+def build_template_compliance_note(body, template="standard"):
     """Deterministic (not AI-guessed) section-presence check, reusing the same
     parser render_article_layout.py and template_migration_report.py use --
     so this can never report a false pass on a section that isn't really
-    there."""
-    sections = parse_body_sections(body)
-    missing, mandatory_missing = validate_sections(sections)
+    there. `template` selects which registered template's section list this
+    Article should be checked against (resolved by the caller from Category
+    via article_template.template_for_category(), same as every other
+    consumer)."""
+    section_order = get_template(template)["section_order"]
+    sections = parse_body_sections(body, template=template)
+    missing, mandatory_missing = validate_sections(sections, template=template)
     if not missing:
-        return "【テンプレート準拠】全8セクション確認済み。"
+        return f"【テンプレート準拠：{template}】全{len(section_order)}セクション確認済み。"
     parts = []
-    for name in SECTION_ORDER:
+    for name in section_order:
         status = "欠落" if name in missing else "OK"
         parts.append(f"{name}: {status}")
-    note = "【テンプレート準拠】" + "／".join(parts)
+    note = f"【テンプレート準拠：{template}】" + "／".join(parts)
     if mandatory_missing:
         note += f" ※必須セクション欠落: {', '.join(mandatory_missing)}"
     return note
@@ -113,6 +117,8 @@ def review_article(article):
     title = get_prop(article, "Title", "title")
     body = get_prop(article, "Body", "rich_text")
     update_level = get_prop(article, "Update Level", "number") or 1
+    category = get_prop(article, "Category", "select")
+    template = template_for_category(category)
 
     prompt = build_review_prompt(title, body, update_level)
     provider, text = ai_gateway.complete(prompt, max_tokens=800)
@@ -121,7 +127,7 @@ def review_article(article):
     if any(v is None for v in scores.values()):
         raise RuntimeError(f"Could not parse all 5 scores from AI response:\n{text}")
 
-    compliance_note = build_template_compliance_note(body)
+    compliance_note = build_template_compliance_note(body, template=template)
     suggestions = f"{compliance_note}\n\n{suggestions}" if suggestions else compliance_note
 
     overall = round(sum(scores.values()) / 5)

@@ -56,8 +56,7 @@ sys.path.insert(0, AUTOMATION_DIR)
 
 from notion_api import load_env, notion_request, query_database, get_prop  # noqa: E402
 from article_template import (  # noqa: E402
-    SECTION_ORDER, PRIMARY_SECTIONS, SECONDARY_SECTIONS, PREMIUM_SECTION,
-    SOURCES_SECTION, parse_body_sections,
+    get_template, template_for_category, parse_body_sections,
 )
 
 ENV_PATH = os.path.join(NOTION_BUILD_DIR, ".env")
@@ -97,10 +96,17 @@ def _fetch_related_articles(token, knowledge_links_ids):
     return related
 
 
-def build_article_blocks(sections, body_text=None, related_articles=None, last_updated=None):
+def build_article_blocks(sections, template="standard", body_text=None, related_articles=None, last_updated=None):
+    td = get_template(template)
+    section_order = td["section_order"]
+    primary_sections = td["primary_sections"]
+    secondary_sections = td["secondary_sections"]
+    premium_section = td["premium_section"]
+    sources_section = td["sources_section"]
+
     now = datetime.datetime.now().strftime("%Y-%m-%d %H:%M")
-    found = [s for s in SECTION_ORDER if s in sections]
-    missing = [s for s in SECTION_ORDER if s not in sections]
+    found = [s for s in section_order if s in sections]
+    missing = [s for s in section_order if s not in sections]
     related_articles = related_articles or []
 
     blocks = [
@@ -124,12 +130,12 @@ def build_article_blocks(sections, body_text=None, related_articles=None, last_u
         _append_trailing_blocks(blocks, related_articles, last_updated)
         return blocks, found, missing
 
-    for name in PRIMARY_SECTIONS:
+    for name in primary_sections:
         if name in sections:
             blocks.append(_heading_block(name, level=2))
             blocks.append(_paragraph_block(sections[name]))
 
-    secondary_present = [name for name in SECONDARY_SECTIONS if name in sections]
+    secondary_present = [name for name in secondary_sections if name in sections]
     if secondary_present:
         blocks.append({"divider": {}})
         toggle_children = []
@@ -141,17 +147,17 @@ def build_article_blocks(sections, body_text=None, related_articles=None, last_u
             "children": toggle_children,
         }})
 
-    if PREMIUM_SECTION in sections:
+    if premium_section in sections:
         blocks.append({"divider": {}})
         blocks.append({"toggle": {
             "rich_text": [{"text": {"content": "💎 Premium Section"}}],
-            "children": [_paragraph_block(sections[PREMIUM_SECTION])],
+            "children": [_paragraph_block(sections[premium_section])],
         }})
 
-    if SOURCES_SECTION in sections:
+    if sources_section in sections:
         blocks.append({"divider": {}})
-        blocks.append(_heading_block(SOURCES_SECTION, level=3))
-        blocks.append(_paragraph_block(sections[SOURCES_SECTION]))
+        blocks.append(_heading_block(sources_section, level=3))
+        blocks.append(_paragraph_block(sections[sources_section]))
 
     if missing:
         blocks.append({"divider": {}})
@@ -197,20 +203,26 @@ def render_article(env, article_id, title=None, body=None):
         title = get_prop(page, "Title", "title")
         body = get_prop(page, "Body", "rich_text")
 
+    category = get_prop(page, "Category", "select")
+    template = template_for_category(category)
+
     knowledge_links = get_prop(page, "Knowledge Links", "relation") or []
     last_updated = get_prop(page, "Last Verified Date", "date") or get_prop(page, "Updated Date", "date")
     related_articles = _fetch_related_articles(token, knowledge_links)
 
-    sections = parse_body_sections(body)
+    sections = parse_body_sections(body, template=template)
     blocks, found, missing = build_article_blocks(
-        sections, body_text=body, related_articles=related_articles, last_updated=last_updated
+        sections, template=template, body_text=body, related_articles=related_articles, last_updated=last_updated
     )
 
     clear_article_blocks(token, article_id)
     for i in range(0, len(blocks), 90):
         notion_request(token, "PATCH", f"/blocks/{article_id}/children", {"children": blocks[i:i + 90]})
 
-    return {"block_count": len(blocks), "found": found, "missing": missing, "title": title}
+    return {
+        "block_count": len(blocks), "found": found, "missing": missing, "title": title,
+        "template": template, "total_sections": len(get_template(template)["section_order"]),
+    }
 
 
 def run_backfill(env, limit=None, dry_run=False):
@@ -229,11 +241,14 @@ def run_backfill(env, limit=None, dry_run=False):
     for page in pages:
         title = get_prop(page, "Title", "title")
         body = get_prop(page, "Body", "rich_text")
+        category = get_prop(page, "Category", "select")
+        template = template_for_category(category)
+        section_order = get_template(template)["section_order"]
         try:
-            sections = parse_body_sections(body)
-            found = [s for s in SECTION_ORDER if s in sections]
-            missing = [s for s in SECTION_ORDER if s not in sections]
-            log(f"  {title[:50]}: {len(found)}/{len(SECTION_ORDER)} sections found" + (f" (missing: {missing})" if missing else ""))
+            sections = parse_body_sections(body, template=template)
+            found = [s for s in section_order if s in sections]
+            missing = [s for s in section_order if s not in sections]
+            log(f"  {title[:50]} [{template}]: {len(found)}/{len(section_order)} sections found" + (f" (missing: {missing})" if missing else ""))
             if not dry_run:
                 result = render_article(env, page["id"], title=title, body=body)
                 log(f"    -> rendered {result['block_count']} block(s)")
@@ -262,7 +277,8 @@ def main():
 
     if args.cmd == "article":
         result = render_article(env, args.article_id)
-        log(f"Rendered {result['block_count']} block(s) for '{result['title']}' ({len(result['found'])}/{len(SECTION_ORDER)} sections found)")
+        log(f"Rendered {result['block_count']} block(s) for '{result['title']}' [{result['template']}] "
+            f"({len(result['found'])}/{result['total_sections']} sections found)")
         if result["missing"]:
             log(f"  Missing: {result['missing']}")
     elif args.cmd == "backfill":
