@@ -1,12 +1,12 @@
-<title>Automation Scripts v1.9</title>
+<title>Automation Scripts v2.0</title>
 
 # Automation Scripts
-### ARu Studio — Roadmap Version 3 実装記録 ＋ Version 4準備 ＋ Version 4 Phase 5（Editor Experience）＋ ARu Intelligence Phase 1
+### ARu Studio — Roadmap Version 3 実装記録 ＋ Version 4準備 ＋ Version 4 Phase 5（Editor Experience）＋ ARu Intelligence Phase 1/2
 
 | | |
 |---|---|
-| **Status** | Active — Notion自動化20スクリプト＋AI Gateway＋Article Freshness Monitor＋Coverage Analyzer＋Editorial Planner＋Publishing Center＋Duplicate Prevention＋Editor Experience（Article Layout Renderer／Editor Home／AI Command Center）＋ARu Intelligence Phase 1（Source Watcher）実装・実データ／実API（Claude）でテスト済み |
-| **Date** | 2026-07-16 |
+| **Status** | Active — Notion自動化22スクリプト＋AI Gateway＋Article Freshness Monitor＋Coverage Analyzer＋Editorial Planner＋Publishing Center＋Duplicate Prevention＋Editor Experience（Article Layout Renderer／Editor Home／AI Command Center）＋ARu Intelligence Phase 1（Source Watcher）＋Phase 2（Source Library Expansion／Bulk Import）実装・実データ／実API（Claude）でテスト済み |
+| **Date** | 2026-07-17 |
 | **位置づけ** | [AI Agent Workflow](./AI-Agent-Workflow.md)に定めた処理を、新規DB（AI Agents／Prompt Library／Automation）を追加せず、既存10DBに対するPythonスクリプトとして実装したもの |
 | **場所** | `notion-build/automation/` |
 
@@ -40,7 +40,9 @@
 | `render_article_layout.py` | Editor-in-Chief（Editor Experience） | Articles.Bodyの9セクションテンプレートを、Articleページの実ブロック（見出し＋段落、4セクションはtoggle折りたたみ）として描画。スキーマ・プロパティは無変更（詳細後述） |
 | `editor_home.py` | Editor-in-Chief（Editor Experience） | 「今日、人間が決めること」9項目の件数をDashboardと同一フィルタで集計し、専用Notionページ（ナビゲーションハブ）に反映（詳細後述） |
 | `ai_command_center.py` | Editor-in-Chief（Editor Experience） | Freshness内訳・Duplicate Prevention本日の活動・外部監視フィード・AI分析ページへのポインタを専用Notionページ（ナビゲーションハブ）に反映（詳細後述） |
-| `source_watcher.py` | Editor-in-Chief（情報源監視） | Source Libraryの公式情報源URLを定期フェッチし、内容ハッシュの変化から本物の変化検知を行い、Source Monitorレコードを自動作成（詳細後述） |
+| `source_watcher.py` | Editor-in-Chief（情報源監視） | Source Libraryの公式情報源URLを定期フェッチし、SimHash指紋の変化から本物の変化検知を行い、Source Monitorレコードを自動作成。Importance優先度順で処理し、Update Classificationを自動分類（詳細後述） |
+| `source_categories.py` | — | Source Category（22件）とUpdate Classification（11件）のタクソノミー定義（`life_topics.py`と同じ構造）。`ensure_schema()`とAI分類の単一の情報源 |
+| `bulk_import_sources.py` | Editor-in-Chief（情報源一括登録） | CSVからSource Libraryへ一括登録。URL重複はスキップ、未知のSelect値は自動でスキーマへ追加（詳細後述） |
 
 ## 実行方法
 
@@ -621,6 +623,84 @@ Phase 5実装後、以下を実データに対して1回ずつ再実行し、挙
 - ページ全文のハッシュ比較は粗い検知方式であり、広告・「最終更新日」表示など本質的でない変化でも誤検知（false positive）しうる。実運用でのfalse positive発生率を見てから、Phase 2でソースごとのCSSセレクタ指定等の精緻化を検討する
 - **Source Library内の実URL投入がPhase 1の実効性の前提条件**：現時点で実URLを持つレコードは1件のみ。Reiが実際の政府・自治体・観光協会等のURLをSource Libraryへ登録していくことで、初めてPhase 1が実運用上の価値を持つ
 
+## Source Library Expansion（ARu Intelligence Phase 2、2026-07-17）
+
+**目的**：Phase 1が指摘した課題（「監視エンジンはできたが、監視対象がほぼ空」）を解消する。Reiの依頼：①Source Libraryをカテゴリ別に拡張、②数百件規模のソースを手作業でなく一括投入できる仕組み、③Critical/High/Medium/Lowの監視優先度、④変化の種類を分類、⑤誤検知（false positive）の削減、⑥Intelligence Dashboard、⑦公開ワークフロー（人間承認）は不変。「新規データベースは追加しない」「Version 4互換性を維持する」という制約は継続。
+
+**場所**：`notion-build/automation/source_categories.py`（新規）、`notion-build/automation/bulk_import_sources.py`（新規）、`notion-build/automation/source_watcher.py`（拡張）、`notion-build/automation/ai_command_center.py`（拡張）
+
+### ① Source Libraryアーキテクチャ拡張
+
+Source Libraryへ5プロパティを追加（すべて既存DBへの追加のみ、リレーション先の新規DBは作成していない——「Region Master」は`docs/Roadmap.md`が既にDeferredとして文書化している未構築DBであり、新しいAIが勝手に作らないという既存方針に従い、Country/Region/Cityは単純なSelect/rich_textとして実装）：
+
+| プロパティ | 型 | 内容 |
+|---|---|---|
+| `Category` | Select（22件） | Immigration／Visa／Student／Employment／Tax／Pension／Health Insurance／Disaster／Transportation／Tourism／Events／Festivals／Municipal Governments／Universities／Japanese Language Schools／Weather／Culture／Consumer Information／Housing／Banking／Emergency／Trending Topics（Reiの指定どおり、英語表記のまま） |
+| `Country` | Select | Japan／Other International |
+| `Region` | Select | 北海道／東北／関東／中部／近畿／中国／四国／九州・沖縄／全国／海外 |
+| `City` | rich_text | 自由入力（都市名の選択肢は膨大なためSelectにせず） |
+| `Importance` | Select（4件） | Critical／High／Medium／Low —— 既存の`Tier`（高/中/低）に代わる、監視優先度の正式なフィールド。`Tier`はスキーマ上残すが（削除は破壊的変更のため回避）、新規ロジックはすべて`Importance`を参照する |
+| `Last Check Error`（当初計画にはなかった追加） | rich_text | 直近チェックのエラー内容。成功時は空にクリア。ローカルログファイル方式（`duplicate_prevention.jsonl`と同じ、マシン依存という既知の制約を持つ）ではなく、Source Library自体のプロパティとして持たせることで、Notion上でどこからでも同期・閲覧できるようにした——計画からの意図的な改善点として明記 |
+
+`Monitoring Status`は新規プロパティを追加せず、既存の`Status`（Active/Inactive/Under Review）をそのまま「監視対象かどうか」の判定に使う（`source_watcher.py`の対象抽出条件は`Status=Active`）。
+
+`source_categories.py`は`life_topics.py`と同じ構造（フラットなリスト定数）で、`SOURCE_CATEGORIES`（22件）と`UPDATE_CLASSIFICATIONS`（11件、後述）の2つを保持する単一の情報源。
+
+### ② 一括インポート
+
+`bulk_import_sources.py`：stdlibの`csv.DictReader`でCSVを読み込み、Notion APIで直接ページを作成する（このリポジトリに以前CSV読み込み機能は一切存在しなかった——`bulk_generate_articles.py`のコメントが説明するとおり、Notionネイティブの「CSV Import」はSelect/Relationプロパティを正しく設定できないため、意図的に避けられてきた）。
+
+- 必須列：`Source Name`／`URL`。任意列（未入力時は既定値を適用）：`Source Type`（政府）／`Category`／`Country`／`Region`／`City`／`Importance`（Medium）／`Check Frequency`（Weekly）
+- 実行前にSource Library内の既存URLを1回クエリし、CSV内で既に存在するURLの行は「重複」としてスキップ（`duplicate_guard.py`と同じ「暗黙の重複を許さない」原則を、記事ではなく情報源に適用したもの）
+- CSV内に未知のCategory/Country/Region/Importance値があれば、ページ作成前に自動でSelectの選択肢へ追加（「無効なSelectオプション」エラーを未然に防止）
+- `notion-build/automation/data/source_library_import_template.csv`（ヘッダー＋実在確認済み1件の記入例）と`notion-build/automation/data/source_library_seed.csv`（後述の実データ9件）の2ファイルを同梱
+
+### ③ 監視優先度
+
+`Importance`（Critical/High/Medium/Low）が優先度の正式なフィールド。`source_watcher.py`の`derive_impact_level()`は`Importance`が設定されていればそれをそのまま採用し、未設定の場合のみ（Phase 1時点の記録の後方互換のため）従来の`Tier`×`Source Type`推論にフォールバックする。`get_due_sources()`はチェック期限が来たソースを`Importance`の高い順（Critical→High→Medium→Low）へソートしてから1回あたりの上限件数（20→50件に引き上げ）を適用するため、ソースが数百件規模に増えてもCritical案件が後回しにされない。
+
+### ④ Update Classification（変化の分類）
+
+Source Monitorへ`Update Classification`（Select、11件：Law Change／Policy Update／Fee Change／Deadline Change／Event Update／Festival Schedule／Weather Warning／Transportation／Tourism Information／Emergency Notice／General News）を追加。変化検知時、`classify_update()`（`ai_gateway.py`経由、`generate_diff_summary()`と同じ呼び出しパターン）が`UPDATE_CLASSIFICATIONS`の中から最も適切な1件を判定し、検証に失敗（AIの誤出力・ハルシネーション）した場合は`General News`へフォールバックする——`life_topics.py`の「既知リストに対する検証、未知の値は採用しない」というパターンを踏襲。既存の`Change Type`プロパティと、それを参照する`sync_source_monitor_to_research.py`の`CHANGE_TYPE_TO_URGENCY`マッピングは無変更（`Update Classification`は並存する追加フィールド）。
+
+**実データでのテスト（4件、いずれも正しく分類）**：「週間労働時間上限の変更」→`Policy Update`、「確定申告期限の延長」→`Deadline Change`、「大雨警報」→`Weather Warning`、「夏祭りの日程決定」→`Festival Schedule`。
+
+### ⑤ 誤検知（false positive）の削減
+
+Phase 1のSHA-256完全一致比較を、**SimHash方式の近似指紋比較**へ置き換え（stdlibのみ、`hashlib.blake2b`を使用）。
+
+1. `normalize_for_fingerprint()`：日付・時刻らしきパターン、「件／人／回／PV／アクセス」等を伴う数字（訪問者カウンタ等）を正規表現で除去
+2. `compute_shingles()`：5単語のスライディングウィンドウでシングル（shingle）を生成
+3. `simhash()`：各シングルのハッシュ値をビットごとの多数決で統合し、64bitの指紋を生成
+4. `hamming_distance()`：2つの指紋のハミング距離（異なるビット数）を計算
+5. ハミング距離が閾値（`SIMHASH_CHANGE_THRESHOLD=2`）を超えた場合のみ「変化あり」と判定。広告・タイムスタンプ・訪問者数のような周辺的なノイズは指紋を数ビットしか動かさないため閾値以下に収まり、実質的な内容変更は多くのビットを動かすため閾値を超える
+
+**実データでのテスト結果**（実際にフェッチした出入国在留管理庁ページ、252単語）：
+- 安定性：同一ページを2回フェッチ→ハミング距離0（誤検知なし）
+- ノイズ耐性：実ページ本文＋偽の訪問者数「4,821件」＋タイムスタンプを追加→ハミング距離2（閾値以下、正しく「変化なし」と判定）
+- 実質的な変更の検知：本文の約15%を別の内容に置換→ハミング距離13（閾値超え、正しく「変化あり」）
+- 小さいが実質的な編集：文章を1文追加→ハミング距離3（閾値超え、正しく「変化あり」）
+
+`Last Content Hash`プロパティの中身がSHA-256（Phase 1）からSimHash（Phase 2）へ内部的に変わるが、フォーマット不一致（16進数の桁数で判定）を検知した場合は「変化あり」ではなく「レガシー形式のため再ベースライン化」として扱い、誤検知を出さないようにしている——実際にPhase 1のテストレコード1件でこの経路が実データ上で正しく動作することを確認した。
+
+このアルゴリズムは調整可能なヒューリスティックであり、「解決済みの問題」ではない。実運用でソース数が増えるにつれて閾値の再調整が必要になる可能性がある（既知の制約として明記）。
+
+### ⑥ Dashboard／AI Command Center拡張
+
+- `ai_command_center.py`に新セクション「🌐 Source Intelligence」を追加：監視対象ソース数（Active内訳付き）、本日の変化検知件数、うちCritical件数、エラー中のソース一覧、本日のUpdate Classification内訳、Research候補件数（`Status=New`かつ`Discovery Method=Source Monitor`のResearch）
+- Dashboardへ新規Linked Database View「🔴 Critical Source Updates」（Source Monitor、`Impact Level=Critical`かつ`Change Detected=true`、`Checked At`降順）を追加——設定手順は既存13セクションと同じ共通手順（[Dashboard Setup Guide](./Dashboard-Setup-Guide.md)の14番目のセクションとして追記）。**新しいNotionページは作成していない**——既存のDashboardとAI Command Centerを拡張しただけ
+
+### ⑦ 人間ワークフロー（不変）
+
+Source → Watcher → Source Monitor → Editor Review → Research → Article → Translation → SNS → Publishのチェーンは一切変更していない。`source_watcher.py`は今回もSource LibraryとSource Monitorのみに書き込み、Research／Article／Translation／SNS Queueへは一切書き込まない。
+
+### 実データでのシード投入と実行結果（2026-07-17）
+
+- **Category検証済み実ソース9件**をWebFetchで1件ずつ疎通確認したうえで`source_library_seed.csv`として整備し、`bulk_import_sources.py`で投入：国税庁（Tax／Critical）、厚生労働省（Health Insurance／Critical）、内閣府防災情報のページ（Disaster／Critical）、気象庁（Weather／Critical）、総務省消防庁（Emergency／Critical）、日本年金機構（Pension／High）、ハローワークインターネットサービス（Employment／High）、国土交通省（Transportation／High）、日本政府観光局JNTO（Tourism／Medium）——**9件作成、0件重複、0件エラー**
+- **未着手のカテゴリ**（実ソース未投入、Reiまたは今後のPhaseでの追加が必要）：Visa（外務省サイトが自動フェッチをブロックしたため見送り）、Student、Events、Festivals、Municipal Governments、Universities、Japanese Language Schools、Culture、Consumer Information、Housing、Banking、Trending Topics
+- **投入後の`source_watcher.py`実行**：Source Library計10件（Phase 1のテストレコード1件＋Phase 2のシード9件）に対して実行し、Importance降順（Critical→High→Medium）で正しくソートされた順に処理、9件すべて「baseline established」（0誤検知）。同日中に強制的に再チェック対象とした2回目の実行では9件すべて「unchanged（ハミング距離0）」を確認、Phase 1のテストレコード1件は「レガシー形式のため再ベースライン化」経路が実データ上で正しく機能
+- **回帰テスト**：`article_freshness_monitor.py`／`publishing_center.py`／`coverage_analyzer.py`／`editorial_planner.py`／`duplicate_prevention_report.py`／`enforce_publish_gate.py`を実データに対して再実行し、いずれもエラーなく完走、既存ロジックどおりの結果を確認
+
 ## 未実施事項（要判断）
 
 - **スケジューリング**：cron／launchd等での定期実行はまだ設定していない。日次実行にするか、Rei自身が手動実行するかは別途判断が必要
@@ -629,4 +709,4 @@ Phase 5実装後、以下を実データに対して1回ずつ再実行し、挙
 
 ---
 
-*ARu HQ / Decode Japan — Automation Scripts v1.9 — 2026-07-16*
+*ARu HQ / Decode Japan — Automation Scripts v2.0 — 2026-07-17*

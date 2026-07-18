@@ -96,8 +96,11 @@ Dashboardページを開き、埋め込みたい見出し（例：「① Publish
 | ⑦ | Source Monitor Alerts | Source Monitor | Table | `Change Detected` にチェックが入っている | `Checked At` 降順 | Monitor Entry／Change Type／Impact Level／Checked At／Source |
 | ⑧ | Recent Law Updates | Law Update | Table | フィルタなし（全件表示） | `Effective Date` 降順 | Law Name／Significance／Effective Date／Update Status／Jurisdiction |
 | ⑨ | Recent Event Calendar | Event Calendar | Table | `Status` は `Cancelled` ではない | `Event Date` 昇順 | Event Name／Type／Event Date／Status／Location |
+| 🔴🆕 | Critical Source Updates | Source Monitor | Table | `Impact Level` は `Critical` **かつ** `Change Detected` にチェックが入っている | `Checked At` 降順 | Monitor Entry／Source／Update Classification／Diff Summary／Checked At |
 
 > **View種別について**：すべてTableを推奨する（設定項目がシンプルで、初めてでも迷わないため）。慣れてきたら④をPlatformでグループ化したBoard表示に変えるなど、好みに応じてアレンジしてよい。
+
+> **🔴🆕 Critical Source Updates について（ARu Intelligence Phase 2、2026-07-17追加）**：Source Libraryが1件から10件（今後は数百件を想定）に拡張されたことに伴い追加。`⑦ Source Monitor Alerts`が「検知されたすべての変化」を見る場所なのに対し、こちらは「その中でも最優先（Importance=Critical）のものだけ」を絞り込んで見る場所。設定手順は他の13セクションと同じ共通手順（上記参照）に従うだけでよい——Filterの2つ目の条件を追加する際は「+ Add filter」をもう一度押し、`Change Detected`が「チェック済み」を選ぶ。
 
 ---
 
@@ -116,6 +119,7 @@ Dashboardページを開き、埋め込みたい見出し（例：「① Publish
 - [ ] ⑦ Source Monitor Alerts
 - [ ] ⑧ Recent Law Updates
 - [ ] ⑨ Recent Event Calendar
+- [ ] 🔴🆕 Critical Source Updates（ARu Intelligence Phase 2）
 
 > インタラクティブ版（進捗が保存されるチェックリスト＋Notion画面のモックアップ付き）は [Artifact版 Dashboard Setup Guide](https://claude.ai/code/artifact/22766c12-4f75-40d2-843b-cbf06b9587bf) を参照。
 
@@ -127,4 +131,4 @@ Dashboardページを開き、埋め込みたい見出し（例：「① Publish
 
 ---
 
-*ARu HQ / Decode Japan — Dashboard Setup Guide v1.1 — 2026-07-16*
+*ARu HQ / Decode Japan — Dashboard Setup Guide v1.2 — 2026-07-17*

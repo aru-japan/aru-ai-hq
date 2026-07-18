@@ -1,0 +1,10 @@
+Source Name,URL,Source Type,Category,Country,Region,City,Importance,Check Frequency
+国税庁,https://www.nta.go.jp/,政府,Tax,Japan,全国,,Critical,Weekly
+厚生労働省,https://www.mhlw.go.jp/,政府,Health Insurance,Japan,全国,,Critical,Weekly
+内閣府 防災情報のページ,https://www.bousai.go.jp/,政府,Disaster,Japan,全国,,Critical,Daily
+気象庁,https://www.jma.go.jp/,政府,Weather,Japan,全国,,Critical,Daily
+総務省消防庁,https://www.fdma.go.jp/,政府,Emergency,Japan,全国,,Critical,Daily
+日本年金機構,https://www.nenkin.go.jp/,政府,Pension,Japan,全国,,High,Weekly
+ハローワークインターネットサービス,https://www.hellowork.mhlw.go.jp/,政府,Employment,Japan,全国,,High,Weekly
+国土交通省,https://www.mlit.go.jp/,政府,Transportation,Japan,全国,,High,Weekly
+日本政府観光局（JNTO）,https://www.japan.travel/en/,政府,Tourism,Japan,全国,,Medium,Weekly

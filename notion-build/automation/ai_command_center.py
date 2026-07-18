@@ -1,4 +1,5 @@
-"""AI Command Center -- Version 4 Phase 5 (Editor Experience).
+"""AI Command Center -- Version 4 Phase 5 (Editor Experience) + ARu Intelligence
+Phase 1/2 (Source Monitoring).
 
 The AI/ops counterpart to editor_home.py: a navigation hub summarizing what
 the AI layer is currently flagging or monitoring, rather than what a human
@@ -11,9 +12,10 @@ This page never recomputes Coverage Analysis or Editorial Planner's AI content
 itself (that would mean extra AI Gateway calls and a second copy that can
 drift from the real page) -- it only points at those existing pages with
 light metadata (last-edited time + URL). Freshness breakdown, Duplicate
-Prevention "today" stats, and external-signal-feed counts are cheap local
-reads/queries computed fresh each run, reusing the existing modules'
-constants and functions directly rather than re-deriving them.
+Prevention "today" stats, external-signal-feed counts, and (Phase 2) Source
+Library monitoring stats are cheap local reads/queries computed fresh each
+run, reusing the existing modules' constants and functions directly rather
+than re-deriving them.
 """
 import os
 import sys
@@ -29,6 +31,7 @@ sys.path.insert(0, AUTOMATION_DIR)
 
 from notion_api import load_env, notion_request, query_database, get_prop, set_env_value  # noqa: E402
 from article_freshness_monitor import FORCE_FLAG_URGENCY_SCORE  # noqa: E402
+from source_categories import UPDATE_CLASSIFICATIONS  # noqa: E402
 import duplicate_prevention_report as dpr  # noqa: E402
 
 ENV_PATH = os.path.join(NOTION_BUILD_DIR, ".env")
@@ -107,6 +110,50 @@ def gather_duplicate_prevention_today(env):
     return {"generated": len(generated), "skipped": len(skipped)}
 
 
+def gather_source_intelligence(env):
+    """ARu Intelligence Phase 2: Source Library/Monitor stats. Sources monitored
+    and errored-sources counts come straight from Source Library; today's
+    changes and their Update Classification breakdown come from Source
+    Monitor -- all direct live queries, nothing recomputed or cached."""
+    token = env["NOTION_TOKEN"]
+    today = datetime.date.today().isoformat()
+
+    all_sources = query_database(token, env["SOURCE_LIBRARY_DB_ID"])
+    active_sources = [p for p in all_sources if get_prop(p, "Status", "select") == "Active"]
+    errored_sources = [p for p in all_sources if (get_prop(p, "Last Check Error", "rich_text") or "").strip()]
+
+    todays_changes = query_database(token, env["SOURCE_MONITOR_DB_ID"], filter_obj={
+        "and": [
+            {"property": "Change Detected", "checkbox": {"equals": True}},
+            {"property": "Checked At", "date": {"equals": today}},
+        ]
+    })
+    critical_today = [p for p in todays_changes if get_prop(p, "Impact Level", "select") == "Critical"]
+
+    classification_breakdown = {c: 0 for c in UPDATE_CLASSIFICATIONS}
+    for p in todays_changes:
+        classification = get_prop(p, "Update Classification", "select")
+        if classification in classification_breakdown:
+            classification_breakdown[classification] += 1
+
+    research_candidates = query_database(token, env["RESEARCH_DB_ID"], filter_obj={
+        "and": [
+            {"property": "Status", "select": {"equals": "New"}},
+            {"property": "Discovery Method", "select": {"equals": "Source Monitor"}},
+        ]
+    })
+
+    return {
+        "total_sources": len(all_sources),
+        "active_sources": len(active_sources),
+        "errored_sources": [get_prop(p, "Source Name", "title") for p in errored_sources],
+        "todays_changes": len(todays_changes),
+        "critical_today": len(critical_today),
+        "classification_breakdown": {k: v for k, v in classification_breakdown.items() if v > 0},
+        "research_candidates": len(research_candidates),
+    }
+
+
 def get_dashboard_url(env):
     token = env["NOTION_TOKEN"]
     page = notion_request(token, "GET", f"/pages/{env['DASHBOARD_PAGE_ID']}")
@@ -120,7 +167,7 @@ def rt(text, link=None):
     return [{"text": obj}]
 
 
-def build_page_blocks(freshness, monitor_stats, pointers, dup_today, dashboard_url):
+def build_page_blocks(freshness, monitor_stats, pointers, dup_today, source_intel, dashboard_url):
     now = datetime.datetime.now().strftime("%Y-%m-%d %H:%M")
 
     blocks = [
@@ -156,6 +203,25 @@ def build_page_blocks(freshness, monitor_stats, pointers, dup_today, dashboard_u
     for s in monitor_stats:
         icon = "✅" if s["count"] == 0 else "🔔"
         blocks.append({"bulleted_list_item": {"rich_text": rt(f"{icon} {s['emoji']} {s['label']}: {s['count']}件")}})
+    blocks.append({"divider": {}})
+
+    blocks.append({"heading_2": {"rich_text": rt("🌐 Source Intelligence（ARu Intelligence Phase 2）")}})
+    blocks.append({"bulleted_list_item": {"rich_text": rt(
+        f"監視対象ソース数: {source_intel['total_sources']}件（うちActive: {source_intel['active_sources']}件）"
+    )}})
+    blocks.append({"bulleted_list_item": {"rich_text": rt(f"本日の変化検知: {source_intel['todays_changes']}件")}})
+    blocks.append({"bulleted_list_item": {"rich_text": rt(
+        f"うちCritical（🔴 Critical Source Updatesで確認）: {source_intel['critical_today']}件"
+    )}})
+    error_icon = "✅" if not source_intel["errored_sources"] else "⚠️"
+    error_text = "なし" if not source_intel["errored_sources"] else "、".join(source_intel["errored_sources"])
+    blocks.append({"bulleted_list_item": {"rich_text": rt(f"{error_icon} エラー中のソース: {error_text}")}})
+    if source_intel["classification_breakdown"]:
+        breakdown_text = "、".join(f"{k}: {v}件" for k, v in source_intel["classification_breakdown"].items())
+        blocks.append({"bulleted_list_item": {"rich_text": rt(f"本日の内訳（Update Classification）: {breakdown_text}")}})
+    blocks.append({"bulleted_list_item": {"rich_text": rt(
+        f"Research候補（Source Monitor起点、未レビュー）: {source_intel['research_candidates']}件"
+    )}})
     blocks.append({"divider": {}})
 
     blocks.append({"heading_2": {"rich_text": rt("🧭 AI分析ページへのリンク")}})
@@ -204,7 +270,7 @@ def write_page(env, blocks):
     return page_id
 
 
-def print_report(freshness, monitor_stats, pointers, dup_today):
+def print_report(freshness, monitor_stats, pointers, dup_today, source_intel):
     print("\n" + "=" * 70)
     print("🤖 AI Command Center")
     print("=" * 70)
@@ -215,6 +281,11 @@ def print_report(freshness, monitor_stats, pointers, dup_today):
         print(f"  {s['emoji']} {s['label']}: {s['count']}件")
     for p in pointers:
         print(f"  {p['label']}: {'last_edited=' + p['last_edited'] if p['url'] else '未作成'}")
+    print(f"Source Intelligence: 監視対象={source_intel['total_sources']}（Active={source_intel['active_sources']}） "
+          f"本日の変化={source_intel['todays_changes']}（Critical={source_intel['critical_today']}） "
+          f"エラー中={len(source_intel['errored_sources'])} Research候補={source_intel['research_candidates']}")
+    if source_intel["classification_breakdown"]:
+        print(f"  内訳: {source_intel['classification_breakdown']}")
     print()
 
 
@@ -233,12 +304,15 @@ def main():
     log("Gathering today's Duplicate Prevention activity...")
     dup_today = gather_duplicate_prevention_today(env)
 
-    print_report(freshness, monitor_stats, pointers, dup_today)
+    log("Gathering Source Intelligence stats (ARu Intelligence Phase 2)...")
+    source_intel = gather_source_intelligence(env)
+
+    print_report(freshness, monitor_stats, pointers, dup_today, source_intel)
 
     log("Resolving Dashboard page URL...")
     dashboard_url = get_dashboard_url(env)
 
-    blocks = build_page_blocks(freshness, monitor_stats, pointers, dup_today, dashboard_url)
+    blocks = build_page_blocks(freshness, monitor_stats, pointers, dup_today, source_intel, dashboard_url)
     log("Writing AI Command Center Notion page...")
     page_id = write_page(env, blocks)
     log(f"DONE. AI Command Center page: {page_id}")
