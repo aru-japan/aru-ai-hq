@@ -1,12 +1,12 @@
-<title>Automation Scripts v2.0</title>
+<title>Automation Scripts v2.1</title>
 
 # Automation Scripts
-### ARu Studio — Roadmap Version 3 実装記録 ＋ Version 4準備 ＋ Version 4 Phase 5（Editor Experience）＋ ARu Intelligence Phase 1/2
+### ARu Studio — Roadmap Version 3 実装記録 ＋ Version 4準備 ＋ Version 4 Phase 5（Editor Experience）＋ ARu Intelligence Phase 1/2/3
 
 | | |
 |---|---|
-| **Status** | Active — Notion自動化22スクリプト＋AI Gateway＋Article Freshness Monitor＋Coverage Analyzer＋Editorial Planner＋Publishing Center＋Duplicate Prevention＋Editor Experience（Article Layout Renderer／Editor Home／AI Command Center）＋ARu Intelligence Phase 1（Source Watcher）＋Phase 2（Source Library Expansion／Bulk Import）実装・実データ／実API（Claude）でテスト済み |
-| **Date** | 2026-07-17 |
+| **Status** | Active — Notion自動化24スクリプト＋AI Gateway＋Article Freshness Monitor＋Coverage Analyzer＋Editorial Planner＋Publishing Center＋Duplicate Prevention＋Editor Experience（Article Layout Renderer／Editor Home／AI Command Center）＋ARu Intelligence Phase 1（Source Watcher）＋Phase 2（Source Library Expansion／Bulk Import）＋Phase 3（Research Prioritizer／Today's Opportunities／Editorial Intelligence）実装・実データ／実API（Claude）でテスト済み |
+| **Date** | 2026-07-18 |
 | **位置づけ** | [AI Agent Workflow](./AI-Agent-Workflow.md)に定めた処理を、新規DB（AI Agents／Prompt Library／Automation）を追加せず、既存10DBに対するPythonスクリプトとして実装したもの |
 | **場所** | `notion-build/automation/` |
 
@@ -43,6 +43,8 @@
 | `source_watcher.py` | Editor-in-Chief（情報源監視） | Source Libraryの公式情報源URLを定期フェッチし、SimHash指紋の変化から本物の変化検知を行い、Source Monitorレコードを自動作成。Importance優先度順で処理し、Update Classificationを自動分類（詳細後述） |
 | `source_categories.py` | — | Source Category（22件）とUpdate Classification（11件）のタクソノミー定義（`life_topics.py`と同じ構造）。`ensure_schema()`とAI分類の単一の情報源 |
 | `bulk_import_sources.py` | Editor-in-Chief（情報源一括登録） | CSVからSource Libraryへ一括登録。URL重複はスキップ、未知のSelect値は自動でスキーマへ追加（詳細後述） |
+| `research_prioritizer.py` | Editor-in-Chief（企画・優先順位付け） | Status=NewのResearchを5軸（Freshness／Foreign Resident Value／Tourism Value／Seasonal Relevance／Premium Potential）で決定論的にスコアリング。新規スキーマ・AI呼び出しなし（詳細後述） |
+| `today_opportunities.py` | Editor-in-Chief（企画・優先順位付け） | Event Calendar／Source Monitor／Law Update／Researchの4つの既存システムを統合し、「今日動くべきこと」を種類別に提示（詳細後述） |
 
 ## 実行方法
 
@@ -701,6 +703,62 @@ Source → Watcher → Source Monitor → Editor Review → Research → Article
 - **投入後の`source_watcher.py`実行**：Source Library計10件（Phase 1のテストレコード1件＋Phase 2のシード9件）に対して実行し、Importance降順（Critical→High→Medium）で正しくソートされた順に処理、9件すべて「baseline established」（0誤検知）。同日中に強制的に再チェック対象とした2回目の実行では9件すべて「unchanged（ハミング距離0）」を確認、Phase 1のテストレコード1件は「レガシー形式のため再ベースライン化」経路が実データ上で正しく機能
 - **回帰テスト**：`article_freshness_monitor.py`／`publishing_center.py`／`coverage_analyzer.py`／`editorial_planner.py`／`duplicate_prevention_report.py`／`enforce_publish_gate.py`を実データに対して再実行し、いずれもエラーなく完走、既存ロジックどおりの結果を確認
 
+## Editorial Intelligence（ARu Intelligence Phase 3、2026-07-18）
+
+**目的**：Phase 1/2で「情報源監視の仕組み」ができたので、Phase 3ではそれを含む既存の全システムを編集長が実際に**毎日使う**形にまとめる。新機能の追加ではなく、既存システムの再利用と統合が目的（Reiの依頼どおり）。新規データベースは一切追加していない。
+
+**場所**：`notion-build/automation/research_prioritizer.py`（新規）、`notion-build/automation/today_opportunities.py`（新規）、`notion-build/automation/ai_command_center.py`（再構成）、`docs/Editorial-Workflow.md`（新規）
+
+### ① Today's Opportunities
+
+`today_opportunities.py`：4つの既存システムを日付ベースで統合し、「編集者が今日動くべきこと」を提示する。新しいクロスタイプの単一スコアは作らず（祭りとビザ制度改正を1つの数値で比較するのは無理があるため）、種類ごとに分けて表示する。
+
+- **Event Calendar**（既存DB）：`Status`が`Cancelled`/`Completed`以外、`Event Date`が今日から14日以内のイベント（祭り／花火大会／フードフェス等、既存の`Type`選択肢がそのまま該当）
+- **Source Monitor**（既存DB）：本日`Checked At`＝今日 かつ `Impact Level`がCritical/Highの変化（政府発表・ビザ制度更新等）
+- **Law Update**（既存DB）：`Update Status=Confirmed`（確定したがまだArticleに反映されていない法改正）
+- **Research**（既存DB）：`research_prioritizer.py`の上位候補のうち、Category=イベント/旅行情報 かつ 季節性スコアが高いもの（Event Calendarにまだ載っていない、季節性の高い企画の種）
+
+### ② Research Prioritization
+
+`research_prioritizer.py`：Status=NewのResearchを5軸でスコアリングし、上位から表示する。
+
+| 軸 | 満点 | 算出方法 |
+|---|---|---|
+| Freshness | 20点 | 発見（作成）からの経過日数。新しいほど高得点 |
+| Foreign Resident Value | 20点 | Research.Category（既存7分類）→ Critical/High/Medium/Lowへのマッピング（法律・制度=Critical、生活情報=High等） |
+| Tourism Value | 20点 | 同じくCategoryから、旅行情報=Critical、イベント/日本文化=High等 |
+| Seasonal Relevance | 20点 | Research.Season（既存プロパティ）と実際の現在の季節を照合。一致=20点、通年=12点、季節指定なし=8点、不一致=3点 |
+| Premium Potential | 20点 | Usage Scope（既存プロパティ）にEnterprise/Municipal Partnershipが含まれる=20点、Evidence LevelがOfficial/Verified=12点、それ以外=5点 |
+
+**5軸すべて、Researchの既存プロパティのみから決定論的に算出——新規AI呼び出しゼロ、新規スキーマゼロ。** そのためAI Command Centerを再実行するたびに追加コストなく再計算できる。
+
+**実データでのテスト（2026-07-18）**：Status=New 19件全件をスコアリング。上位10件はいずれもCategory=法律・制度（Foreign Resident Value=Critical=20点）の同時期一括生成Researchで、Freshness/Seasonal/Premiumの差のみで48点に並んだ——これはロジックの不具合ではなく、現状のResearch backlogがCategory・Season的に同質であることを正直に反映した結果（Categoryや季節がばらつけば差が広がる設計）。
+
+### ③ AI Command Centerの再構成（編集長の毎日のホーム画面）
+
+`ai_command_center.py`の先頭5セクションを差し替え、Phase 1/2の監視詳細セクションはその下に「根拠」として残した：
+
+1. 🎯 Today's Opportunities
+2. 🔴 Critical Updates（外部シグナルで要更新フラグの記事＋本日のCritical情報源変化＋重要度MajorでArticle未反映のLaw Updateの合算）
+3. 📊 Top Research Candidates（`research_prioritizer.py`上位5件）
+4. 🚀 Publishing Queue（`editor_home.py`のReady to Publishと同一フィルタを再利用、数値の食い違いを防止）
+5. 🕐 Recently Updated Articles（Articles.Updated Date降順、上位5件）
+
+**実装中に発見・修正したバグ**：Critical Updatesの初期実装は`Status=Archived`の記事を除外しておらず、Archived後もFreshness Statusが「Needs Update」のまま残っていた古いテスト記事1件が誤って表示されていた（記事をArchiveする際にFreshness Statusをクリアする仕組みがそもそも存在しないため）。他の全スクリプトが徹底している「Archivedは除外する」という規約に倣い、`Status`の除外条件を追加して解消。実データで合計3件→2件（正しい件数）に修正されたことを確認済み。
+
+**Editor Homeとの役割分担**：Editor Home（Phase 5）は「今日、人間が決めること」9項目に特化した軽量ページとして存続。AI Command Centerは、それに加えてAIが検知・提案した内容までを含む、より広い「編集長の毎日のホーム画面」という位置づけになった。
+
+### ④ ドキュメント整備
+
+`docs/Editorial-Workflow.md`を新規作成し、情報源監視→企画・優先順位付け→編集者レビュー→コンテンツ生成→公開ゲート→鮮度管理（環流）という編集ワークフロー全体を1つの図・1つの文書にまとめた。個々のスクリプトの詳細は引き続き本ドキュメント（Automation Scripts）を参照する構成とし、重複を避けた。
+
+### ⑤ 実データでのテスト結果まとめ（2026-07-18）
+
+- `research_prioritizer.py`：Status=New 19件を実データでスコアリング、5軸すべて正しく算出
+- `today_opportunities.py`：実データで動作確認——直近14日のEvent Calendar 0件（実データが少ないため）、本日の重要情報源変化0件、Confirmed済みLaw Update 1件、季節性Research候補0件（現状のResearchがCategory=法律・制度に偏っているため0件、ロジックは正常）
+- `ai_command_center.py`再構成後：Today's Opportunities／Critical Updates（バグ修正後2件）／Top Research Candidates（5件）／Publishing Queue（11件）／Recently Updated Articles（5件）まで、実データで正しく表示・Notionページへの書き込みを確認
+- 回帰テスト：`article_freshness_monitor.py`／`publishing_center.py`／`enforce_publish_gate.py`／`duplicate_prevention_report.py`／`editor_home.py`／`coverage_analyzer.py`／`editorial_planner.py`／`source_watcher.py`／`bulk_import_sources.py`（重複スキップ経路含む）を実データに対して再実行し、いずれもエラーなく完走、既存ロジックどおりの結果を確認
+
 ## 未実施事項（要判断）
 
 - **スケジューリング**：cron／launchd等での定期実行はまだ設定していない。日次実行にするか、Rei自身が手動実行するかは別途判断が必要
@@ -709,4 +767,4 @@ Source → Watcher → Source Monitor → Editor Review → Research → Article
 
 ---
 
-*ARu HQ / Decode Japan — Automation Scripts v2.0 — 2026-07-17*
+*ARu HQ / Decode Japan — Automation Scripts v2.1 — 2026-07-18*

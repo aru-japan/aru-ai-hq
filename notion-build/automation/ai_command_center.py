@@ -1,21 +1,20 @@
 """AI Command Center -- Version 4 Phase 5 (Editor Experience) + ARu Intelligence
-Phase 1/2 (Source Monitoring).
+Phase 1/2/3 (Source Monitoring + Editorial Intelligence).
 
-The AI/ops counterpart to editor_home.py: a navigation hub summarizing what
-the AI layer is currently flagging or monitoring, rather than what a human
-must directly decide on. Split rationale:
+Phase 3 makes this page **the editor's daily homepage**: the first five
+sections answer "what should I act on today?" (Today's Opportunities,
+Critical Updates, Top Research Candidates, Publishing Queue, Recently
+Updated Articles) using research_prioritizer.py and today_opportunities.py.
+Everything below that is the Phase 1/2 monitoring detail this page already
+had -- kept, not replaced, since it's still useful for anyone who wants to
+dig deeper than the daily-homepage summary.
 
-    Editor Home        -- "what do I need to act on?" (human decisions)
-    AI Command Center   -- "what is the AI watching / has the AI already found?"
-
-This page never recomputes Coverage Analysis or Editorial Planner's AI content
-itself (that would mean extra AI Gateway calls and a second copy that can
-drift from the real page) -- it only points at those existing pages with
-light metadata (last-edited time + URL). Freshness breakdown, Duplicate
-Prevention "today" stats, external-signal-feed counts, and (Phase 2) Source
-Library monitoring stats are cheap local reads/queries computed fresh each
-run, reusing the existing modules' constants and functions directly rather
-than re-deriving them.
+This page never recomputes Coverage Analysis or Editorial Planner's AI
+content itself (that would mean extra AI Gateway calls and a second copy
+that can drift from the real page) -- it only points at those existing
+pages with light metadata (last-edited time + URL). Everything else here
+is a cheap, deterministic, live query against DBs that already exist --
+no new database anywhere in Phase 3.
 """
 import os
 import sys
@@ -32,6 +31,8 @@ sys.path.insert(0, AUTOMATION_DIR)
 from notion_api import load_env, notion_request, query_database, get_prop, set_env_value  # noqa: E402
 from article_freshness_monitor import FORCE_FLAG_URGENCY_SCORE  # noqa: E402
 from source_categories import UPDATE_CLASSIFICATIONS  # noqa: E402
+from research_prioritizer import rank_research_candidates  # noqa: E402
+from today_opportunities import gather_opportunities  # noqa: E402
 import duplicate_prevention_report as dpr  # noqa: E402
 
 ENV_PATH = os.path.join(NOTION_BUILD_DIR, ".env")
@@ -53,10 +54,83 @@ POINTER_PAGES = [
     ("📝 Editorial Planner", "EDITORIAL_PLANNER_PAGE_ID"),
 ]
 
+RECENTLY_UPDATED_LIMIT = 5
+TOP_RESEARCH_LIMIT = 5
+
 
 def log(msg):
     print(f"[{time.strftime('%H:%M:%S')}] {msg}", flush=True)
 
+
+# --- Phase 3: Editorial Intelligence (daily homepage) ---
+
+def gather_critical_updates(env, today):
+    """Union of everything demanding urgent human attention right now:
+    Articles force-flagged by an external signal (not just time decay),
+    today's Critical-impact Source Monitor changes, and Law Updates
+    significant enough (Major) to matter but not yet reflected into an
+    Article. Reuses existing properties/queries throughout -- no new
+    schema, no recomputation of anything already computed elsewhere."""
+    token = env["NOTION_TOKEN"]
+
+    signal_flagged_articles = query_database(token, env["ARTICLES_DB_ID"], filter_obj={
+        "and": [
+            {"property": "Status", "select": {"does_not_equal": "Archived"}},
+            {"property": "Freshness Status", "select": {"equals": "Needs Update"}},
+            {"property": "Freshness Urgency Score", "number": {"greater_than_or_equal_to": FORCE_FLAG_URGENCY_SCORE}},
+        ]
+    })
+    critical_source_changes = query_database(token, env["SOURCE_MONITOR_DB_ID"], filter_obj={
+        "and": [
+            {"property": "Change Detected", "checkbox": {"equals": True}},
+            {"property": "Checked At", "date": {"equals": today.isoformat()}},
+            {"property": "Impact Level", "select": {"equals": "Critical"}},
+        ]
+    })
+    major_law_updates = query_database(token, env["LAW_UPDATE_DB_ID"], filter_obj={
+        "and": [
+            {"property": "Significance", "select": {"equals": "Major"}},
+            {"property": "Update Status", "select": {"does_not_equal": "Article Published"}},
+            {"property": "Update Status", "select": {"does_not_equal": "Archived"}},
+        ]
+    })
+
+    return {
+        "articles": [get_prop(p, "Title", "title") for p in signal_flagged_articles],
+        "source_changes": [get_prop(p, "Monitor Entry", "title") for p in critical_source_changes],
+        "law_updates": [get_prop(p, "Law Name", "title") for p in major_law_updates],
+    }
+
+
+def gather_publishing_queue(env, limit=5):
+    """Same Ready to Publish query as editor_home.py's stat -- reused
+    verbatim, not redefined, so the two pages never disagree on what
+    counts as ready."""
+    token = env["NOTION_TOKEN"]
+    pages = query_database(token, env["ARTICLES_DB_ID"], filter_obj={
+        "property": "Publishing Status", "select": {"equals": "Ready to Publish"}
+    }, sorts=[
+        {"property": "Priority", "direction": "descending"},
+        {"property": "Update Level", "direction": "descending"},
+    ])
+    return {
+        "total": len(pages),
+        "top": [get_prop(p, "Title", "title") for p in pages[:limit]],
+    }
+
+
+def gather_recently_updated_articles(env, limit=RECENTLY_UPDATED_LIMIT):
+    token = env["NOTION_TOKEN"]
+    pages = query_database(token, env["ARTICLES_DB_ID"], filter_obj={
+        "property": "Status", "select": {"does_not_equal": "Archived"}
+    }, sorts=[{"property": "Updated Date", "direction": "descending"}])
+    return [{
+        "title": get_prop(p, "Title", "title"),
+        "updated": get_prop(p, "Updated Date", "date"),
+    } for p in pages[:limit]]
+
+
+# --- Phase 1/2: monitoring detail (unchanged) ---
 
 def gather_freshness_breakdown(env):
     token = env["NOTION_TOKEN"]
@@ -167,29 +241,94 @@ def rt(text, link=None):
     return [{"text": obj}]
 
 
-def build_page_blocks(freshness, monitor_stats, pointers, dup_today, source_intel, dashboard_url):
+def build_page_blocks(opportunities, critical, top_research, publishing_queue, recently_updated,
+                       freshness, monitor_stats, pointers, dup_today, source_intel, dashboard_url):
     now = datetime.datetime.now().strftime("%Y-%m-%d %H:%M")
 
     blocks = [
-        {"heading_1": {"rich_text": rt("🤖 AI Command Center")}},
-        {"paragraph": {"rich_text": rt(f"最終更新: {now}（ai_command_center.py。AIが検知・監視している内容の一覧）")}},
-        {"paragraph": {"rich_text": rt(
-            "このページはナビゲーションハブです。実際の記事一覧などの操作は、"
-            "下のリンクからDashboardの該当セクション（Linked View）を開いて行ってください。"
-        )}},
+        {"heading_1": {"rich_text": rt("🤖 AI Command Center — 編集長の毎日のホーム画面")}},
+        {"paragraph": {"rich_text": rt(f"最終更新: {now}（ai_command_center.py）")}},
         {"divider": {}},
-        {"heading_2": {"rich_text": rt("🔴 Freshness 内訳（更新が必要な記事）")}},
-        {"callout": {
-            "rich_text": rt(f"合計: {freshness['total']}件"),
-            "icon": {"type": "emoji", "emoji": "🔴" if freshness["total"] else "✅"},
-        }},
-        {"bulleted_list_item": {"rich_text": rt(
-            f"外部シグナル起因（法改正・情報源変化・イベント中止）: {freshness['signal_flagged']}件"
-        )}},
-        {"bulleted_list_item": {"rich_text": rt(
-            f"時間経過による定期レビュー期限超過: {freshness['time_based_flagged']}件"
-        )}},
     ]
+
+    # 1. Today's Opportunities
+    blocks.append({"heading_2": {"rich_text": rt("🎯 Today's Opportunities")}})
+    if opportunities["events"]:
+        blocks.append({"heading_3": {"rich_text": rt("直近2週間のイベント")}})
+        for e in opportunities["events"]:
+            blocks.append({"bulleted_list_item": {"rich_text": rt(f"[{e['type']}] {e['name']}（{e['date']}、{e['location'] or '場所未定'}）")}})
+    if opportunities["source_signals"]:
+        blocks.append({"heading_3": {"rich_text": rt("本日検知した重要な情報源の変化")}})
+        for s in opportunities["source_signals"]:
+            blocks.append({"bulleted_list_item": {"rich_text": rt(f"[{s['impact']}/{s['classification'] or '未分類'}] {s['name']}")}})
+    if opportunities["law_updates"]:
+        blocks.append({"heading_3": {"rich_text": rt("最近Confirmedされた法改正")}})
+        for l in opportunities["law_updates"]:
+            blocks.append({"bulleted_list_item": {"rich_text": rt(f"[{l['significance']}] {l['name']}（施行日: {l['effective_date'] or '未定'}）")}})
+    if opportunities["seasonal_research"]:
+        blocks.append({"heading_3": {"rich_text": rt("季節性の高いResearch候補")}})
+        for r in opportunities["seasonal_research"]:
+            blocks.append({"bulleted_list_item": {"rich_text": rt(f"[{r['total']}点] {r['topic']}")}})
+    if not any(opportunities.values()):
+        blocks.append({"paragraph": {"rich_text": rt("本日、新たな機会は検知されていません。")}})
+    blocks.append({"divider": {}})
+
+    # 2. Critical Updates
+    blocks.append({"heading_2": {"rich_text": rt("🔴 Critical Updates")}})
+    total_critical = len(critical["articles"]) + len(critical["source_changes"]) + len(critical["law_updates"])
+    blocks.append({"callout": {
+        "rich_text": rt(f"合計: {total_critical}件"),
+        "icon": {"type": "emoji", "emoji": "🔴" if total_critical else "✅"},
+    }})
+    for label, items in (("外部シグナルで要更新フラグの記事", critical["articles"]),
+                         ("本日のCritical情報源変化", critical["source_changes"]),
+                         ("重要度Majorの未反映法改正", critical["law_updates"])):
+        if items:
+            blocks.append({"bulleted_list_item": {"rich_text": rt(f"{label}: {len(items)}件（{'、'.join(items[:5])}）")}})
+    blocks.append({"divider": {}})
+
+    # 3. Top Research Candidates
+    blocks.append({"heading_2": {"rich_text": rt("📊 Top Research Candidates")}})
+    if top_research:
+        for i, s in enumerate(top_research, 1):
+            blocks.append({"numbered_list_item": {"rich_text": rt(f"[{s['total']}点] {s['topic']}")}})
+    else:
+        blocks.append({"paragraph": {"rich_text": rt("Status=NewのResearchはありません。")}})
+    blocks.append({"divider": {}})
+
+    # 4. Publishing Queue
+    blocks.append({"heading_2": {"rich_text": rt("🚀 Publishing Queue")}})
+    blocks.append({"callout": {
+        "rich_text": rt(f"Ready to Publish: {publishing_queue['total']}件"),
+        "icon": {"type": "emoji", "emoji": "🚀" if publishing_queue["total"] else "✅"},
+    }})
+    for title in publishing_queue["top"]:
+        blocks.append({"bulleted_list_item": {"rich_text": rt(title)}})
+    blocks.append({"divider": {}})
+
+    # 5. Recently Updated Articles
+    blocks.append({"heading_2": {"rich_text": rt("🕐 Recently Updated Articles")}})
+    for a in recently_updated:
+        blocks.append({"bulleted_list_item": {"rich_text": rt(f"{a['title']}（{a['updated'] or '不明'}）")}})
+    blocks.append({"divider": {}})
+
+    blocks.append({"paragraph": {"rich_text": rt(
+        "ここから下は、上記サマリーの根拠となる詳細（Freshness内訳・重複防止・外部監視・Source Intelligence）です。"
+    )}})
+    blocks.append({"divider": {}})
+
+    # --- Phase 1/2 detail (unchanged) ---
+    blocks.append({"heading_2": {"rich_text": rt("🔴 Freshness 内訳（更新が必要な記事）")}})
+    blocks.append({"callout": {
+        "rich_text": rt(f"合計: {freshness['total']}件"),
+        "icon": {"type": "emoji", "emoji": "🔴" if freshness["total"] else "✅"},
+    }})
+    blocks.append({"bulleted_list_item": {"rich_text": rt(
+        f"外部シグナル起因（法改正・情報源変化・イベント中止）: {freshness['signal_flagged']}件"
+    )}})
+    blocks.append({"bulleted_list_item": {"rich_text": rt(
+        f"時間経過による定期レビュー期限超過: {freshness['time_based_flagged']}件"
+    )}})
     if dashboard_url:
         blocks.append({"paragraph": {"rich_text": rt("→ Dashboardの「🔴 Update Needed」で見る", link=dashboard_url)}})
     blocks.append({"divider": {}})
@@ -205,23 +344,17 @@ def build_page_blocks(freshness, monitor_stats, pointers, dup_today, source_inte
         blocks.append({"bulleted_list_item": {"rich_text": rt(f"{icon} {s['emoji']} {s['label']}: {s['count']}件")}})
     blocks.append({"divider": {}})
 
-    blocks.append({"heading_2": {"rich_text": rt("🌐 Source Intelligence（ARu Intelligence Phase 2）")}})
+    blocks.append({"heading_2": {"rich_text": rt("🌐 Source Intelligence")}})
     blocks.append({"bulleted_list_item": {"rich_text": rt(
         f"監視対象ソース数: {source_intel['total_sources']}件（うちActive: {source_intel['active_sources']}件）"
     )}})
     blocks.append({"bulleted_list_item": {"rich_text": rt(f"本日の変化検知: {source_intel['todays_changes']}件")}})
-    blocks.append({"bulleted_list_item": {"rich_text": rt(
-        f"うちCritical（🔴 Critical Source Updatesで確認）: {source_intel['critical_today']}件"
-    )}})
     error_icon = "✅" if not source_intel["errored_sources"] else "⚠️"
     error_text = "なし" if not source_intel["errored_sources"] else "、".join(source_intel["errored_sources"])
     blocks.append({"bulleted_list_item": {"rich_text": rt(f"{error_icon} エラー中のソース: {error_text}")}})
     if source_intel["classification_breakdown"]:
         breakdown_text = "、".join(f"{k}: {v}件" for k, v in source_intel["classification_breakdown"].items())
         blocks.append({"bulleted_list_item": {"rich_text": rt(f"本日の内訳（Update Classification）: {breakdown_text}")}})
-    blocks.append({"bulleted_list_item": {"rich_text": rt(
-        f"Research候補（Source Monitor起点、未レビュー）: {source_intel['research_candidates']}件"
-    )}})
     blocks.append({"divider": {}})
 
     blocks.append({"heading_2": {"rich_text": rt("🧭 AI分析ページへのリンク")}})
@@ -270,10 +403,23 @@ def write_page(env, blocks):
     return page_id
 
 
-def print_report(freshness, monitor_stats, pointers, dup_today, source_intel):
+def print_report(opportunities, critical, top_research, publishing_queue, recently_updated,
+                  freshness, monitor_stats, pointers, dup_today, source_intel):
     print("\n" + "=" * 70)
-    print("🤖 AI Command Center")
+    print("🤖 AI Command Center — 編集長の毎日のホーム画面")
     print("=" * 70)
+    print(f"🎯 Today's Opportunities: events={len(opportunities['events'])} "
+          f"source_signals={len(opportunities['source_signals'])} "
+          f"law_updates={len(opportunities['law_updates'])} "
+          f"seasonal_research={len(opportunities['seasonal_research'])}")
+    total_critical = len(critical["articles"]) + len(critical["source_changes"]) + len(critical["law_updates"])
+    print(f"🔴 Critical Updates: 合計={total_critical} "
+          f"(articles={len(critical['articles'])} source={len(critical['source_changes'])} law={len(critical['law_updates'])})")
+    print(f"📊 Top Research Candidates: {len(top_research)}件")
+    for s in top_research:
+        print(f"    [{s['total']}点] {s['topic']}")
+    print(f"🚀 Publishing Queue: {publishing_queue['total']}件")
+    print(f"🕐 Recently Updated Articles: {len(recently_updated)}件")
     print(f"Freshness 内訳: 合計={freshness['total']} 外部シグナル={freshness['signal_flagged']} "
           f"時間経過={freshness['time_based_flagged']}")
     print(f"Duplicate Prevention（本日）: 生成={dup_today['generated']} スキップ={dup_today['skipped']}")
@@ -284,13 +430,27 @@ def print_report(freshness, monitor_stats, pointers, dup_today, source_intel):
     print(f"Source Intelligence: 監視対象={source_intel['total_sources']}（Active={source_intel['active_sources']}） "
           f"本日の変化={source_intel['todays_changes']}（Critical={source_intel['critical_today']}） "
           f"エラー中={len(source_intel['errored_sources'])} Research候補={source_intel['research_candidates']}")
-    if source_intel["classification_breakdown"]:
-        print(f"  内訳: {source_intel['classification_breakdown']}")
     print()
 
 
 def main():
     env = load_env(ENV_PATH)
+    today = datetime.date.today()
+
+    log("Gathering Today's Opportunities...")
+    opportunities = gather_opportunities(env, today)
+
+    log("Gathering Critical Updates...")
+    critical = gather_critical_updates(env, today)
+
+    log("Gathering Top Research Candidates...")
+    top_research, _ = rank_research_candidates(env, limit=TOP_RESEARCH_LIMIT, today=today)
+
+    log("Gathering Publishing Queue...")
+    publishing_queue = gather_publishing_queue(env)
+
+    log("Gathering Recently Updated Articles...")
+    recently_updated = gather_recently_updated_articles(env)
 
     log("Gathering freshness breakdown...")
     freshness = gather_freshness_breakdown(env)
@@ -304,15 +464,17 @@ def main():
     log("Gathering today's Duplicate Prevention activity...")
     dup_today = gather_duplicate_prevention_today(env)
 
-    log("Gathering Source Intelligence stats (ARu Intelligence Phase 2)...")
+    log("Gathering Source Intelligence stats...")
     source_intel = gather_source_intelligence(env)
 
-    print_report(freshness, monitor_stats, pointers, dup_today, source_intel)
+    print_report(opportunities, critical, top_research, publishing_queue, recently_updated,
+                 freshness, monitor_stats, pointers, dup_today, source_intel)
 
     log("Resolving Dashboard page URL...")
     dashboard_url = get_dashboard_url(env)
 
-    blocks = build_page_blocks(freshness, monitor_stats, pointers, dup_today, source_intel, dashboard_url)
+    blocks = build_page_blocks(opportunities, critical, top_research, publishing_queue, recently_updated,
+                                freshness, monitor_stats, pointers, dup_today, source_intel, dashboard_url)
     log("Writing AI Command Center Notion page...")
     page_id = write_page(env, blocks)
     log(f"DONE. AI Command Center page: {page_id}")
