@@ -1,7 +1,7 @@
-<title>Automation Scripts v2.5</title>
+<title>Automation Scripts v2.6</title>
 
 # Automation Scripts
-### ARu Studio — Roadmap Version 3 実装記録 ＋ Version 4準備 ＋ Version 4 Phase 5（Editor Experience）＋ ARu Intelligence Phase 1/2/3 ＋ ARu公式記事テンプレート再設計 ＋ Article Template Framework（G3-A／G3-B）＋ Story Bank Database v1.0
+### ARu Studio — Roadmap Version 3 実装記録 ＋ Version 4準備 ＋ Version 4 Phase 5（Editor Experience）＋ ARu Intelligence Phase 1/2/3 ＋ ARu公式記事テンプレート再設計 ＋ Article Template Framework（G3-A／G3-B）＋ Story Bank Database v1.0 ＋ Story Bank Batch #001
 
 | | |
 |---|---|
@@ -895,8 +895,32 @@ NotionパブリックAPIはViewを作成できないため、Story Backlog／Hig
 
 ### 未実施事項（本セッションのスコープ外）
 
-- **National Fireworks Top 50の実データ投入**：本セッションでは実際のデータセットが提供されなかったため未実施。QA Card・Articleの生成もこれに伴い未着手（指示どおり）
 - 上記7ビューの手動設定（Rei側の作業）
+
+## Story Bank Batch #001 インポート（2026-07-18）
+
+**目的**：ChatGPT側が企画・選定した「National Fireworks Top 50」の最初のバッチ（20件）を、実際にStory Bankへ投入する。役割分担の確定（ChatGPT＝企画・選定、Claude Code＝インポート・実装のみ、コンテンツを推測・生成・補完しない）にもとづく、初めての実運用インポート。
+
+**場所**：`notion-build/automation/bulk_import_story_bank.py`（新規）、`notion-build/automation/data/story_bank_batch_001.csv`（新規、ChatGPTが提供した生データをそのまま保存）。
+
+### 変更内容
+
+CSVの列は英語ラベル（`Category=Event`、`Region=Tokyo`等）で提供されたが、Story Bankの既存Select語彙は日本語（`イベント`、`関東`等）のため、インポート時に正規化するマッピング辞書（`CATEGORY_MAP`／`SUBCATEGORY_MAP`／`SEASON_MAP`／`REGION_MAP`／`MONTH_MAP`）を実装し、新しい英語の選択肢を並存させないようにした。`Evergreen`／`Premium Candidate`の`Yes`/`No`はcheckboxのbooleanへ変換。インポート前に既存Titleとの重複確認を行い、重複はスキップする設計。
+
+### 実データでのインポート結果（2026-07-18）
+
+- 既存レコード確認：1件（テストレコード、Archived）。タイトルが異なるため重複なし
+- **20件中20件インポート成功、重複スキップ0件**
+- 判断が必要な警告2件を検出しログに記録：
+  - 「関門海峡花火大会」：元データのRegionが`Fukuoka/Yamaguchi`（2地方にまたがる）。Regionは単一選択のため`九州・沖縄`へ判断で割り当て（要レビュー）
+  - 「熱海海上花火大会」：元データのEvent Monthが`Multiple`（具体的な月なし）。推測せずEvent Month未設定のまま
+- テストレコード（Archived）は変更なし。Articles・SNS Queue等の他DB・パイプラインには一切変更を加えていない
+- インポート後のStory Bank：21件（New 20件／Archived 1件）
+
+### 未実施事項
+
+- **National Fireworks Top 50の残り30件**：Batch #002以降としてChatGPTから提供され次第、同じスクリプトでインポートする
+- QA Card・Articleの生成は未着手（指示どおり、今回のスコープ外）
 
 ## 未実施事項（要判断）
 
@@ -906,4 +930,4 @@ NotionパブリックAPIはViewを作成できないため、Story Backlog／Hig
 
 ---
 
-*ARu HQ / Decode Japan — Automation Scripts v2.5 — 2026-07-18*
+*ARu HQ / Decode Japan — Automation Scripts v2.6 — 2026-07-18*
