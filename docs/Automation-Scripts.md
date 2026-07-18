@@ -1,7 +1,7 @@
-<title>Automation Scripts v2.8</title>
+<title>Automation Scripts v2.9</title>
 
 # Automation Scripts
-### ARu Studio — Roadmap Version 3 実装記録 ＋ Version 4準備 ＋ Version 4 Phase 5（Editor Experience）＋ ARu Intelligence Phase 1/2/3 ＋ ARu公式記事テンプレート再設計 ＋ Article Template Framework（G3-A／G3-B）＋ Story Bank Database v1.0 ＋ Story Bank Batch #001 ＋ Story Bankバッチ運用ルールの正式化 ＋ ARu Studio v4.1 Editorial Intelligence
+### ARu Studio — Roadmap Version 3 実装記録 ＋ Version 4準備 ＋ Version 4 Phase 5（Editor Experience）＋ ARu Intelligence Phase 1/2/3 ＋ ARu公式記事テンプレート再設計 ＋ Article Template Framework（G3-A／G3-B）＋ Story Bank Database v1.0 ＋ Story Bank Batch #001 ＋ Story Bankバッチ運用ルールの正式化 ＋ ARu Studio v4.1 Editorial Intelligence ＋ 編集運営フローの精緻化
 
 | | |
 |---|---|
@@ -1048,6 +1048,33 @@ QA Card Template（`QA_CARD_INSTRUCTIONS`）とExisting Article Revision Templat
 
 Notion公開APIの制約により、リクエストされた24ビュー（Story Bank 7／Articles 7／Source Monitor 4／Law Update 6）はいずれも自動作成できない。[Studio-v4.1-View-Setup-Guide.md](./Studio-v4.1-View-Setup-Guide.md)として手動設定手順を文書化した。
 
+## 編集運営フローの精緻化（2026-07-19）
+
+**目的**：単なる変更検知に留めず、優先度付与・影響コンテンツの一覧化・定期レビューの自動抽出まで含めた編集運営フローとして仕上げる（Rei追加指示）。新規プロパティは追加せず、既存の`Priority`（Law Update）・`Impact Summary`（Law Update）・`Next Review`（Story Bank／Articles、Stage 1で追加済みだが未使用だったもの）を実際に機能させる形で実装。
+
+### Priority自動算出（`law_update_pipeline.py`の`compute_priority()`）
+
+Law Updateの既存`Priority`（High/Medium/Low）を、Urgencyと影響範囲の広さから決定論的に算出する（AIの主観判断ではない）。候補作成時（C）はUrgencyのみで仮算出し、Impact Analysis（E）で実際の影響件数が判明した時点で再算出・上書きする——Urgencyが高くなくても広範囲に影響する変更を過小評価しないため。
+
+### 影響コンテンツの一覧化（`run_impact_analysis()`拡張）
+
+Affected Stories／Affected Articlesのリレーションに加えて、以下を`Impact Summary`（既存rich_text）へ構造化して記録するよう拡張：
+- QA(Story Bank)件数（`QA Question`が設定済みのStory Bankレコード数）
+- 記事件数を`Content Type`別に内訳表示（Headline/Basic Article/Deep Guide/Premium/Update Notice/未分類）
+- 関連SNS投稿件数（該当記事の既存`Related to SNS Queue (Related Article)`リレーション経由、重複除去済み）
+
+実データで検証：一時テストLaw Update（Affected Category=生活情報）で記事17件・SNS投稿45件を正しく検出・集計することを確認、検証後Archived。
+
+### 定期レビューの自動抽出（`notion-build/automation/review_scheduler.py`、新規）
+
+`law_update_pipeline.py`とは別の関心事（カレンダー駆動、変更検知駆動ではない）として独立スクリプト化。`Update Frequency`（Daily/Weekly/Monthly/Quarterly/Biannual）と、Story Bankは`Last Reviewed`、Articlesは`Last Verified Date`（いずれも既存プロパティ）を起点に`Next Review`を自動算出。未レビューの場合はページ作成日をフォールバック起点とする。`Event-Based`は算出対象外（Event Monthは年内の月名のみで年が特定できず、推測になるため意図的に対象外——他の箇所と同じ捏造回避の方針）。`find_review_due()`がStory Bank／Articles両方から本日以前のNext Review期限切れを抽出し、Dashboardと[Studio-v4.1-View-Setup-Guide.md](./Studio-v4.1-View-Setup-Guide.md)の手動Viewの両方から参照可能にした。
+
+実データで検証：日付計算ロジックを単体確認したのち、実際のStory Bank本番レコード1件（花火大会、ChatGPT選定の実データ）に`Update Frequency=Monthly`／`Last Reviewed=2026-07-01`を一時的に設定して書き込みパスを実地確認（Next Review=2026-07-31を正しく算出）、確認後は3プロパティすべてを元の未設定状態へ復元済み。
+
+### Dashboard再構成（`ai_command_center.py`）
+
+先頭を「🆕 今日追加するQA」「🔴 更新が必要な記事」「🚀 公開待ちコンテンツ」の3セクションに再構成（Rei指示どおり、この3つを中心に据える）。後者2つは新規集約関数（`gather_updates_needed()`／`gather_publish_pending()`）で、既存の個別クエリ（Freshness Status・Current Validity・review_scheduler・Publishing Queue・SNS Draft・Translation Human Review Status=Pending）を重複計算せず統合。旧来の独立セクション（Publishing Queue単体・翻訳更新待ち単体・SNS公開待ち単体）はこの3セクションへ統合したため個別見出しとしては廃止し、Today's Opportunities・Critical Updates・Top Research Candidates・Recently Updated Articles・Law Update Pipelineキューは「詳細」として3セクションの下に維持（削除ではなく降格）。実データで実行・実際のNotionページへの反映まで確認済み（更新が必要な記事=2件、公開待ちコンテンツ=228件〔記事11／SNS163／翻訳54〕）。標準7スクリプト回帰テストすべて正常完走。
+
 ## 未実施事項（要判断）
 
 - **スケジューリング**：cron／launchd等での定期実行はまだ設定していない。日次実行にするか、Rei自身が手動実行するかは別途判断が必要
@@ -1061,4 +1088,4 @@ Notion公開APIの制約により、リクエストされた24ビュー（Story 
 
 ---
 
-*ARu HQ / Decode Japan — Automation Scripts v2.8 — 2026-07-19*
+*ARu HQ / Decode Japan — Automation Scripts v2.9 — 2026-07-19*
