@@ -1,19 +1,34 @@
 """Bulk-import Story Bank entries from a CSV (ChatGPT-curated content, per the
-established role split: ChatGPT selects/curates Story Bank content, Claude
-Code only imports/implements -- this script never invents a Story, it only
-maps and writes what's already in the CSV).
+established role split: ChatGPT selects/curates/prioritizes Story Bank
+content, Claude Code only imports/implements -- this script never invents a
+Story, it only maps and writes what's already in the CSV).
 
 Normalizes the incoming English-labeled CSV columns onto Story Bank's
-existing Japanese Select vocabulary (Category/Subcategory/Season/Region/
-Event Month) rather than creating a parallel English option set -- the same
-naming-consistency principle Architecture-Specification-v1.0.md Sec.5/6
-established for the other Knowledge Domains.
+existing Japanese Select vocabulary (Category/Subcategory/Season/Primary
+Region/Event Month) rather than creating a parallel English option set --
+the same naming-consistency principle Architecture-Specification-v1.0.md
+Sec.5/6 established for the other Knowledge Domains.
+
+Formal operating rules (Rei, 2026-07-18):
+  - CSVs live in notion-build/automation/data/, named
+    StoryBank_Batch###_Category.csv
+  - After a successful import, the source CSV is moved (not deleted) to
+    notion-build/automation/data/imported/ as a permanent history record
+  - A Story spanning multiple prefectures gets exactly one Primary Region
+    (first-listed prefecture in the source data); the rest is recorded in
+    Notes, never silently dropped
+  - An event held multiple times a year gets Event Month = "Multiple" (a
+    real Select option), never left blank
+  - Every run reports exactly five things: duplicate check, import count,
+    total Story Bank count, errors, and pending items (judgment calls that
+    need Rei/ChatGPT review) -- nothing else
 
 Usage:
-    python3 bulk_import_story_bank.py data/story_bank_batch_001.csv
+    python3 bulk_import_story_bank.py data/StoryBank_Batch002_Fireworks.csv
 """
 import csv
 import os
+import shutil
 import sys
 
 AUTOMATION_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -23,23 +38,28 @@ sys.path.insert(0, NOTION_BUILD_DIR)
 from notion_api import load_env, notion_request, query_database, get_prop  # noqa: E402
 
 ENV_PATH = os.path.join(NOTION_BUILD_DIR, ".env")
+IMPORTED_DIR = os.path.join(AUTOMATION_DIR, "data", "imported")
 
 CATEGORY_MAP = {"Event": "イベント"}
 SUBCATEGORY_MAP = {"Fireworks": "花火大会"}
 SEASON_MAP = {"Summer": "夏", "Autumn": "秋", "Winter": "冬", "Spring": "春", "All Season": "通年"}
-# Prefecture (or prefecture-pair) -> the existing 9-region Select value.
-# "Fukuoka/Yamaguchi" spans two conventional regions (Kyushu/Chugoku) --
-# mapped to 九州・沖縄 as a judgment call (Kanmon Straits fireworks are
-# jointly hosted, Region is single-select, not multi-select). Flagged in the
-# run's own report rather than decided silently.
-REGION_MAP = {
-    "Tokyo": "関東", "Kanagawa": "関東", "Chiba": "関東",
-    "Niigata": "中部", "Nagano": "中部", "Aichi": "中部", "Shizuoka": "中部",
-    "Akita": "東北", "Yamagata": "東北",
-    "Shiga": "近畿", "Mie": "近畿",
+
+# Full 47-prefecture -> conventional 8-region (+Hokkaido) breakdown, same
+# vocabulary as Source Library's Region field. Built out in full (not just
+# the prefectures seen in Batch 001) since future batches span other
+# categories (Summer Festival etc.) and will reference many more.
+PREFECTURE_TO_REGION = {
     "Hokkaido": "北海道",
-    "Fukuoka": "九州・沖縄",
-    "Fukuoka/Yamaguchi": "九州・沖縄",  # judgment call -- see module docstring
+    "Aomori": "東北", "Iwate": "東北", "Miyagi": "東北", "Akita": "東北", "Yamagata": "東北", "Fukushima": "東北",
+    "Ibaraki": "関東", "Tochigi": "関東", "Gunma": "関東", "Saitama": "関東",
+    "Chiba": "関東", "Tokyo": "関東", "Kanagawa": "関東",
+    "Niigata": "中部", "Toyama": "中部", "Ishikawa": "中部", "Fukui": "中部", "Yamanashi": "中部",
+    "Nagano": "中部", "Gifu": "中部", "Shizuoka": "中部", "Aichi": "中部",
+    "Mie": "近畿", "Shiga": "近畿", "Kyoto": "近畿", "Osaka": "近畿", "Hyogo": "近畿", "Nara": "近畿", "Wakayama": "近畿",
+    "Tottori": "中国", "Shimane": "中国", "Okayama": "中国", "Hiroshima": "中国", "Yamaguchi": "中国",
+    "Tokushima": "四国", "Kagawa": "四国", "Ehime": "四国", "Kochi": "四国",
+    "Fukuoka": "九州・沖縄", "Saga": "九州・沖縄", "Nagasaki": "九州・沖縄", "Kumamoto": "九州・沖縄",
+    "Oita": "九州・沖縄", "Miyazaki": "九州・沖縄", "Kagoshima": "九州・沖縄", "Okinawa": "九州・沖縄",
 }
 MONTH_MAP = {
     "January": "1月", "February": "2月", "March": "3月", "April": "4月",
@@ -54,32 +74,55 @@ def existing_titles(token, db_id):
     return {get_prop(p, "Title", "title") for p in pages}
 
 
-def build_properties(row, warnings, row_num):
+def resolve_region(region_raw, title, pending):
+    """Returns (primary_region, note_text_or_None). A region spanning
+    multiple prefectures (e.g. "Fukuoka/Yamaguchi") gets its first-listed
+    prefecture as Primary Region; the rest goes to Notes, per Rei's rule --
+    never silently dropped."""
+    parts = [p.strip() for p in region_raw.split("/") if p.strip()]
+    if not parts:
+        pending.append(f"{title}: Primary Region blank in source data")
+        return None, None
+
+    primary_pref = parts[0]
+    primary_region = PREFECTURE_TO_REGION.get(primary_pref)
+    if primary_region is None:
+        pending.append(f"{title}: unrecognized prefecture '{primary_pref}', Primary Region left unset")
+
+    note = None
+    if len(parts) > 1:
+        note = f"Also spans: {', '.join(parts[1:])}（複数県にまたがるためPrimary Regionは{primary_pref}のみ設定）"
+        pending.append(f"{title}: Region spans multiple prefectures ({region_raw}) -- "
+                        f"Primary Region set to {primary_pref}, rest recorded in Notes")
+    return primary_region, note
+
+
+def resolve_event_month(event_month_raw, title, pending):
+    if not event_month_raw:
+        return []
+    if event_month_raw == "Multiple":
+        return ["Multiple"]
+    if event_month_raw in MONTH_MAP:
+        return [MONTH_MAP[event_month_raw]]
+    pending.append(f"{title}: unrecognized Event Month '{event_month_raw}', left unset")
+    return []
+
+
+def build_properties(row, pending):
     title = row["Title"].strip()
 
     category = CATEGORY_MAP.get(row["Category"], row["Category"])
     subcategory = SUBCATEGORY_MAP.get(row["Subcategory"], row["Subcategory"])
     season = SEASON_MAP.get(row["Season"], row["Season"])
-    region_raw = row["Region"].strip()
-    region = REGION_MAP.get(region_raw)
-    if region is None:
-        warnings.append(f"  row {row_num} ({title}): unrecognized Region '{region_raw}', left unset")
-    if "/" in region_raw:
-        warnings.append(f"  row {row_num} ({title}): Region '{region_raw}' spans two conventional regions, "
-                         f"Region is single-select -- mapped to '{region}' as a judgment call, please review")
+    region_raw = row.get("Region", row.get("Primary Region", "")).strip()
+    primary_region, region_note = resolve_region(region_raw, title, pending)
 
     evergreen = YES_NO_MAP.get(row["Evergreen"].strip(), False)
     premium = YES_NO_MAP.get(row["Premium Candidate"].strip(), False)
 
-    event_month_raw = row["Event Month"].strip()
-    event_month = []
-    if event_month_raw in MONTH_MAP:
-        event_month = [MONTH_MAP[event_month_raw]]
-    elif event_month_raw and event_month_raw != "Multiple":
-        warnings.append(f"  row {row_num} ({title}): unrecognized Event Month '{event_month_raw}', left unset")
-    elif event_month_raw == "Multiple":
-        warnings.append(f"  row {row_num} ({title}): Event Month='Multiple' has no specific month in the source "
-                         f"data -- left unset rather than guessing which months")
+    event_month = resolve_event_month(row["Event Month"].strip(), title, pending)
+
+    notes_parts = [n for n in [region_note, row.get("Notes", "").strip() or None] if n]
 
     props = {
         "Title": {"title": [{"text": {"content": title}}]},
@@ -93,10 +136,12 @@ def build_properties(row, warnings, row_num):
         "Source Status": {"select": {"name": row["Source Status"].strip()}},
         "Story Status": {"select": {"name": row["Story Status"].strip()}},
     }
-    if region:
-        props["Region"] = {"select": {"name": region}}
+    if primary_region:
+        props["Primary Region"] = {"select": {"name": primary_region}}
     if event_month:
         props["Event Month"] = {"multi_select": [{"name": m} for m in event_month]}
+    if notes_parts:
+        props["Notes"] = {"rich_text": [{"text": {"content": " / ".join(notes_parts)}}]}
     return props, title
 
 
@@ -109,45 +154,54 @@ def main():
     token = env["NOTION_TOKEN"]
     db_id = env["STORY_BANK_DB_ID"]
 
-    print(f"Reading {csv_path}...")
     with open(csv_path, encoding="utf-8") as f:
         rows = list(csv.DictReader(f))
-    print(f"  {len(rows)} row(s) in CSV")
 
-    print("Querying existing Story Bank titles for duplicate check...")
     existing = existing_titles(token, db_id)
-    print(f"  {len(existing)} existing record(s) (including Archived, unchanged by this run)")
+    pre_existing_count = len(existing)
 
-    warnings = []
+    pending = []
+    errors = []
     imported = 0
     skipped_duplicate = []
 
-    for i, row in enumerate(rows, start=1):
+    for row in rows:
         title = row["Title"].strip()
         if title in existing:
             skipped_duplicate.append(title)
             continue
-        props, title = build_properties(row, warnings, i)
-        notion_request(token, "POST", "/pages", {"parent": {"database_id": db_id}, "properties": props})
-        existing.add(title)
-        imported += 1
-        print(f"  [{i}/{len(rows)}] imported: {title}")
+        try:
+            props, title = build_properties(row, pending)
+            notion_request(token, "POST", "/pages", {"parent": {"database_id": db_id}, "properties": props})
+            existing.add(title)
+            imported += 1
+        except Exception as e:
+            errors.append(f"{title}: {e}")
 
-    print()
+    moved_to = None
+    if imported > 0 and not errors:
+        os.makedirs(IMPORTED_DIR, exist_ok=True)
+        dest = os.path.join(IMPORTED_DIR, os.path.basename(csv_path))
+        shutil.move(csv_path, dest)
+        moved_to = dest
+
     print("=" * 70)
-    print("Story Bank Import Summary")
+    print("Story Bank Import Report")
     print("=" * 70)
-    print(f"CSV rows: {len(rows)}")
-    print(f"Imported: {imported}")
-    print(f"Skipped (duplicate title): {len(skipped_duplicate)}")
-    if skipped_duplicate:
-        for t in skipped_duplicate:
-            print(f"  - {t}")
-    if warnings:
-        print(f"\nWarnings ({len(warnings)}) -- judgment calls or unmapped values, please review:")
-        for w in warnings:
-            print(w)
-    print()
+    print(f"重複チェック: 既存{pre_existing_count}件と照合、重複{len(skipped_duplicate)}件"
+          + (f"（{', '.join(skipped_duplicate)}）" if skipped_duplicate else ""))
+    print(f"インポート件数: {imported}件")
+    print(f"Story Bank総件数: {pre_existing_count + imported}件")
+    print(f"エラー: {len(errors)}件" + ("" if not errors else ""))
+    for e in errors:
+        print(f"  - {e}")
+    print(f"保留事項: {len(pending)}件")
+    for p in pending:
+        print(f"  - {p}")
+    if moved_to:
+        print(f"\nCSVを移動しました: {moved_to}")
+    elif imported > 0 and errors:
+        print(f"\nエラーがあったため、CSVは移動していません（{csv_path}のまま）")
 
 
 if __name__ == "__main__":

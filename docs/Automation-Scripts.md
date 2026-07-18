@@ -1,7 +1,7 @@
-<title>Automation Scripts v2.6</title>
+<title>Automation Scripts v2.7</title>
 
 # Automation Scripts
-### ARu Studio — Roadmap Version 3 実装記録 ＋ Version 4準備 ＋ Version 4 Phase 5（Editor Experience）＋ ARu Intelligence Phase 1/2/3 ＋ ARu公式記事テンプレート再設計 ＋ Article Template Framework（G3-A／G3-B）＋ Story Bank Database v1.0 ＋ Story Bank Batch #001
+### ARu Studio — Roadmap Version 3 実装記録 ＋ Version 4準備 ＋ Version 4 Phase 5（Editor Experience）＋ ARu Intelligence Phase 1/2/3 ＋ ARu公式記事テンプレート再設計 ＋ Article Template Framework（G3-A／G3-B）＋ Story Bank Database v1.0 ＋ Story Bank Batch #001 ＋ Story Bankバッチ運用ルールの正式化
 
 | | |
 |---|---|
@@ -921,6 +921,39 @@ CSVの列は英語ラベル（`Category=Event`、`Region=Tokyo`等）で提供�
 
 - **National Fireworks Top 50の残り30件**：Batch #002以降としてChatGPTから提供され次第、同じスクリプトでインポートする
 - QA Card・Articleの生成は未着手（指示どおり、今回のスコープ外）
+
+## Story Bankバッチ運用ルールの正式化（2026-07-18）
+
+**目的**：Batch #001で生じた2件の判断保留（Region複数県またがり／Event Month=Multiple）を、場当たり的な警告ログのままにせず、恒久的なスキーマ変更と運用ルールとして正式化する。Reiからの明示指示にもとづく。
+
+**場所**：`notion-build/add_story_bank_notes_and_region_rules.py`（新規、一回限りのスキーマ移行スクリプト）、`notion-build/automation/bulk_import_story_bank.py`（全面改修）。
+
+### スキーマ変更（実施・確認済み）
+
+`add_story_bank_notes_and_region_rules.py`実行により、Story Bankへ以下を適用：
+
+1. `Region`（select）→`Primary Region`へリネーム
+2. `Notes`（rich_text）を新規追加——Primary Regionからあふれた補足情報等の置き場
+3. `Event Month`（multi_select）の選択肢に`Multiple`を追加
+
+実データでAPI経由の確認済み：
+```
+Properties: [..., 'Primary Region', ..., 'Notes', ...]
+Event Month options: ['1月', ..., '12月', 'Multiple']（13オプション）
+```
+
+### `bulk_import_story_bank.py`の変更
+
+- **Primary Region**：CSVのRegionが`/`区切りで複数県にまたがる場合（例：`Fukuoka/Yamaguchi`）、先頭県のみをPrimary Regionへマッピングし（`Fukuoka`→`九州・沖縄`）、残り（`Also spans: Yamaguchi`）をNotesへ書き込む。あいまいなまま放置しない
+- **Event Month**：CSV値が`Multiple`の場合、未設定にせず選択肢`Multiple`をそのまま設定する。空欄は残さない
+- **地方マッピングの全47都道府県化**：Batch #001で登場した13都道府県のみだった`REGION_MAP`を、日本の全47都道府県→8地方区分（北海道／東北／関東／中部／近畿／中国／四国／九州・沖縄）の完全なマッピング（`PREFECTURE_TO_REGION`）へ拡張。今後Fireworks以外のカテゴリ（Summer Festival等）のバッチが未見の県を含んでも対応できるようにするため
+- **エラーハンドリング**：1件のページ作成が失敗しても他の行の処理を止めず、エラーとして収集・報告する設計へ変更
+- **レポート形式の固定**：毎回のインポート報告は、Reiの指定どおり**重複チェック／インポート件数／Story Bank総件数／エラー／保留事項**の5項目のみに固定（それ以外は出力しない）
+- **CSVファイルの運用ルール**：保存場所`notion-build/automation/data/`、命名`StoryBank_Batch###_Category.csv`で統一。インポート成功後（エラー0件時）は自動的に`notion-build/automation/data/imported/`へ移動（削除はしない）。`story_bank_batch_001.csv`も本ルールに合わせて`imported/`へ移動済み
+
+### 今後の運用
+
+ChatGPTがCSVを`StoryBank_Batch###_Category.csv`として提供した時点で、Claude Codeは確認を挟まず`bulk_import_story_bank.py`で自動インポートする（Rei承認済み、2026-07-18）。
 
 ## 未実施事項（要判断）
 
