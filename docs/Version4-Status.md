@@ -4,12 +4,12 @@
 
 | | |
 |---|---|
-| **Date** | 2026-07-14（本体）／2026-07-16 追記あり |
+| **Date** | 2026-07-14（本体）／2026-07-16・2026-07-18 追記あり |
 | **対象** | Version 4（Enterprise）準備状況のスナップショット |
-| **最新Commit** | `2f15dae` |
+| **最新Commit** | `6584101` |
 | **位置づけ** | [Roadmap](./Roadmap.md)・[AI-Handover](./AI-Handover.md)・[README](../README.md)との整合性を確認済み |
 
-> このレポートは特定時点のスナップショット。本体は2026-07-14時点、末尾の「8. Dashboard運用整備」は2026-07-16の追記。数値はすべてNotion実データへの実クエリで取得したもので、推測値ではない。
+> このレポートは特定時点のスナップショット。本体は2026-07-14時点、「8. Dashboard運用整備」「9. Version 4 Phase 5」は2026-07-16の追記、「10. ARu Intelligence Phase 1〜3」「11. ARu公式記事テンプレート再設計」は2026-07-18の追記。数値はすべてNotion実データへの実クエリで取得したもので、推測値ではない。
 
 ---
 
@@ -108,11 +108,13 @@ Version 4本体は**前提条件（Pilot Operation 7日間の実運用完了）�
 
 | 層 | 内容 | 進捗 |
 |---|---|---|
-| **前提条件** | Version 3.5 Pilot Operation（7日間実運用） | **2/7日（約29%）** |
-| **Version 4準備作業**（技術的土台） | Article Freshness Monitor、Coverage Analyzer、Editorial Planner、Publishing Center、Duplicate Prevention | **5/5件 実施済み（100%）**（現時点でRoadmapに明記された準備作業はこの5件） |
+| **前提条件** | Version 3.5 Pilot Operation（7日間実運用） | **2/7日（約29%、Day 2から変わらず）** |
+| **Version 4準備作業**（技術的土台） | Article Freshness Monitor、Coverage Analyzer、Editorial Planner、Publishing Center、Duplicate Prevention、Editor Experience（Phase 5）、ARu Intelligence Phase 1（Source Watcher）、Phase 2（Source Library Expansion）、Phase 3（Editorial Intelligence） | **9/9件 実施済み（100%）**（現時点でRoadmapに明記された準備作業はこの9件。詳細は本レポート10節、および[Roadmap](./Roadmap.md#version-4--enterprise)） |
 | **Version 4本体**（Roadmap記載5項目：Usage Scope実運用／自治体・観光協会・企業とのデータ連携／JNTO・Visit Japan連携／企業向けダッシュボード／Mentorネットワーク本格拡大） | いずれも対外的な契約・意思決定を伴う | **0/5件（0%）** |
 
-**総合評価**：技術的な土台固め（Freshness Monitor）は計画通り先行実装できたが、Version 4本体は実装だけでは進められない項目が大半を占める。次のゲートはPilot Operation Day 3〜7の完走と、その後の対外的な方針確認。**全体としては「本体着手前」であり、大まかな目安としては一桁%〜10%程度**（前提条件の進捗と、技術準備1件の完了を反映した粗い目安であり、対外交渉が絡む項目のため精緻な%算出はできない）。
+**注**：上記とは別に、**ARu公式記事テンプレート再設計（2026-07-18、本レポート11節）**をブランド品質標準化として実施済み。これはRoadmapの「Version 4準備作業」箇条書きにはまだ記載がなく（Roadmap.mdは2026-07-18時点で未反映）、Version 4本体の前提条件でもないため上記9件の集計には含めていない。
+
+**総合評価**：技術的な土台固め（Freshness Monitor以降、ARu Intelligenceまでの9件）は計画通り・前倒しで先行実装できたが、Version 4本体は実装だけでは進められない項目が大半を占める。次のゲートはPilot Operation Day 3〜7の完走と、その後の対外的な方針確認。**全体としては「本体着手前」であり、大まかな目安としては一桁%〜10%程度**（前提条件の進捗と、技術準備9件の完了を反映した粗い目安であり、対外交渉が絡む項目のため精緻な%算出はできない）。
 
 ---
 
@@ -134,6 +136,12 @@ Version 4本体は**前提条件（Pilot Operation 7日間の実運用完了）�
 14. **ARu Constitutionの改訂提案が3件に増加**：①9セクションテンプレート・Freshness Monitor（§4・§11）、②Publishing Centerで判明した「Level 1 ── 自動公開」表記の誤解（§15）、③Reiが明示的に指示した「1 Research Topic = 1 Article」原則（§4）。いずれもLevel B、発効予定2026-07-17以降、編集長の承認待ち
 15. **アーカイブした重複記事15件のTranslation・SNS Queueレコードが未整理**：親Articleが Archived/Duplicate のため公開経路には現れないが、レコード自体の削除・アーカイブは今回のスコープ外。要判断
 16. **Duplicate Preventionのログはローカルファイル**：`notion-build/automation/logs/duplicate_prevention.jsonl`はGit・Notionいずれとも同期しない。「本日の生成件数」等はスクリプトを実行した端末上の活動のみを反映する（既知の制約として明記済み）
+17. **Source Libraryの実監視網はまだ10件のみ**（ARu Intelligence Phase 1のテストレコード1件＋Phase 2のシード9件）：Immigration／Tax／Health Insurance／Disaster／Weather／Emergency／Pension／Employment／Transportation／Tourismはカバー済みだが、Visa（外務省サイトが自動フェッチをブロックし見送り）／Student／Events／Festivals／Municipal Governments／Universities／Japanese Language Schools／Culture／Consumer Information／Housing／Banking／Trending Topicsは未着手。数百件規模の監視網にするにはRei（または今後のフェーズ）による継続的なソース登録が前提
+18. **SimHashの変化検知閾値は調整可能なヒューリスティックであり「解決済みの問題」ではない**：`SIMHASH_CHANGE_THRESHOLD=2`（64bit中）は限られた実データでの初期値。ソース数が増えるにつれ、実運用のfalse positive/false negative発生率を見ながら再調整が必要になる可能性がある
+19. **Archived記事のFreshness Statusが自動でクリアされないバグの根本原因は未修正**：ARu Intelligence Phase 3の実装中、この既知の制約が原因でCritical UpdatesにArchived済みテスト記事が誤って混入する事象を発見し、当該集計側（`Status`除外条件の追加）では対処済みだが、Archive時にFreshness Statusをクリアする処理自体はまだ存在しない。新しい集計ロジックを書く際は同様の除外条件を忘れないこと
+20. **全38記事がTemplate Status＝Update Needed**：ARu公式記事テンプレート再設計（9セクション→8セクション）に伴い`template_migration_report.py`を実データ全件に対して実行した結果、Up to Dateは0件。新テンプレート導入前に生成された記事は必然的にすべて旧構成のため想定どおりだが、実際にどの記事から・どのペースで移行するかはRei自身の判断待ち
+21. **テンプレート移行の改訂版サンプル1件がRei承認待ち**：テスト記事「日本のカフェ文化が変わった理由」について、新8セクション構成への改訂版を実データから生成済みだが、承認までは本番記事を上書きしていない
+22. **Roadmap.mdがARu公式記事テンプレート再設計（2026-07-18）を未反映**：README.md・AI-Handover.mdはこの再設計を反映済みだが、`docs/Roadmap.md`の「Version 4準備作業」箇条書きには2026-07-18時点でまだ記載がない（本レポート作成時に発見。本レポートの更新スコープには含めていないため、Roadmap.md自体の修正はRei確認後に別途行う）
 
 ---
 
@@ -177,6 +185,15 @@ Version 4本体は**前提条件（Pilot Operation 7日間の実運用完了）�
 
 **整合性上の結論**：README／Roadmap／AI-Handoverの3文書は本日の実装内容と矛盾しない。ARu Constitutionのみ、本日の実装によって記述が実態と乖離した箇所・明文化すべき新原則が3件見つかり、いずれも正規の改訂プロセス（§20 Governance）に沿ってPending Amendmentとして提案し、承認待ちの状態。
 
+**2026-07-18追記（本レポート更新時の再確認）**：ARu Intelligence Phase 1〜3およびARu公式記事テンプレート再設計を反映するにあたり、上記4文書を再度確認した。
+
+| ドキュメント | 結果 |
+|---|---|
+| [README.md](../README.md) | ✅ 「現在地」節がARu Intelligence Phase 1〜3、およびテンプレート再設計（9→8セクション）まで反映済み |
+| [AI-Handover.md](./AI-Handover.md) | ✅ Completed Features／Current Automationとも反映済み（v1.9、Latest Commit `6584101`） |
+| [Roadmap.md](./Roadmap.md) | ⚠️ **一部不一致**：「Version 4準備作業」節はARu Intelligence Phase 1〜3まで反映済みだが、ARu公式記事テンプレート再設計（2026-07-18）は未記載。本レポートの更新スコープには含めていないため、Roadmap.md自体の修正はRei確認後に別途対応する（本レポート4節17〜22項にも記載） |
+| [ARu-Constitution.md](./ARu-Constitution.md) | ✅ 新たな不一致・追加原則は検出されなかった。ARu Intelligence Phase 1〜3は既存の§7 Source Policy／§9 AI Behavior Rulesの範囲内（変化検知・優先順位付けのみでPublish Approvalに触れない）で動作。テンプレート再設計も記事本文の構成変更に留まり、Pending Amendments（3件、承認待ち）から件数の増減なし |
+
 ---
 
 ## 8. Dashboard運用整備（2026-07-16追記）
@@ -201,6 +218,38 @@ Reiから「編集長が記事を開いた瞬間に必要な情報だけを見�
 
 詳細は[Automation Scripts](./Automation-Scripts.md)の該当節を参照。
 
+## 10. ARu Intelligence Phase 1〜3（2026-07-16〜2026-07-18追記）
+
+Version 4 Phase番号とは別の独立トラックとしてRei自身が命名（目的が「編集長の作業体験の改善」ではなく「コンテンツの鮮度・信頼性の担保」および「ARuを毎日使うプラットフォームにする」ことのため）。いずれも新規データベースは追加していない。詳細は[Automation Scripts](./Automation-Scripts.md)、編集ワークフロー全体像は[Editorial Workflow](./Editorial-Workflow.md)を参照。
+
+### Phase 1：Source Watcher（2026-07-16）
+
+`source_watcher.py`を新規実装。これまでSource Monitor.`Change Detected`は完全に手動チェックボックスで、外部URLを実際にフェッチして変化を検知するコードは1件も存在しなかった——下流（Research自動起票／Article強制フラグ／Publishing Center連携／Dashboard／AI Command Center）はすべて実装・テスト済みだったが、実データを受け取ったことがなかった。stdlibのみでURLをフェッチしSHA-256でハッシュ比較、変化検知時のみSource Monitorレコードを新規作成する。新規スキーマはSource Libraryへの`Last Content Hash`（rich_text）1プロパティのみ。政府・自治体系情報源の変化はフラグ立てのみに留め、Law Updateの自動作成はしない（人間が判断）。
+
+**実行結果（実データ、2026-07-16）**：Source Library実データ1件（テストレコード、出入国在留管理庁の実URL）に対し実行。初回実行でbaseline確立（誤検知0件）、変化検知パスを意図的なハッシュ改変で実証（`Impact Level=Critical`、AI生成Diff Summaryを確認）。既存6スクリプトの回帰テストで異常なし。**Phase 1時点での実運用上の網羅範囲は実URL1件のみ**（コードの欠陥ではなく、Source Libraryへの実データ投入がまだこれからだったため）。
+
+### Phase 2：Source Library Expansion（2026-07-17）
+
+`source_categories.py`／`bulk_import_sources.py`（新規）、`source_watcher.py`／`ai_command_center.py`（拡張）。Phase 1が残した「監視エンジンはできたが監視対象がほぼ空」という課題を解消。Source LibraryへCategory（22種）／Country／Region／City／Importance（Critical/High/Medium/Low、旧`Tier`を代替）／`Last Check Error`を追加（既存DBへの追加のみ、Region Masterは既存のDeferred方針どおり作成せず）。本リポジトリ初のCSV一括登録機能（`bulk_import_sources.py`）を実装し、変化検知をSHA-256完全一致からSimHash近似指紋＋ハミング距離比較へ変更（広告・タイムスタンプ・訪問者数等のノイズを除去）。Source Monitorへ`Update Classification`（11分類、AI判定）を追加。
+
+**実行結果（実データ、2026-07-17）**：WebFetchで実在確認済みの9ソース（国税庁／厚生労働省／内閣府防災情報／気象庁／消防庁／日本年金機構／ハローワーク／国土交通省／JNTO）を投入——**9件成功、0件重複、0件エラー**。投入後の`source_watcher.py`実行で9件すべて正しくbaseline確立。SimHashのノイズ耐性テスト（ノイズ追加→ハミング距離2、閾値以下で正しく「変化なし」）・実質変更検知テスト（本文15%置換→ハミング距離13、正しく「変化あり」）を実データで確認。既存6スクリプトの回帰テストで異常なし。**未着手のカテゴリ**：Visa（外務省サイトが自動フェッチをブロックし見送り）、Student／Events／Festivals／Municipal Governments／Universities／Japanese Language Schools／Culture／Consumer Information／Housing／Banking／Trending Topics。
+
+### Phase 3：Editorial Intelligence（2026-07-18）
+
+`research_prioritizer.py`／`today_opportunities.py`（新規）、`ai_command_center.py`（再構成）、`docs/Editorial-Workflow.md`（新規）。新機能追加ではなく既存システムの再利用・統合が目的。`research_prioritizer.py`はStatus=NewのResearchをFreshness／Foreign Resident Value／Tourism Value／Seasonal Relevance／Premium Potentialの5軸（各20点）で決定論的にスコアリング（新規スキーマ・追加AI呼び出しなし）。`today_opportunities.py`はEvent Calendar／Source Monitor／Law Update／Researchの4つの既存システムを統合。`ai_command_center.py`を「編集長が毎日最初に見るページ」として再構成し、先頭5セクション（🎯 Today's Opportunities／🔴 Critical Updates／📊 Top Research Candidates／🚀 Publishing Queue／🕐 Recently Updated Articles）を追加（Phase 1/2の監視詳細セクションは根拠情報として下部に残置）。
+
+**実行結果（実データ、2026-07-18）**：Status=New 19件全件をスコアリング（5軸すべて正しく算出。上位10件が同点48点で並ぶ結果になったが、現状のResearch backlogがCategory・Season的に同質であることを正直に反映したもので、ロジックの不具合ではない）。実装中、`Status=Archived`の除外漏れによりCritical Updatesへ古いテスト記事が誤混入するバグを発見・修正（3件→2件の正しい件数に修正確認）。既存8スクリプトの回帰テストで異常なし。
+
+## 11. ARu公式記事テンプレート再設計（2026-07-18追記）
+
+`article_template.py`（新規、共有モジュール）、`render_article_layout.py`／`generate_article_pipeline.py`／`reviewer_agent.py`（更新）、`template_migration_report.py`（新規）。ブランド品質の標準化が目的で、既存の生成・レビュー・翻訳・SNSパイプラインはそのまま、記事本文の構成だけを刷新した。
+
+**変更内容**：旧9セクションテンプレート（Question／Basic Answer／More Details／Why Does Japan Do This?／Practical Steps and Cautions／Latest Information／ARu Tip／Related Questions／Mentor Support）を、新しい8セクション公式構成（Basic Answer／More Details／Cultural Background／ARu Tip［必須］／Things to Know／FAQ／Premium Section／Sources）へ置き換え。Title・Related Articles・Last Updatedは既存プロパティ（記事タイトル・`Knowledge Links`・`Last Verified Date`）のまま扱い、Bodyには含めない。従来`generate_article_pipeline.py`と`render_article_layout.py`に別々に重複定義されていたセクション構成を`article_template.py`へ一本化。`reviewer_agent.py`は既存5観点スコアリングに加え、決定論的なセクション有無チェックとAIによるPremium価値・重複・fact/interpretation/recommendation区別の評価を追加（新規レビュープロパティなし）。`template_migration_report.py`は新規プロパティ`Template Status`（Up to Date／Update Needed）で全記事の移行優先度を可視化するのみで、**既存記事を自動的に書き換えることはしない**。
+
+**発見・修正したバグ**：AIが箇条書き内で使うインライン太字（例:「**浴衣を着てみましょう**：...」）を、旧パーサーが誤ってセクション境界と認識し本文が途中で途切れる潜在バグ（旧テンプレートにも存在）を発見。正規のセクション名に一致した太字だけを境界とみなすよう修正し、実データで全文が正しく保持されることを確認。
+
+**実行結果（実データ、2026-07-18）**：`template_migration_report.py`を全38件（Archived除く）に対して実行 → **全38件がUpdate Needed（Up to Date 0件）**——新テンプレート導入前に生成された記事は必然的にすべて旧構成のため想定どおりで、コード側の不具合ではない。テスト記事「日本のカフェ文化が変わった理由」の改訂版を実データから生成し、8セクションへの再編成を確認（**Rei承認まで本番記事は上書きしていない**）。`render_article_layout.py`・`reviewer_agent.py`の実データ確認も完了（詳細は[Automation Scripts](./Automation-Scripts.md)）。
+
 ---
 
-*ARu HQ / Decode Japan — Version 4 Current Status Report — 2026-07-14（8〜9節は2026-07-16追記）*
+*ARu HQ / Decode Japan — Version 4 Current Status Report — 2026-07-14（8〜9節は2026-07-16追記、10〜11節は2026-07-18追記）*
