@@ -1,7 +1,7 @@
-<title>Automation Scripts v2.7</title>
+<title>Automation Scripts v2.8</title>
 
 # Automation Scripts
-### ARu Studio — Roadmap Version 3 実装記録 ＋ Version 4準備 ＋ Version 4 Phase 5（Editor Experience）＋ ARu Intelligence Phase 1/2/3 ＋ ARu公式記事テンプレート再設計 ＋ Article Template Framework（G3-A／G3-B）＋ Story Bank Database v1.0 ＋ Story Bank Batch #001 ＋ Story Bankバッチ運用ルールの正式化
+### ARu Studio — Roadmap Version 3 実装記録 ＋ Version 4準備 ＋ Version 4 Phase 5（Editor Experience）＋ ARu Intelligence Phase 1/2/3 ＋ ARu公式記事テンプレート再設計 ＋ Article Template Framework（G3-A／G3-B）＋ Story Bank Database v1.0 ＋ Story Bank Batch #001 ＋ Story Bankバッチ運用ルールの正式化 ＋ ARu Studio v4.1 Editorial Intelligence
 
 | | |
 |---|---|
@@ -955,12 +955,110 @@ Event Month options: ['1月', ..., '12月', 'Multiple']（13オプション）
 
 ChatGPTがCSVを`StoryBank_Batch###_Category.csv`として提供した時点で、Claude Codeは確認を挟まず`bulk_import_story_bank.py`で自動インポートする（Rei承認済み、2026-07-18）。
 
+## ARu Studio v4.1 Editorial Intelligence（2026-07-19）
+
+**目的**：Story Bankを「QAカードの起点」として継続運用し、公式情報の変更検知から影響記事の抽出・更新までを既存資産の再利用で実現する。Business Roadmap「Version 4 — Enterprise」（外部提携ゲート、現状0/5）とは別のスコープ——[Version4-Completion-Report.md](./Version4-Completion-Report.md)で確立した「Business Roadmap versionsとStudio vXは独立したカウンタ」という命名規則にもとづき、**ARu Studio v4.1**と呼ぶ。
+
+Reiの方針：「重複プロパティは作らず、既存のVersion4資産を最大限再利用する。判断に迷う場合は新規追加ではなく既存拡張を優先する」。実装前にStory Bank／Articles／Source Monitor／Law Updateの実スキーマをAPIで取得し、要求された項目の多くが既存プロパティ・既存リレーションで代替可能であることを確認したうえで、下記の再利用表にもとづき最小限の新規追加のみ行った。
+
+### 既存資産の再利用表（新規プロパティを作らなかったもの）
+
+| リクエストされた項目 | 再利用した既存資産 |
+|---|---|
+| Story Bank: Status | 既存 `Story Status` |
+| Story Bank: Related Articles | 既存 `Generated Article` relation（Notionのrelationは元々複数ページを保持できるため、Headline/Basic/Deep/Premium複数記事を1つのStoryにリンクする用途にもそのまま使える） |
+| Articles: Related Story / Related QA | 既存 `Related to Story Bank (Generated Article)` relation（Story BankがStory起案とQAカードの両方の役割を兼ねる設計のため、2本目のリレーションは重複になる） |
+| Articles: Related Law Update | 既存 `Related to Law Update (Affected Articles)` relation |
+| Articles/Story Bank: Target Persona | 既存の13値Audience taxonomy（Articles/Research/Editorial Calendar/Event Calendar/SNS Queueで既に使用）。Story Bank側は新規追加だが、値は完全に同じ13種を再利用し、プロパティ名も他所と合わせて`Audience`とした（`Target Persona`という独自名にしなかった） |
+| Articles: Last Reviewed / Last Updated | 既存 `Last Verified Date` / `Updated Date` |
+| Source Monitor: Source Name/Category/URL/Authority/Check Frequency/Reliability | Source Libraryへの既存`Source` relationからの**rollup**として追加（データを複製せず参照するのみ）：`Source Category`←Category、`Official URL`←URL、`Check Frequency`←Check Frequency、`Reliability`←Trust Score、`Authority`←Source Type |
+| Source Monitor: Last Checked | 既存 `Checked At` |
+| Source Monitor: Monitor Status | 既存 `Status`（OK/Error/Changed/Needs Attention）へ`Active`/`Paused`/`Check Required`を追加（既存値は変更・削除せず末尾に追加） |
+| Law Update: Affected Persona | 既存 `Impact Scope`（同じ13値Audience taxonomy） |
+| Law Update: Official Source / Related Sources | 既存 `Official Notice URL` / `Related Source Library` |
+| Law Update: Affected Translations | 既存 `Affected Translation`（単数名だが同じrelation） |
+| Law Update: Urgency（Emergency/High/Normal/Low案） | 既存の`Critical/High/Medium/Low`表記を維持（Articles/Editorial Calendar/Event Calendarと統一） |
+| Articles: Update Status | 既存 `Status`（Draft/AI Draft/Human Review/Approved/Published/Archived）へ`Updating`/`Approval Required`を追加 |
+| Law Update: Update Workflow Status | 既存 `Update Status`（Monitoring/Confirmed/Reflecting to Article/Article Published/Archived）へ`No Action Required`/`Approval Required`を追加 |
+
+### 実際に追加したもの（`notion-build/add_v4_1_schema.py`）
+
+- **Story Bank**（15→28プロパティ）：`Content Category`（14値、QAカードの困りごと分類——既存の7値`Category`編集ドメイン分類とは別軸）、`Audience`（上記のとおり既存13値taxonomy再利用）、`Problem`、`Search Intent`、`QA Question`、`Short Answer`、`Article Needed`、`Deep Article Needed`、`Information Sensitivity`（Low/Medium/High/Critical——Story Bankが使わない設計の既存`Confidentiality`とは別軸）、`Dietary Restriction Type`（Vegetarian/Vegan/Halal/No Pork/Food Allergy/Religious Dietary Needs。Notion APIは親子連動Select（Content Category=食事制限の時だけ表示）を作れないため、常時表示の独立multi_selectとした）、`Update Frequency`（Daily/Weekly/Monthly/Quarterly/Biannual/Event-Based）、`Last Reviewed`、`Next Review`
+- **Articles**（66→74プロパティ）：`Content Type`（Headline/Basic Article/Deep Guide/Premium/Update Notice）、`Information Sensitivity`、`Next Review`、`Update Frequency`、`Previous Information`／`Current Information`／`Change Reason`（Update Notice記事・既存記事改訂の根拠データ）、`Current Validity`（Current/Review Due/Outdated/Under Review/Archived——法改正起因で「事実として正しいか」を表す軸。時間経過による既存`Freshness Status`（Fresh/Needs Update、`article_freshness_monitor.py`管理）とは意図的に別軸のまま——自動化の依存関係を壊さないため）
+- **Source Monitor**（18→25プロパティ）：`Target Category`（既存7値Category taxonomy再利用、検知した変化をどの編集ドメインへルーティングするか）、`Last Modified Detected`、rollup5種（上記表）
+- **Law Update**（31→41プロパティ）：`Update Type`、`Announcement Date`、`Previous Rule`／`New Rule`／`Difference Summary`、`Affected Category`（既存7値Category taxonomy再利用）、`Reviewed By`（people）、`Reviewed Date`、`Published Date`、`Notes`
+
+### 新規リレーション（`notion-build/add_v4_1_relations.py`）
+
+既存のStory Bank→Articles→Translation→SNS Queueの連鎖、Source Monitor→Source Libraryは全て既存のため無変更。実際に欠けていた7本のみ追加（すべてdual_property、対象DB側にも自動でミラーが作成される）：
+
+- Story Bank → Source Library（`Related Sources`）
+- Articles → Source Library（`Related Source`）
+- Source Monitor → Story Bank（`Related Stories`）
+- Source Monitor → Articles（`Related Articles`、直接。従来はResearch経由の間接パスのみだった）
+- Source Monitor → Law Update（`Related Law Updates`。従来Source MonitorからLaw Updateへの経路は皆無だった）
+- Law Update → Story Bank（`Affected Stories`）
+- Law Update → SNS Queue（`Affected SNS`）
+
+実データで重複リレーション0件を確認済み（Articles/Law Updateにそれぞれ既存の2本ずつのリレーションがあるが、いずれも本セッション以前からの意図的な別用途——Articlesの`Knowledge Links`自己参照、Law Updateの`Source Law Update`（起票元1件）と`Affected Articles`（影響先複数件）の使い分け）。
+
+### Law Update Pipeline（`notion-build/automation/law_update_pipeline.py`、新規）
+
+Human-in-the-loop設計——AIは法的重要性を判断せず、人間が明示的に状態を進めた時だけ次の自動処理が走る。「変更検知→候補作成→人間の承認→更新・公開」の順を厳守し、Publishedは今回も一切AIが設定しない（既存`enforce_publish_gate.py`の哲学を踏襲）。
+
+| ステップ | 内容 | 実装 |
+|---|---|---|
+| A. Source Monitor確認 | 既存 `source_watcher.py`（無変更） |
+| B. 変更検知 | 既存 `source_watcher.py`（`Change Detected=true`、無変更） |
+| C. Law Update候補作成 | `create_law_update_candidates()`：Change Detected=trueかつまだLaw Updateが紐付いていないSource Monitorから、`Update Status=Monitoring`（未確認）のLaw Update候補を作成 |
+| D. 新旧情報の保存 | Cに統合。`New Rule`はSource MonitorのDiff Summary/Change Summaryをそのまま転記（実際に検知した内容、捏造なし）。`Previous Rule`は意図的に空欄——生の変更前全文はどこにも保存されていない（SimHash方式の指紋比較のみ）ため、捏造を避けて空欄のままとした。**既知のギャップ**：Dを完全に満たすには`source_watcher.py`側で変更前後の全文スナップショット保存が必要（未実装、別セッション向けの提案事項） |
+| E/F. 影響するStory Bank・Articles抽出＋要レビュー化 | `run_impact_analysis()`：`Update Status=Confirmed`（**人間が確認して初めて動く**）かつ未分析のLaw Updateについて、`Affected Category`と一致するStory Bank/Articlesを検索・リンクし、該当ArticlesのCurrent Validityを`Review Due`に設定。Law Updateは`Reflecting to Article`へ進む |
+| G. Translation・SNS Queue連携 | `sync_downstream_on_resolution()`：Current Validityが`Current`に戻った（＝人間が改訂完了）Articlesの関連Translationに`Needs Re-Translation=true`を立てる。**既知のギャップ**：SNS Queueには本セッションで追加した「要更新」を表すプロパティが無い（今回のプロパティ追加リストに含まれていなかったため）。既存投稿を編集する仕組みは未実装 |
+| H. Version・Last Verified Date更新 | `bump_on_publish()`：`Publishing Status=Published`かつCurrent Validityが更新サイクル中だったArticlesの`Version`を+1、`Last Verified Date`を今日の日付に、Current Validityを`Current`に戻す |
+
+実データで検証済み（2026-07-19）：既存の2件の【テスト】Source Monitorエントリ（Change Detected=true）からC/Dが実際にLaw Update候補2件を作成→再実行で0件（冪等性確認）→E/F単体は、実データを汚さないよう新規テストLaw Update（`Affected Category=生活情報`）を作って動作確認（Articles 17件・Story Bank 0件のマッチを検出）→検証後アーカイブ。既存の実Law Updateレコード1件（すでに`Affected Articles`が手動設定済み）は正しくスキップされた（上書きしない設計が機能）。標準8スクリプト回帰テストすべて正常完走。
+
+### Templates（`notion-build/automation/article_template.py`拡張）
+
+既存の`TEMPLATES`レジストリ（G3-A/G3-Bで確立）へ5エントリを追加：`headline`（4セクション）、`deep_guide`（10セクション）、`premium`（6セクション）、`update_notice`（6セクション、Previous/Current Information・Change Reasonが根拠）、`food_restriction`（8セクション、食事制限の安全性に関わるため2つの必須セクションと専用の捏造禁止プレースホルダーを持つ）。
+
+新しい`template_for_content(category, content_type=None, content_category=None)`が、既存の`template_for_category(category)`（無変更、後方互換）の上にContent Type／Content Categoryのディスパッチを追加：`Content Category=食事制限`が最優先（トピック型テンプレート）、次に`Content Type`（Headline/Deep Guide/Premium/Update Notice）、どちらも該当しなければ従来どおり`template_for_category()`にフォールバックする。既存4スクリプト（`generate_article_pipeline.py`は変更なし——後述のギャップ参照／`reviewer_agent.py`／`render_article_layout.py`／`template_migration_report.py`）を更新し、Content Typeを見て解決するようにした。実データで全既存記事がContent Type未設定のため引き続き`standard`/`event`に解決されることを確認（回帰なし）。
+
+QA Card Template（`QA_CARD_INSTRUCTIONS`）とExisting Article Revision Template（`EXISTING_ARTICLE_REVISION_CHECKLIST`）も同ファイルに追加。QA Card Templateは**自動生成スクリプトには接続していない**——Story Bankコンテンツ所有権ルール（ChatGPT企画・選定、Claude Codeは実装のみ）により、AIによる自動生成には使わない設計とした。Existing Article Revision Templateは編集者向けチェックリスト（AI生成指示ではなく手順書）。
+
+**既知のギャップ**：`generate_article_pipeline.py`のCLIは`--content-type`引数を持たないため、新規生成記事は生成時点では引き続き`template_for_category()`（Category基準）で解決される。Headline/Deep Guide/Premium/Update Noticeテンプレートは、記事作成後に人間（または将来の生成パイプライン）がContent Typeを設定すれば、reviewer/render/migration reportの3スクリプトで正しくディスパッチされる。同様に、Food Restriction Supportテンプレートは現状Story Bank→Article自動生成パイプライン自体が存在しない（本セッションのスコープ外）ため、実際には未到達——将来そのパイプラインを作る際にそのまま使える状態で用意した。
+
+### 標準更新ルール（ドキュメント化のみ、Update Frequencyプロパティの値と対応）
+
+| 区分 | 対象 | 頻度 | Update Frequency値 |
+|---|---|---|---|
+| Critical | 在留資格、法令、医療、税金、災害 | 毎日または公式更新時 | `Daily` または `Event-Based` |
+| High | 留学生、労働、保険、交通料金 | 週次 | `Weekly` |
+| Medium | 生活手続、食事制限、行政サービス | 月次 | `Monthly` |
+| Low | 文化、マナー、一般的な生活情報 | 3〜6か月ごと | `Quarterly` または `Biannual` |
+| Event | 開催日、料金、会場、予約条件 | 開催前および公式更新時 | `Event-Based` |
+
+`Next Review`（Story Bank／Articles）は上記の区分と`Update Frequency`にもとづき編集者が設定する運用（本セッションでは自動算出ロジックは実装していない——`Last Reviewed`/`Last Verified Date`から機械的に次回日を計算する処理は将来の拡張候補として`Automation設計`の枠外に残した）。
+
+### Dashboard（`ai_command_center.py`拡張）
+
+既存の🔴 Critical Updates・🔴 Freshness内訳セクションと重複しないよう、新規5セクションを追加：🆕 今日追加するQA・今日の記事・Deep Guide候補、⚖️ 法改正・制度変更キュー（Law Update Pipelineの状態別内訳、Monitoring/Approval Requiredは人間が動くべき項目として個別表示）、🈂️ 翻訳更新待ち、📱 SNS公開待ち。既存の🔴 Freshness内訳セクションは、新設したCurrent Validity内訳（法改正起因の要確認記事数）を追加する形で**拡張**し、別見出しは作らなかった。実データで実行・実際のNotionページへの書き込みまで確認済み（エラーなし）。
+
+### View（作成不可、手動設定ガイドのみ）
+
+Notion公開APIの制約により、リクエストされた24ビュー（Story Bank 7／Articles 7／Source Monitor 4／Law Update 6）はいずれも自動作成できない。[Studio-v4.1-View-Setup-Guide.md](./Studio-v4.1-View-Setup-Guide.md)として手動設定手順を文書化した。
+
 ## 未実施事項（要判断）
 
 - **スケジューリング**：cron／launchd等での定期実行はまだ設定していない。日次実行にするか、Rei自身が手動実行するかは別途判断が必要
 - **通知**：Legal Gap・Criticalの検知結果をSlack/メール等へ通知する仕組みは未実装
 - **Audit Log**：各スクリプトの実行結果は現状ターミナル出力のみで、永続的な記録先がない（Roadmap上Audit Log DBはDeferred）
+- **law_update_pipeline.pyのD（変更前後の全文保存）**：`source_watcher.py`が指紋（SimHash）のみ保存し生の全文を保持しないため、`Previous Rule`は自動では埋まらない。全文スナップショット保存を追加するかはRei判断
+- **law_update_pipeline.pyのG（SNS Queue連携）**：SNS Queueに「要更新」を表す既存プロパティが無いため未実装。新規プロパティを追加するかはRei判断（今回のリクエストのプロパティ一覧に含まれていなかったため追加していない）
+- **Content Type起点の記事生成**：`generate_article_pipeline.py`はCLIで`--content-type`を受け取らないため、Headline/Deep Guide/Premium/Update Noticeでの新規生成はまだできない（既存記事へ後付けでContent Typeを設定すればreviewer/render/migration reportは正しく動く）
+- **Story Bank→Article自動生成パイプライン自体が未実装**：Food Restriction Supportテンプレートはレジストリには存在するが、ディスパッチ経路（Story BankのContent Categoryを見て記事生成する処理）が無いため到達しない
+- **Next Reviewの自動算出**：Update Frequency区分から次回レビュー日を計算するロジックは未実装（現状は手動設定）
 
 ---
 
-*ARu HQ / Decode Japan — Automation Scripts v2.6 — 2026-07-18*
+*ARu HQ / Decode Japan — Automation Scripts v2.8 — 2026-07-19*

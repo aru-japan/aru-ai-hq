@@ -43,6 +43,7 @@ import difflib
 PREMIUM_ENRICHMENT_PLACEHOLDER = "この記事にはまだ十分なプレミアム情報がありません。編集者による追加取材・加筆が必要です。"
 SOURCES_VERIFICATION_PLACEHOLDER = "出典は編集部による確認が必要です（自動生成時点で検証済みの一次情報源が見つかりませんでした）。"
 BEFORE_YOU_GO_UNCERTAIN_PLACEHOLDER = "現地公式サイト等での要確認事項です（自動生成時点で確認できませんでした）。"
+FOOD_SAFETY_UNCERTAIN_PLACEHOLDER = "この項目は店舗・製造元・公式情報源への個別確認が必須です（自動生成時点では安全性を断定できません）。"
 
 _STANDARD_INSTRUCTIONS = """記事は必ず以下のARu公式テンプレート（8セクション）の構成で書いてください。各セクションの見出しはそのまま太字（**見出し**）で示し、8つすべてを含めてください。
 
@@ -74,6 +75,78 @@ _EVENT_INSTRUCTIONS = """記事は必ず以下のARu Eventテンプレート（8
 Title・Related Articles・Last Updatedは本文（Body）には含めない——これらはNotionの既存プロパティ（記事タイトル・Knowledge Links・Last Verified Date）から自動的に扱われる。""".format(
     before_you_go_placeholder=BEFORE_YOU_GO_UNCERTAIN_PLACEHOLDER,
     premium_placeholder=PREMIUM_ENRICHMENT_PLACEHOLDER,
+    sources_placeholder=SOURCES_VERIFICATION_PLACEHOLDER,
+)
+
+_HEADLINE_INSTRUCTIONS = """記事は必ず以下のARu Headlineテンプレート（4セクション）の構成で書いてください。目を引く短い記事——Basic Articleより短く、フックで惹きつけて即座に核心の回答を返す。各セクションの見出しはそのまま太字（**見出し**）で示すこと。
+
+1. **Hook** — 1〜2文で読者の関心を掴む導入。問いかけ・意外性のある事実など
+2. **Basic Answer** — 3〜5行の直接回答
+3. **ARu Tip** — 実践的アドバイス。**このセクションは必須——省略しないこと**
+4. **Sources** — 公式・信頼できる情報源。**捏造しないこと**。なければ「{sources_placeholder}」とだけ書く
+
+Title・Related Articles・Last Updatedは本文（Body）には含めない。""".format(
+    sources_placeholder=SOURCES_VERIFICATION_PLACEHOLDER,
+)
+
+_DEEP_GUIDE_INSTRUCTIONS = """記事は必ず以下のARu Deep Guideテンプレート（10セクション）の構成で書いてください。Basic Articleより深く、手順・実例・よくある失敗まで踏み込んだPremium級の内容にする。各セクションの見出しはそのまま太字（**見出し**）で示すこと。
+
+1. **Basic Answer** — 短い直接回答
+2. **More Details** — 背景・具体例
+3. **Cultural Background** — 日本独自の文化的背景
+4. **Step-by-Step Guide** — 実際の手順を番号付きで具体的に。**このセクションは必須——省略しないこと**
+5. **ARu Tip** — 実践的アドバイス。**このセクションは必須——省略しないこと**
+6. **Common Mistakes** — 外国籍ユーザーが陥りやすい失敗・誤解
+7. **Things to Know** — 注意点、地域差
+8. **FAQ** — Q&A形式で3〜5件
+9. **Premium Section** — 該当する場合のみ、より詳しい実用情報。**確信を持てる情報がない場合は絶対に内容を創作しないこと**。その場合は「{premium_placeholder}」とだけ書く
+10. **Sources** — 公式・信頼できる情報源。**捏造しないこと**。なければ「{sources_placeholder}」とだけ書く
+
+Title・Related Articles・Last Updatedは本文（Body）には含めない。""".format(
+    premium_placeholder=PREMIUM_ENRICHMENT_PLACEHOLDER,
+    sources_placeholder=SOURCES_VERIFICATION_PLACEHOLDER,
+)
+
+_PREMIUM_INSTRUCTIONS = """記事は必ず以下のARu Premiumテンプレート（6セクション）の構成で書いてください。記事全体がPremium層のコンテンツである前提——内部に別途「おまけのPremium Section」は設けない。各セクションの見出しはそのまま太字（**見出し**）で示すこと。
+
+1. **Premium Overview** — このPremium記事が提供する価値の要約
+2. **Detailed Walkthrough** — 詳細な解説・手順
+3. **Insider Tips** — 一般には知られていない実用的な情報
+4. **Cultural Background** — 日本独自の文化的背景
+5. **ARu Tip** — 実践的アドバイス。**このセクションは必須——省略しないこと**
+6. **Sources** — 公式・信頼できる情報源。**捏造しないこと**。なければ「{sources_placeholder}」とだけ書く
+
+Title・Related Articles・Last Updatedは本文（Body）には含めない。""".format(
+    sources_placeholder=SOURCES_VERIFICATION_PLACEHOLDER,
+)
+
+_UPDATE_NOTICE_INSTRUCTIONS = """記事は必ず以下のARu Update Noticeテンプレート（6セクション）の構成で書いてください。この記事はArticlesの既存プロパティ Previous Information／Current Information／Change Reason（Law Updateまたは編集判断により設定済み）を根拠とすること——本文で新しい事実を創作しないこと。各セクションの見出しはそのまま太字（**見出し**）で示すこと。
+
+1. **What Changed** — Previous Information→Current Informationの差分を要約する。**このセクションは必須——省略しないこと**
+2. **Why It Changed** — Change Reasonプロパティにもとづく変更理由
+3. **What This Means For You** — 読者（在留外国人・留学生等）にとっての実際の影響
+4. **ARu Tip** — 実践的アドバイス。**このセクションは必須——省略しないこと**
+5. **Premium Section** — 該当する場合のみ、より詳しい実務対応。**確信を持てる情報がない場合は絶対に内容を創作しないこと**。その場合は「{premium_placeholder}」とだけ書く
+6. **Sources** — 公式・信頼できる情報源（Related Source Library等）。**捏造しないこと**。なければ「{sources_placeholder}」とだけ書く
+
+Title・Related Articles・Last Updatedは本文（Body）には含めない。""".format(
+    premium_placeholder=PREMIUM_ENRICHMENT_PLACEHOLDER,
+    sources_placeholder=SOURCES_VERIFICATION_PLACEHOLDER,
+)
+
+_FOOD_RESTRICTION_INSTRUCTIONS = """記事は必ず以下のARu Food Restriction Supportテンプレート（8セクション）の構成で書いてください。食事制限・アレルギー・宗教上の制約は誤りが読者の健康・信仰に直接影響する領域——確信を持てない安全性の判断は絶対に断定しないこと。各セクションの見出しはそのまま太字（**見出し**）で示すこと。
+
+1. **対象となる食事制限** — Vegetarian/Vegan/Halal/No Pork/Food Allergy/Religious Dietary Needs等、対象を明記する。**このセクションは必須——省略しないこと**
+2. **日本で注意する食材** — 日本の食文化で見落とされがちな該当食材
+3. **見落としやすい原材料** — だし（動物性）、みりん・料理酒（アルコール）等、気づきにくい原材料
+4. **店舗で確認する質問** — 店舗・製造元に確認すべき具体的な質問リスト
+5. **日本語での伝え方** — 実際に使える日本語フレーズ（例文）
+6. **表示の見方** — 日本の食品表示・メニュー表示の読み方
+7. **緊急時の対応** — 誤って摂取した場合の対応。**このセクションは必須——省略しないこと**
+8. **公式または信頼できる情報源** — 政府・団体・公式認証機関等。**出典を捏造しないこと**。確信が持てない安全性の判断は、断定せず「{food_safety_placeholder}」と書くこと。なければ「{sources_placeholder}」とだけ書く
+
+最終確認日は本文（Body）には含めない——既存プロパティ（Last Verified Date）から扱う。Title・Related Articlesも同様に本文には含めない。""".format(
+    food_safety_placeholder=FOOD_SAFETY_UNCERTAIN_PLACEHOLDER,
     sources_placeholder=SOURCES_VERIFICATION_PLACEHOLDER,
 )
 
@@ -128,7 +201,100 @@ TEMPLATES = {
         "mandatory_sections": ["Before You Go", "ARu Tip"],
         "instructions": _EVENT_INSTRUCTIONS,
     },
+    # ARu Studio v4.1 -- dispatched by Articles.Content Type rather than Category
+    # (see template_for_content() below). Basic Article (Content Type's default)
+    # deliberately has no entry here -- it maps straight back to "standard",
+    # unchanged, exactly as every pre-v4.1 article already behaves.
+    "headline": {
+        "section_order": ["Hook", "Basic Answer", "ARu Tip", "Sources"],
+        "primary_sections": ["Hook", "Basic Answer", "ARu Tip"],
+        "secondary_sections": [],
+        "premium_section": None,
+        "sources_section": "Sources",
+        "mandatory_sections": ["ARu Tip"],
+        "instructions": _HEADLINE_INSTRUCTIONS,
+    },
+    "deep_guide": {
+        "section_order": ["Basic Answer", "More Details", "Cultural Background", "Step-by-Step Guide",
+                           "ARu Tip", "Common Mistakes", "Things to Know", "FAQ", "Premium Section", "Sources"],
+        "primary_sections": ["Basic Answer", "More Details", "Cultural Background", "Step-by-Step Guide",
+                              "ARu Tip", "Common Mistakes", "Things to Know"],
+        "secondary_sections": ["FAQ"],
+        "premium_section": "Premium Section",
+        "sources_section": "Sources",
+        "mandatory_sections": ["ARu Tip", "Step-by-Step Guide"],
+        "instructions": _DEEP_GUIDE_INSTRUCTIONS,
+    },
+    "premium": {
+        "section_order": ["Premium Overview", "Detailed Walkthrough", "Insider Tips", "Cultural Background",
+                           "ARu Tip", "Sources"],
+        "primary_sections": ["Premium Overview", "Detailed Walkthrough", "Insider Tips",
+                              "Cultural Background", "ARu Tip"],
+        "secondary_sections": [],
+        # The whole article is already the Premium tier -- no separate inner
+        # Premium Section on top of that.
+        "premium_section": None,
+        "sources_section": "Sources",
+        "mandatory_sections": ["ARu Tip"],
+        "instructions": _PREMIUM_INSTRUCTIONS,
+    },
+    "update_notice": {
+        "section_order": ["What Changed", "Why It Changed", "What This Means For You", "ARu Tip",
+                           "Premium Section", "Sources"],
+        "primary_sections": ["What Changed", "Why It Changed", "What This Means For You", "ARu Tip"],
+        "secondary_sections": [],
+        "premium_section": "Premium Section",
+        "sources_section": "Sources",
+        "mandatory_sections": ["What Changed", "ARu Tip"],
+        "instructions": _UPDATE_NOTICE_INSTRUCTIONS,
+    },
+    # Dispatched by Story Bank's Content Category = "食事制限" (see
+    # template_for_content()), not by Content Type -- a topical template, not
+    # a depth-tier one. Safety-critical content: two mandatory sections
+    # instead of the usual one, and its own dedicated anti-fabrication
+    # placeholder (FOOD_SAFETY_UNCERTAIN_PLACEHOLDER) since a wrong claim
+    # here (e.g. "this is pork-free") can cause real harm, not just a stale
+    # fact.
+    "food_restriction": {
+        "section_order": ["対象となる食事制限", "日本で注意する食材", "見落としやすい原材料",
+                           "店舗で確認する質問", "日本語での伝え方", "表示の見方",
+                           "緊急時の対応", "公式または信頼できる情報源"],
+        "primary_sections": ["対象となる食事制限", "日本で注意する食材", "見落としやすい原材料",
+                              "店舗で確認する質問", "日本語での伝え方", "表示の見方", "緊急時の対応"],
+        "secondary_sections": [],
+        "premium_section": None,
+        "sources_section": "公式または信頼できる情報源",
+        "mandatory_sections": ["対象となる食事制限", "緊急時の対応"],
+        "instructions": _FOOD_RESTRICTION_INSTRUCTIONS,
+    },
 }
+
+# QA Card Template: guidance for curating Story Bank's QA Question / Short
+# Answer fields (plain properties, not a Body blob -- there is no
+# parse_body_sections()/render step for these). Deliberately NOT wired into
+# any auto-generation script: per the 2026-07-18 Story Bank content-ownership
+# rule, ChatGPT curates Story Bank content and Claude Code only imports/
+# implements -- this constant exists so a human editor (or ChatGPT, working
+# from this same spec) has a single documented rubric, not so Claude Code can
+# auto-fill QA Question/Short Answer itself.
+QA_CARD_INSTRUCTIONS = """Story BankのQA Question／Short Answerを作成する際のガイドライン（AIによる自動生成には使用しない——ChatGPT側での企画・選定、または人間編集者による作成を想定）。
+
+QA Question: ユーザーが実際に検索・質問しそうな形の一文（「〜できますか？」「〜はどうすればいい？」等の自然な疑問文）。ProblemフィールドとSearch Intentフィールドの内容と整合していること。
+
+Short Answer: 3行以内の直接回答。Article Needed／Deep Article Neededの判断材料になる——この短答だけで実用上足りる場合はArticle Neededをオフのままにしてよい。"""
+
+# Existing Article Revision Template: an editorial checklist for revising an
+# already-published Article (as opposed to Law/Policy Update Template below,
+# which is the public-facing article a reader sees). Process guidance, not
+# an AI-generation instructions string.
+EXISTING_ARTICLE_REVISION_CHECKLIST = """既存記事を改訂する際の編集チェックリスト。
+
+1. Previous Informationへ、変更前の該当箇所をそのまま保存する（要約せず原文に近い形で）
+2. Current Informationへ、変更後の内容を記載する
+3. Change Reasonへ、変更理由を記載する（Law Updateが起点の場合はそのLaw Updateへのリンクも残す）
+4. 本文（Body）を実際に書き換える
+5. Current Validityを Review Due/Outdated から Current へ戻す（Law Update Pipelineのstep Hがこれを検知してVersion・Last Verified Dateを自動更新する）
+6. Translation側にNeeds Re-Translation=trueが立っていないか確認する（Law Update Pipelineのstep Gが該当記事のTranslationに自動で立てる）"""
 
 
 def get_template(name="standard"):
@@ -146,6 +312,31 @@ def template_for_category(category):
     if category == "イベント":
         return "event"
     return "standard"
+
+
+def template_for_content(category, content_type=None, content_category=None):
+    """ARu Studio v4.1: richer dispatch than template_for_category() alone,
+    layering Content Type (Headline/Basic Article/Deep Guide/Premium/Update
+    Notice) and Story Bank's Content Category ("食事制限") on top of it.
+
+    Precedence: Content Category="食事制限" (a topical template) wins over
+    Content Type (a depth-tier template) -- same relationship "event" already
+    has over "standard" via template_for_category(). If neither applies,
+    falls back to template_for_category(category) unchanged, so every
+    existing article (Content Type unset, i.e. pre-v4.1) resolves exactly as
+    before this function was added.
+    """
+    if content_category == "食事制限":
+        return "food_restriction"
+    if content_type == "Headline":
+        return "headline"
+    if content_type == "Deep Guide":
+        return "deep_guide"
+    if content_type == "Premium":
+        return "premium"
+    if content_type == "Update Notice":
+        return "update_notice"
+    return template_for_category(category)
 
 
 # Backward-compatible module-level exports. Every existing consumer imports

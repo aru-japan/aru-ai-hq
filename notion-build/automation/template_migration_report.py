@@ -31,7 +31,7 @@ sys.path.insert(0, os.path.join(REPO_ROOT, "scripts"))
 sys.path.insert(0, AUTOMATION_DIR)
 
 from notion_api import load_env, notion_request, query_database, get_prop, set_env_value  # noqa: E402
-from article_template import get_template, template_for_category, parse_body_sections, validate_sections  # noqa: E402
+from article_template import get_template, template_for_content, parse_body_sections, validate_sections  # noqa: E402
 
 ENV_PATH = os.path.join(NOTION_BUILD_DIR, ".env")
 
@@ -63,7 +63,8 @@ def scan_articles(token, articles_db_id):
         title = get_prop(page, "Title", "title")
         body = get_prop(page, "Body", "rich_text")
         category = get_prop(page, "Category", "select")
-        template = template_for_category(category)
+        content_type = get_prop(page, "Content Type", "select")
+        template = template_for_content(category, content_type)
         section_order = get_template(template)["section_order"]
         sections = parse_body_sections(body, template=template)
         missing, mandatory_missing = validate_sections(sections, template=template)

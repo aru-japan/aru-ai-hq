@@ -133,6 +133,12 @@ def gather_recently_updated_articles(env, limit=RECENTLY_UPDATED_LIMIT):
 # --- Phase 1/2: monitoring detail (unchanged) ---
 
 def gather_freshness_breakdown(env):
+    """ARu Studio v4.1: also reports Current Validity (Review Due/Outdated/
+    Under Review), the narrower "is the underlying fact still correct" signal
+    the Law Update Pipeline drives -- extends this existing section rather
+    than adding a second parallel "articles needing update" heading. Current
+    Validity and Freshness Status are independent axes (one time-based, one
+    law-change-based) and are reported side by side, not merged."""
     token = env["NOTION_TOKEN"]
     pages = query_database(token, env["ARTICLES_DB_ID"], filter_obj={
         "property": "Freshness Status", "select": {"equals": "Needs Update"}
@@ -145,7 +151,82 @@ def gather_freshness_breakdown(env):
             signal_flagged += 1
         else:
             time_based_flagged += 1
-    return {"total": len(pages), "signal_flagged": signal_flagged, "time_based_flagged": time_based_flagged}
+
+    validity_pages = query_database(token, env["ARTICLES_DB_ID"], filter_obj={
+        "and": [
+            {"property": "Current Validity", "select": {"is_not_empty": True}},
+            {"property": "Current Validity", "select": {"does_not_equal": "Current"}},
+        ]
+    })
+    validity_counts = {}
+    for page in validity_pages:
+        v = get_prop(page, "Current Validity", "select")
+        validity_counts[v] = validity_counts.get(v, 0) + 1
+
+    return {
+        "total": len(pages), "signal_flagged": signal_flagged, "time_based_flagged": time_based_flagged,
+        "validity_total": len(validity_pages), "validity_counts": validity_counts,
+    }
+
+
+def gather_content_pipeline_today(env, today):
+    """ARu Studio v4.1: today's QA/article creation activity (Story Bank ->
+    QA card -> Article) plus the Deep Guide backlog. created_time comes
+    straight from the Notion page object, not a property -- no new schema."""
+    token = env["NOTION_TOKEN"]
+    today_str = today.isoformat()
+
+    story_bank = query_database(token, env["STORY_BANK_DB_ID"])
+    new_qa_today = [p for p in story_bank
+                    if p.get("created_time", "").startswith(today_str) and get_prop(p, "QA Question", "rich_text")]
+
+    articles = query_database(token, env["ARTICLES_DB_ID"])
+    new_articles_today = [p for p in articles if p.get("created_time", "").startswith(today_str)]
+
+    deep_guide_candidates = [p for p in story_bank
+                             if get_prop(p, "Deep Article Needed", "checkbox")
+                             and not p["properties"].get("Generated Article", {}).get("relation")]
+
+    return {
+        "new_qa_today": [get_prop(p, "Title", "title") for p in new_qa_today],
+        "new_articles_today": [get_prop(p, "Title", "title") for p in new_articles_today],
+        "deep_guide_candidates": [get_prop(p, "Title", "title") for p in deep_guide_candidates],
+    }
+
+
+def gather_law_update_queue(env):
+    """ARu Studio v4.1: status breakdown of the Law Update Pipeline queue
+    (law_update_pipeline.py) -- Monitoring (unconfirmed candidates awaiting a
+    human decision) and Approval Required (edits awaiting human sign-off) are
+    surfaced by name since those are exactly the two points a human needs to
+    act at."""
+    token = env["NOTION_TOKEN"]
+    law_updates = query_database(token, env["LAW_UPDATE_DB_ID"])
+    counts = {}
+    for p in law_updates:
+        status = get_prop(p, "Update Status", "select") or "(未設定)"
+        counts[status] = counts.get(status, 0) + 1
+    monitoring = [get_prop(p, "Law Name", "title") for p in law_updates
+                  if get_prop(p, "Update Status", "select") == "Monitoring"]
+    approval_required = [get_prop(p, "Law Name", "title") for p in law_updates
+                         if get_prop(p, "Update Status", "select") == "Approval Required"]
+    return {"counts": counts, "monitoring": monitoring, "approval_required": approval_required}
+
+
+def gather_translation_queue(env):
+    token = env["NOTION_TOKEN"]
+    pages = query_database(token, env["TRANSLATION_DB_ID"], filter_obj={
+        "property": "Needs Re-Translation", "checkbox": {"equals": True}
+    })
+    return {"total": len(pages), "top": [get_prop(p, "Translation Name", "title") for p in pages[:5]]}
+
+
+def gather_sns_queue_pending(env):
+    token = env["NOTION_TOKEN"]
+    pages = query_database(token, env["SNS_QUEUE_DB_ID"], filter_obj={
+        "property": "Status", "select": {"equals": "Draft"}
+    })
+    return {"total": len(pages)}
 
 
 def gather_monitor_stats(env):
@@ -242,7 +323,8 @@ def rt(text, link=None):
 
 
 def build_page_blocks(opportunities, critical, top_research, publishing_queue, recently_updated,
-                       freshness, monitor_stats, pointers, dup_today, source_intel, dashboard_url):
+                       freshness, monitor_stats, pointers, dup_today, source_intel, dashboard_url,
+                       content_pipeline, law_update_queue, translation_queue, sns_pending):
     now = datetime.datetime.now().strftime("%Y-%m-%d %H:%M")
 
     blocks = [
@@ -312,6 +394,54 @@ def build_page_blocks(opportunities, critical, top_research, publishing_queue, r
         blocks.append({"bulleted_list_item": {"rich_text": rt(f"{a['title']}（{a['updated'] or '不明'}）")}})
     blocks.append({"divider": {}})
 
+    # 6. Today's QA / Article production + Deep Guide backlog (ARu Studio v4.1)
+    blocks.append({"heading_2": {"rich_text": rt("🆕 今日追加するQA・今日の記事・Deep Guide候補")}})
+    blocks.append({"bulleted_list_item": {"rich_text": rt(f"本日追加されたStory Bank QA: {len(content_pipeline['new_qa_today'])}件")}})
+    for t in content_pipeline["new_qa_today"][:5]:
+        blocks.append({"bulleted_list_item": {"rich_text": rt(f"　- {t}")}})
+    blocks.append({"bulleted_list_item": {"rich_text": rt(f"本日作成された記事: {len(content_pipeline['new_articles_today'])}件")}})
+    for t in content_pipeline["new_articles_today"][:5]:
+        blocks.append({"bulleted_list_item": {"rich_text": rt(f"　- {t}")}})
+    blocks.append({"bulleted_list_item": {"rich_text": rt(f"Deep Guide候補（Deep Article Needed、未着手）: {len(content_pipeline['deep_guide_candidates'])}件")}})
+    for t in content_pipeline["deep_guide_candidates"][:5]:
+        blocks.append({"bulleted_list_item": {"rich_text": rt(f"　- {t}")}})
+    blocks.append({"divider": {}})
+
+    # 7. Law Update Queue (ARu Studio v4.1 -- covers both "情報更新アラート" and "法改正・制度変更")
+    blocks.append({"heading_2": {"rich_text": rt("⚖️ 法改正・制度変更キュー（Law Update Pipeline）")}})
+    if law_update_queue["counts"]:
+        breakdown = "、".join(f"{k}: {v}件" for k, v in law_update_queue["counts"].items())
+        blocks.append({"bulleted_list_item": {"rich_text": rt(f"内訳: {breakdown}")}})
+    else:
+        blocks.append({"paragraph": {"rich_text": rt("Law Updateレコードはまだありません。")}})
+    if law_update_queue["monitoring"]:
+        blocks.append({"bulleted_list_item": {"rich_text": rt(
+            f"⚠️ 人間の確認待ち（Monitoring）: {'、'.join(law_update_queue['monitoring'][:5])}"
+        )}})
+    if law_update_queue["approval_required"]:
+        blocks.append({"bulleted_list_item": {"rich_text": rt(
+            f"⚠️ 承認待ち（Approval Required）: {'、'.join(law_update_queue['approval_required'][:5])}"
+        )}})
+    blocks.append({"divider": {}})
+
+    # 8. Translation queue (ARu Studio v4.1)
+    blocks.append({"heading_2": {"rich_text": rt("🈂️ 翻訳更新待ち")}})
+    blocks.append({"callout": {
+        "rich_text": rt(f"Needs Re-Translation: {translation_queue['total']}件"),
+        "icon": {"type": "emoji", "emoji": "🈂️" if translation_queue["total"] else "✅"},
+    }})
+    for t in translation_queue["top"]:
+        blocks.append({"bulleted_list_item": {"rich_text": rt(t)}})
+    blocks.append({"divider": {}})
+
+    # 9. SNS Queue pending (ARu Studio v4.1)
+    blocks.append({"heading_2": {"rich_text": rt("📱 SNS公開待ち")}})
+    blocks.append({"callout": {
+        "rich_text": rt(f"Status=Draft: {sns_pending['total']}件"),
+        "icon": {"type": "emoji", "emoji": "📱" if sns_pending["total"] else "✅"},
+    }})
+    blocks.append({"divider": {}})
+
     blocks.append({"paragraph": {"rich_text": rt(
         "ここから下は、上記サマリーの根拠となる詳細（Freshness内訳・重複防止・外部監視・Source Intelligence）です。"
     )}})
@@ -329,6 +459,11 @@ def build_page_blocks(opportunities, critical, top_research, publishing_queue, r
     blocks.append({"bulleted_list_item": {"rich_text": rt(
         f"時間経過による定期レビュー期限超過: {freshness['time_based_flagged']}件"
     )}})
+    if freshness["validity_total"]:
+        validity_breakdown = "、".join(f"{k}: {v}件" for k, v in freshness["validity_counts"].items())
+        blocks.append({"bulleted_list_item": {"rich_text": rt(
+            f"法改正等により事実確認が必要（Current Validity）: {freshness['validity_total']}件（{validity_breakdown}）"
+        )}})
     if dashboard_url:
         blocks.append({"paragraph": {"rich_text": rt("→ Dashboardの「🔴 Update Needed」で見る", link=dashboard_url)}})
     blocks.append({"divider": {}})
@@ -404,7 +539,8 @@ def write_page(env, blocks):
 
 
 def print_report(opportunities, critical, top_research, publishing_queue, recently_updated,
-                  freshness, monitor_stats, pointers, dup_today, source_intel):
+                  freshness, monitor_stats, pointers, dup_today, source_intel,
+                  content_pipeline, law_update_queue, translation_queue, sns_pending):
     print("\n" + "=" * 70)
     print("🤖 AI Command Center — 編集長の毎日のホーム画面")
     print("=" * 70)
@@ -430,6 +566,11 @@ def print_report(opportunities, critical, top_research, publishing_queue, recent
     print(f"Source Intelligence: 監視対象={source_intel['total_sources']}（Active={source_intel['active_sources']}） "
           f"本日の変化={source_intel['todays_changes']}（Critical={source_intel['critical_today']}） "
           f"エラー中={len(source_intel['errored_sources'])} Research候補={source_intel['research_candidates']}")
+    print(f"🆕 今日のQA/記事: QA={len(content_pipeline['new_qa_today'])} 記事={len(content_pipeline['new_articles_today'])} "
+          f"Deep Guide候補={len(content_pipeline['deep_guide_candidates'])}")
+    print(f"⚖️ Law Update Queue: {law_update_queue['counts']}")
+    print(f"🈂️ 翻訳更新待ち: {translation_queue['total']}件")
+    print(f"📱 SNS公開待ち: {sns_pending['total']}件")
     print()
 
 
@@ -467,14 +608,28 @@ def main():
     log("Gathering Source Intelligence stats...")
     source_intel = gather_source_intelligence(env)
 
+    log("Gathering today's QA/Article production and Deep Guide backlog...")
+    content_pipeline = gather_content_pipeline_today(env, today)
+
+    log("Gathering Law Update Pipeline queue...")
+    law_update_queue = gather_law_update_queue(env)
+
+    log("Gathering Translation queue...")
+    translation_queue = gather_translation_queue(env)
+
+    log("Gathering SNS Queue pending...")
+    sns_pending = gather_sns_queue_pending(env)
+
     print_report(opportunities, critical, top_research, publishing_queue, recently_updated,
-                 freshness, monitor_stats, pointers, dup_today, source_intel)
+                 freshness, monitor_stats, pointers, dup_today, source_intel,
+                 content_pipeline, law_update_queue, translation_queue, sns_pending)
 
     log("Resolving Dashboard page URL...")
     dashboard_url = get_dashboard_url(env)
 
     blocks = build_page_blocks(opportunities, critical, top_research, publishing_queue, recently_updated,
-                                freshness, monitor_stats, pointers, dup_today, source_intel, dashboard_url)
+                                freshness, monitor_stats, pointers, dup_today, source_intel, dashboard_url,
+                                content_pipeline, law_update_queue, translation_queue, sns_pending)
     log("Writing AI Command Center Notion page...")
     page_id = write_page(env, blocks)
     log(f"DONE. AI Command Center page: {page_id}")

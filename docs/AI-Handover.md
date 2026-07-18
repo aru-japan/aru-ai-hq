@@ -66,6 +66,8 @@ Research → Article → Article Review → Translation → Translation Review �
 | SNS Queue | Instagram/Threads/X/Facebook/LinkedIn/TikTok投稿管理 |
 | **Story Bank**（2026-07-18新設） | 編集アイデアの起点となるDB。Story Bank→QA Card→Article→Deep Guide→Instagram→Threadsというパイプラインの最上流。詳細は本文書■ Current Automationおよび[Automation Scripts](./Automation-Scripts.md)参照 |
 
+**ARu Studio v4.1（2026-07-19）でプロパティ数が変わったDB**：Story Bank（15→28）、Articles（66→74）、Source Monitor（18→25）、Law Update（31→41）。すべて既存プロパティ・既存リレーションの再利用を優先し、新規追加は最小限——詳細な再利用表は[Automation Scripts](./Automation-Scripts.md)「ARu Studio v4.1 Editorial Intelligence」節参照。
+
 **まだ存在しないDB（Deferred、削除ではなく保留）**：Language Master、Region Master、Mentor、AI Agents、Prompt Library、Automation。これらは実運用で必要性が確認できてから個別に追加する方針（`docs/Roadmap.md`参照）。**新しいAIがこれらを勝手に作らないこと。**
 
 ## ■ Current Automation（Phase B3.6〜B3.10、コードで実装済み）
@@ -97,6 +99,7 @@ Research → Article → Article Review → Translation → Translation Review �
 - **Story Bank Database v1.0（2026-07-18、新規DB）** `notion-build/create_story_bank.py`：Story Bank→QA Card→Article→Deep Guide→Instagram→Threadsというパイプラインの最上流となる新規データベース。プロパティ：Title／Category（Research既存の7分類を再利用）／Subcategory（現状「花火大会」のみ、今後有機的に追加）／Season／Region（Source Libraryと同じ地方区分）／Priority（S/A/B/C、オプション定義順をC→Sの低→高にして降順ソートでSが先頭に来るようにした——2026-07-16のPriority/Urgency降順バグと同じ教訓を先取り適用）／Target User／Evergreen／Premium Candidate／Event Month／Source Status／Story Status。リレーションは実在するDBのみに設定（`Generated Article`→Articles、`Related SNS Posts`→SNS Queue、いずれも双方向relationとして実データで確認済み）。QA Card・Deep Guideへのリレーションは、両者ともまだ保存モデルが未決定のため意図的に追加していない。View（Story Backlog／High Priority／Summer／Autumn／Evergreen／Premium Candidates／Ready for Production）はNotion公開APIの制約により作成できず、[Story-Bank-View-Setup-Guide.md](./Story-Bank-View-Setup-Guide.md)として手動設定手順を文書化した。**[Knowledge-Lifecycle-Architecture-v1.0.md](./Knowledge-Lifecycle-Architecture-v1.0.md)のOpen Question #3（Story BankをExperience Intelligence拡張ではなく独立DBとして実装するか）は、本実装によって「独立DB」で確定した。**
 - **Story Bank Batch #001インポート（2026-07-18）** `notion-build/automation/bulk_import_story_bank.py`（新規）：ChatGPT側が選定した「National Fireworks Top 50」の最初の20件をCSV（`notion-build/automation/data/story_bank_batch_001.csv`）からインポート。**Claude Codeはコンテンツを推測・生成・補完しない**——ChatGPTが企画・選定し、Claude Codeはインポート・実装のみを担当するという役割分担（2026-07-18確定）にもとづく。CSVの英語ラベル（Category="Event"、Region="Tokyo"等）は、既存の日本語Select語彙（イベント、関東等）へ正規化してから書き込む設計とし、新しい英語オプションを並存させない。インポート前に既存タイトルとの重複確認を実施（実データ0件重複）。実行結果：**20件中20件インポート、重複0件**。2件の判断が必要な警告を検出：①「関門海峡花火大会」のRegionが元データで`Fukuoka/Yamaguchi`（2地方にまたがる）だったため、Region単一選択の制約上`九州・沖縄`へ判断で割り当て、②「熱海海上花火大会」のEvent Monthが元データで`Multiple`（具体的な月の指定なし）だったため、推測せずEvent Month未設定のままにした
 - **Story Bankバッチ運用ルールの正式化（2026-07-18）** Batch #001実施時に生じた2件の警告（Region複数県またがり／Event Month=Multiple）を、恒久的なスキーマ・運用ルールへ格上げ。`notion-build/add_story_bank_notes_and_region_rules.py`（新規、一回限りのスキーマ移行スクリプト）でStory Bankに3つの変更を適用済み：①`Region`→`Primary Region`へリネーム、②新規`Notes`（rich_text）追加、③Event Monthの選択肢に`Multiple`を追加（実データで反映確認済み、13オプション：1月〜12月＋Multiple）。`bulk_import_story_bank.py`を全面改修——Regionが複数県にまたがる場合は先頭県を`Primary Region`に設定しNotesへ残り（例：関門海峡花火大会なら`Fukuoka`→`九州・沖縄`をPrimary Region、`Also spans: Yamaguchi`をNotesへ）、Event Month=`Multiple`は未設定にせず選択肢`Multiple`をそのまま設定するよう変更（今後は空欄放置なし）。CSV運用ルールも正式化：保存場所は`notion-build/automation/data/`、命名は`StoryBank_Batch###_Category.csv`、インポート成功後は`notion-build/automation/data/imported/`へ移動（削除せず履歴として保管）——`story_bank_batch_001.csv`も本ルールに合わせ`imported/`へ移動済み。毎回のインポート報告は**重複チェック／インポート件数／Story Bank総件数／エラー／保留事項**の5項目のみに固定。ChatGPTからCSVを受け取り次第、Claude Codeが確認なしで自動インポートする運用に移行（Rei承認済み）
+- **ARu Studio v4.1 Editorial Intelligence（2026-07-19）** Story Bankを「QAカードの起点」として運用、Law Updateを更新キューとして運用、Source MonitorからLaw Update・影響記事の抽出までを既存資産の再利用で実現。Rei方針「重複プロパティは作らず既存拡張を優先」にもとづき、実装前にAPIで4DBの実スキーマを取得し、要求項目の多くを既存プロパティ・既存リレーションで代替（例：Target Persona→既存13値Audience taxonomy再利用、Update Status→既存Statusへの選択肢追加）。段階的実装（Schema→Relations→Automation→Templates→Dashboard→Docs）、各段階で実データ検証済み。新規：Story Bank(15→28)/Articles(66→74)/Source Monitor(18→25)/Law Update(31→41)のプロパティ追加、7本の新規リレーション（重複0件確認済み）、`notion-build/automation/law_update_pipeline.py`（Human-in-the-loop、AIはPublishedを一切設定しない）、`article_template.py`へ5テンプレート追加（headline/deep_guide/premium/update_notice/food_restriction）＋QA Card/Existing Article Revisionガイド、`ai_command_center.py`へ5新規セクション。詳細・既知のギャップ（Previous Rule自動保存なし、SNS Queue連携未実装、Content Type起点の新規生成CLI未対応等）は`docs/Automation-Scripts.md`「ARu Studio v4.1 Editorial Intelligence」節、View設定は[Studio-v4.1-View-Setup-Guide.md](./Studio-v4.1-View-Setup-Guide.md)参照
 
 詳細と実行方法は`docs/Automation-Scripts.md`。
 
@@ -154,6 +157,7 @@ Research → Article → Article Review → Translation → Translation Review �
 - **Version4 Completion Report作成（`c4b473d`、2026-07-18）**：Version4準備作業・Architecture Phase・G3-A／G3-Bを対象とした公式クロージングレポート[Version4-Completion-Report.md](./Version4-Completion-Report.md)を作成。`Roadmap.md`の「Version 4 — Enterprise」（対外的な事業判断を要する本体、引き続き0/5）とは異なるスコープであることを明記済み
 - **Story Bank Database v1.0（2026-07-18、新規DB）**：Rei明示的承認によりNo New Database原則の例外として実装。詳細は本文書■ Current Automation・[Story-Bank-View-Setup-Guide.md](./Story-Bank-View-Setup-Guide.md)を参照
 - **Story Bank Batch #001（2026-07-18）**：ChatGPT選定の花火大会20件を`bulk_import_story_bank.py`でインポート（20/20成功、重複0件）。詳細は本文書■ Current Automation参照
+- **ARu Studio v4.1 Editorial Intelligence（2026-07-19）**：Story Bank(15→28)/Articles(66→74)/Source Monitor(18→25)/Law Update(31→41)へのプロパティ追加、7本の新規リレーション、Law Update Pipeline（Human-in-the-loop）、5テンプレート追加、Dashboard5セクション追加。詳細は本文書■ Current Automation・[Automation Scripts](./Automation-Scripts.md)・[Studio-v4.1-View-Setup-Guide.md](./Studio-v4.1-View-Setup-Guide.md)参照
 
 ## ■ Remaining Tasks
 
@@ -170,6 +174,10 @@ Research → Article → Article Review → Translation → Translation Review �
 - Deferred中の6DB（Language Master等）
 - Audit Logの永続化（現状はGitコミット履歴とターミナル出力のみ）
 - AI Gatewayのopenaiプロバイダ経路は未検証（Claudeのみ実績あり）
+- **Law Update PipelineのD（変更前後の全文保存）が未実装**：`source_watcher.py`はSimHash指紋のみ保存し生の全文を残さないため、`Previous Rule`は自動では埋まらない（`New Rule`はDiff/Change Summaryから自動転記される）
+- **Law Update PipelineのG（SNS Queue連携）が未実装**：SNS Queueに「要更新」を表すプロパティが無い（今回のリクエストのプロパティ一覧に含まれていなかったため追加していない）。Translationの`Needs Re-Translation`フラグ立ては実装済み
+- **Content Type起点の新規記事生成がまだできない**：`generate_article_pipeline.py`のCLIは`--content-type`引数を持たない。Headline/Deep Guide/Premium/Update Noticeテンプレートは、記事作成後にContent Typeを人間が設定すれば以降のreviewer/render/migration reportで正しく解決される
+- **Food Restriction Supportテンプレートは未到達**：Story Bank→Article自動生成パイプライン自体がまだ存在しない（本セッションのスコープ外）。テンプレート自体はレジストリに登録済みで、そのパイプラインができた時にそのまま使える
 - **Story Bank Batch #001は「National Fireworks Top 50」の一部（20件）のみ**：全50件のうち残り30件は未投入。ChatGPT側からBatch #002以降が`notion-build/automation/data/StoryBank_Batch###_Category.csv`として提供され次第、`bulk_import_story_bank.py`で確認なしに自動インポートする運用（2026-07-18確定）
 - **Story Bank 20件はSource Status=Unverified・Story Status=Newのまま**：Rei／ChatGPT側での事実確認・優先順位レビュー待ち。QA Card・Articleの生成はまだ行っていない（指示どおり）
 - **Knowledge-Lifecycle-Architecture-v1.0.md Open Question #3の文書側反映が未了**：「Story Bankは独立DB」で運用上は確定済み（AI-Handover.md記載済み）だが、Architecture文書自体への反映はRei指示により次回のArchitectureメンテナンスセッションへ意図的に持ち越し中

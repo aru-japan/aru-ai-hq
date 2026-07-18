@@ -56,7 +56,7 @@ sys.path.insert(0, AUTOMATION_DIR)
 
 from notion_api import load_env, notion_request, query_database, get_prop  # noqa: E402
 from article_template import (  # noqa: E402
-    get_template, template_for_category, parse_body_sections,
+    get_template, template_for_content, parse_body_sections,
 )
 
 ENV_PATH = os.path.join(NOTION_BUILD_DIR, ".env")
@@ -204,7 +204,8 @@ def render_article(env, article_id, title=None, body=None):
         body = get_prop(page, "Body", "rich_text")
 
     category = get_prop(page, "Category", "select")
-    template = template_for_category(category)
+    content_type = get_prop(page, "Content Type", "select")
+    template = template_for_content(category, content_type)
 
     knowledge_links = get_prop(page, "Knowledge Links", "relation") or []
     last_updated = get_prop(page, "Last Verified Date", "date") or get_prop(page, "Updated Date", "date")
@@ -242,7 +243,8 @@ def run_backfill(env, limit=None, dry_run=False):
         title = get_prop(page, "Title", "title")
         body = get_prop(page, "Body", "rich_text")
         category = get_prop(page, "Category", "select")
-        template = template_for_category(category)
+        content_type = get_prop(page, "Content Type", "select")
+        template = template_for_content(category, content_type)
         section_order = get_template(template)["section_order"]
         try:
             sections = parse_body_sections(body, template=template)

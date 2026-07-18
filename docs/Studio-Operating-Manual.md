@@ -378,6 +378,8 @@ Archive
 
 ### ④ QA Card 🧭（概念段階）
 
+> **命名の注意（2026-07-19追記）**：ARu Studio v4.1で実装した「Story BankのQA Question/Short Answer」（[Automation Scripts](./Automation-Scripts.md)「ARu Studio v4.1」節参照）は、Content Ladder（QA Card→Article→Deep Guide→Mentor Chat→Mentor Session）における**コンテンツ単位としてのQA Card**——読者に見せる短答コンテンツそのもの。一方、以下で説明する「QA Card」は**執筆前の内部チェックポイント**という別概念であり、同名だが別物。混同しないこと。前者はStory Bankスキーマとして実装済み（🔶）、後者は引き続き🧭（概念段階）のまま。
+
 - **Purpose**：本文を書き始める前に、情報源・想定読者・法的リスクの有無を短くチェックする「執筆前の最終チェックポイント」として位置づける
 - **Input**：Category Classification済みのResearch Candidate
 - **Output**：（目標）執筆着手の可否判定、注意事項のメモ

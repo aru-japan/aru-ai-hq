@@ -32,7 +32,7 @@ sys.path.insert(0, AUTOMATION_DIR)
 
 from notion_api import load_env, notion_request, query_database, get_prop  # noqa: E402
 import ai_gateway  # noqa: E402
-from article_template import get_template, template_for_category, parse_body_sections, validate_sections  # noqa: E402
+from article_template import get_template, template_for_content, parse_body_sections, validate_sections  # noqa: E402
 
 ENV_PATH = os.path.join(NOTION_BUILD_DIR, ".env")
 
@@ -47,8 +47,8 @@ def build_template_compliance_note(body, template="standard"):
     so this can never report a false pass on a section that isn't really
     there. `template` selects which registered template's section list this
     Article should be checked against (resolved by the caller from Category
-    via article_template.template_for_category(), same as every other
-    consumer)."""
+    and Content Type via article_template.template_for_content(), same as
+    every other consumer)."""
     section_order = get_template(template)["section_order"]
     sections = parse_body_sections(body, template=template)
     missing, mandatory_missing = validate_sections(sections, template=template)
@@ -118,7 +118,8 @@ def review_article(article):
     body = get_prop(article, "Body", "rich_text")
     update_level = get_prop(article, "Update Level", "number") or 1
     category = get_prop(article, "Category", "select")
-    template = template_for_category(category)
+    content_type = get_prop(article, "Content Type", "select")
+    template = template_for_content(category, content_type)
 
     prompt = build_review_prompt(title, body, update_level)
     provider, text = ai_gateway.complete(prompt, max_tokens=800)
