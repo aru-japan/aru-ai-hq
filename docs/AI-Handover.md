@@ -113,7 +113,7 @@ Research → Article → Article Review → Translation → Translation Review �
 
 ## ■ Latest Commit
 
-`43a14be`（このHandover文書を書いた時点でのHEAD）。**必ず`git log --oneline -10`で実際の最新を確認すること。** このフィールドは経年劣化する。
+`103eabf`（このHandover文書を書いた時点でのHEAD）。**必ず`git log --oneline -10`で実際の最新を確認すること。** このフィールドは経年劣化する。
 
 **Dashboard「作業開始画面」化（2026-07-19、方向性のみ確認・未実装）**：Reiより、Dashboardを「案内板」から「編集長が一日中仕事をする作業開始画面」へ発展させる方向性が明示された（詳細は[Automation-Scripts.md](./Automation-Scripts.md)「Zone 2の使いやすさ改善」節の「今後の方向性」参照）。次にこの領域へ着手する際は、具体的な構成案（DB・プロパティ単位でAPI実装可能な範囲とRei手動設定が必要な範囲を明示）を提示し承認を得てから実装すること。
 
