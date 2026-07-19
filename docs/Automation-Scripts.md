@@ -1,7 +1,7 @@
-<title>Automation Scripts v2.15</title>
+<title>Automation Scripts v2.16</title>
 
 # Automation Scripts
-### ARu Studio — Roadmap Version 3 実装記録 ＋ Version 4準備 ＋ Version 4 Phase 5（Editor Experience）＋ ARu Intelligence Phase 1/2/3 ＋ ARu公式記事テンプレート再設計 ＋ Article Template Framework（G3-A／G3-B）＋ Story Bank Database v1.0 ＋ Story Bank Batch #001 ＋ Story Bankバッチ運用ルールの正式化 ＋ ARu Studio v4.1 Editorial Intelligence ＋ 編集運営フローの精緻化 ＋ Production Stage ＋ AI Command Center・Dashboardの統一 ＋ ホーム画面の統一 ＋ ARu Studio v4.2 運営者向けガイド
+### ARu Studio — Roadmap Version 3 実装記録 ＋ Version 4準備 ＋ Version 4 Phase 5（Editor Experience）＋ ARu Intelligence Phase 1/2/3 ＋ ARu公式記事テンプレート再設計 ＋ Article Template Framework（G3-A／G3-B）＋ Story Bank Database v1.0 ＋ Story Bank Batch #001 ＋ Story Bankバッチ運用ルールの正式化 ＋ ARu Studio v4.1 Editorial Intelligence ＋ 編集運営フローの精緻化 ＋ Production Stage ＋ AI Command Center・Dashboardの統一 ＋ ホーム画面の統一 ＋ ARu Studio v4.2 運営者向けガイド ＋ ARu Studio v4.2 編集長ファースト3ゾーン再設計
 
 | | |
 |---|---|
@@ -1161,6 +1161,30 @@ Notion公開APIはブロックの挿入位置として`after`（指定ブロッ�
 
 **実データでの確認**：`add_operator_guide.py`実行後、11DB全ての`description`をAPIで再取得し、意図した文面が正しく設定されていることを確認。あわせてStory Bankのプロパティ数が32件（変更前と同一）のままであることを確認し、スキーマが一切変更されていないことを実証した。`ai_command_center.py`も実データに対して再実行し、Dashboard運営ガイドの折りたたみブロック内に新しい5項目の説明が正しい順序で反映されていることをAPIで確認済み。標準回帰テストは今回の変更が`description`フィールドとページ内テキストのみに限定されるため実施していない（プロパティ・リレーション・生成ロジックへの影響なし）。
 
+## ARu Studio v4.2 — 編集長ファースト3ゾーン再設計（2026-07-19、Design Proposal承認後の実装）
+
+**目的**：Rei確認・承認済みの「Version 4.2 Design Proposal」（本セッション内でArtifactとして提示、実装前レビュー用）にもとづき、Dashboardの自動生成セクションをフラットな見出しの羅列から3ゾーン構成へ再設計した。目標は「毎朝Dashboardを開いて30秒で今日やることが分かる」。追加要件として、Reiより「編集長は3クリック以内で記事を書き始められること」が必須要件として提示された。
+
+**3ゾーン構成**（`ai_command_center.py`の`build_page_blocks()`を全面再構成）：
+- **Zone 1「✍️ 今すぐ書く」**（常時展開、最上部）：新規`gather_write_now()`が①執筆中の記事（Production Stage=Deep Writing→Basic Writing→Headline Readyの優先順で最も完成に近いものを再開）②Research最高スコア候補（`research_prioritizer.py`の既存5軸スコアをそのまま使用、新規スコアリングなし）③Story Bankの記事化待ちアイデア（`Article Needed=true`かつ`Generated Article`が空）、の順で1件だけ選定。タイトル自体が実際のNotionページURLへのリッチテキストリンクになっており、クリックすると該当のResearch／Articles／Story Bankページが直接開く。
+- **Zone 2「📋 今日の判断」**（常時展開）：🔴Critical／🚀公開判断待ち（Ready to Publish記事数）／🔧更新が必要、の3つの数字のみを`column_list`（3カラムレイアウト）で並べる。リストは表示せず、根拠はZone 3へ。
+- **Zone 3「🔍 詳細・AI監視」**（既定で折りたたみ）：旧来の7セクション＋詳細セクション（Today's Opportunities／Critical Updates詳細／Top Research Candidates全件／Recently Updated／Freshness内訳／Duplicate Prevention／Source Intelligence／AI分析ページへのリンク等）を、1つの巨大なtoggleではなく**トピックごとに16個の小さなtoggle**として格納——一括で全部読む必要をなくし、必要な項目だけをRei自身が個別に開閉できる設計とした（Notion APIのブロック生成が1回のリクエストで安全に処理できる件数に収めるため、という技術的制約も兼ねる）。
+
+**「3クリック以内で書き始める」要件への対応**：Dashboardを開く（1）→Zone 1が展開済みで即座に見える（0）→タイトルをクリック（1）＝実質2クリックでResearch／Articles／Story Bankの該当ページに到達する設計とし、実データ（Research「外国人が日本で社会保険...」）でリンクの`href`が正しいページURLになっていることをAPIで確認済み。
+
+**Notion Buttonブロックについての確認事項**：Reiより「Notion Plusプランのボタン・レイアウト等の機能を積極的に活用してほしい」との依頼があったが、実装前にNotion公式開発者ドキュメントで確認したところ、**Notion公開API（2022-06-28、本コードベース全体で使用しているバージョン）はButtonブロックの新規作成をサポートしていない**（既存のButtonブロックを読み取ると`type: "unsupported"`として返るのみで、POST/PATCHでの新規作成手段が存在しない）。これは13 Linked ViewsやTemplateがAPIから作成できないのと同種の既知の制約であり、Reiのプラン契約ではなくNotion公開API自体の制約である。そのため、Buttonブロックの代わりに、このコードベースで既に実績のあるリッチテキストの`link`機能（`rt(text, link=url)`）を使い、「クリックすると該当ページが開く」という体験そのものは実現した。`column_list`／`column`（レイアウト機能）はAPIでの作成に対応しているため、Zone 2で採用した。もしNotion標準の見た目のボタンが必要な場合は、Rei自身によるNotion UI上での手動追加が必要（他のView／Template設定と同じ性質の制約）。
+
+**変更範囲**：`ai_command_center.py`の`build_page_blocks()`・新規`gather_write_now()`・`main()`／`print_report()`のシグネチャ更新のみ。11データベースのプロパティ・スキーマ・リレーションは無変更。既存13 Linked Viewsも無変更（Zone 3内での位置づけ言及のみ、実際のブロック自体には触れていない）。
+
+**実データでの確認**：実行後、Dashboardページをマーカー間でAPI取得し、Zone 1（✍️今すぐ書く、callout＋クリック可能なリンク）→Zone 2（📋今日の判断、`column_list`3列、各列の数字がCritical=1／公開判断待ち=11／更新が必要=1と実際の集計値に一致）→Zone 3（🔍詳細・AI監視、16個のtoggleすべてが正しいラベルで格納）→既存の運営ガイドtoggle、の順で意図通りに生成されていることを確認。標準回帰テスト7本のうち`article_freshness_monitor.py`／`publishing_center.py`／`enforce_publish_gate.py`／`coverage_analyzer.py`の4本が正常完走（残り2本はAI Gateway呼び出しに時間がかかり本セッションでは完走待たず——`ai_command_center.py`とは依存関係のない独立スクリプトのため、今回の変更による影響ではないと判断）。
+
+### 未実施事項（要判断）
+
+- **Zone 1の自動選定ロジックの妥当性**：Research最高スコア／Story Bank新着優先など、別の優先順位をReiが希望する場合は`gather_write_now()`の分岐順序を調整する必要がある
+- **朝の2スクリプト実行（`source_watcher.py`→`ai_command_center.py`）の1コマンド化・自動スケジュール化**：今回のスコープ外、次のv4.2改善候補
+- **既存13 Linked Viewsの整理**：Zone 3内への位置づけ言及のみで、実際の削除・再設定はRei判断で引き続き先送り
+- **Notion標準Buttonブロックの手動追加**：希望する場合はRei自身によるNotion UI上の一回限りの手動作業が必要
+
 ---
 
-*ARu HQ / Decode Japan — Automation Scripts v2.15 — 2026-07-19*
+*ARu HQ / Decode Japan — Automation Scripts v2.16 — 2026-07-19*

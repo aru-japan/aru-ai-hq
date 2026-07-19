@@ -1,31 +1,47 @@
-"""ARu Studio v4.1 home screen -- writes directly into the Dashboard page
+"""ARu Studio v4.2 home screen -- writes directly into the Dashboard page
 (formerly wrote to a separate "AI Command Center" page; unified into
 Dashboard on 2026-07-19 per Rei's decision to have a single home screen).
 
-Orders its section around Rei's 7 named priorities -- the "5 minutes every
-morning" list. Headings all use a "📊" prefix and past-tense/report-style
-wording (2026-07-19) so the section reads as a generated summary, not an
-editable work queue -- the underlying data/logic per section is unchanged:
-  1. 📊 今日追加されたStory Bank QA
-  2. 📊 執筆中の記事（Production Stage別）
-  3. 📊 更新が必要な記事
-  4. 📊 公開待ちコンテンツ
-  5. 📊 Production Stage内訳
-  6. 📊 Source Monitor Alerts
-  7. 📊 Law Update Pipeline
-Items 3/4 are aggregates over existing per-DB gather functions
-(gather_updates_needed() folds together Freshness Status, Current Validity,
-and the review_scheduler.py due-date signal; gather_publish_pending() folds
-together Articles Ready to Publish, SNS Queue Drafts, and Translation
-pending review) rather than duplicating those queries under new headings.
-Item 7 reuses gather_law_update_queue() (the Law Update Pipeline status
-breakdown) rather than adding a second, flatter "recent" list next to it.
+**v4.2 "editor-first" redesign (2026-07-19, per the approved Design
+Proposal)**: the page is organized into 3 zones of descending priority
+instead of a flat list of sections, so opening Dashboard answers "what do I
+do today" in about 30 seconds:
 
-Analysis-type sections (Coverage Analysis, Duplicate Prevention, Today's
-Research/Top Research Candidates) are explicitly NOT deleted -- they're
-demoted below a divider as supporting detail, per Rei's instruction. Same
-for Today's Opportunities, Critical Updates, Recently Updated Articles, and
-the original Phase 1/2 monitoring detail.
+  Zone 1 -- ✍️ 今すぐ書く (always expanded, top of page): the single
+  highest-priority thing to write next, chosen by gather_write_now()'s
+  cascade (resume an in-progress article > start the top Research
+  candidate > fall back to a Story Bank idea). The title itself is a real
+  Notion hyperlink straight to that record. This satisfies Rei's "3クリック
+  以内で記事を書き始められる" requirement: open Dashboard (1) -> the card is
+  already visible, nothing to expand (0) -> click the title (1) = 2 clicks
+  to the actual Research/Articles/Story Bank page.
+
+  Zone 2 -- 📋 今日の判断 (always expanded): exactly 3 numbers in a 3-column
+  layout (🔴 Critical / 🚀 公開判断待ち / 🔧 更新が必要), no lists -- just
+  enough to see if anything needs a decision today.
+
+  Zone 3 -- 🔍 詳細・AI監視 (collapsed by default): everything else --
+  every count and list Zone 1/2 summarize, plus the AI-facing signal layer
+  (Source Monitor, Law Update Pipeline, Production Stage breakdown, Source
+  Intelligence, Coverage Analysis/Editorial Planner pointers, Today's
+  Opportunities, Critical Updates detail, full Research ranking) -- as one
+  small toggle per topic rather than one giant toggle, so Rei can open just
+  the one she needs instead of one wall of text. Nothing here is deleted,
+  only folded away; the AI-facing databases underneath keep running exactly
+  as before.
+
+**Known API limitation (confirmed 2026-07-19 via Notion's own developer
+docs, not assumed)**: Rei asked that this redesign lean on Notion's Button
+blocks. The Notion public API (version 2022-06-28, same as this whole
+codebase) does not support creating Button blocks -- reading an existing
+one returns type "unsupported", and there is no way to create one via
+POST/PATCH. Real Notion buttons would have to be added by hand in the
+Notion UI (same category of manual step as the 13 Linked Views), so this
+script instead uses rich_text hyperlinks on ordinary blocks (callout/
+paragraph text with a `link`), which the API has always supported reliably
+-- functionally the same "click it, it opens the record" outcome. Column
+layouts (`column_list`/`column`) ARE supported and are used for Zone 2's
+3-number row.
 
 Dashboard's existing 13 manually-configured Linked Database Views (see
 docs/Dashboard-Setup-Guide.md) are intentionally left alone -- Rei chose not
@@ -42,7 +58,7 @@ content itself (that would mean extra AI Gateway calls and a second copy
 that can drift from the real page) -- it only points at those existing
 pages with light metadata (last-edited time + URL). Everything else here
 is a cheap, deterministic, live query against DBs that already exist --
-no new database anywhere in Phase 3 or v4.1.
+no new database, no schema change, anywhere in this redesign.
 """
 import os
 import sys
@@ -244,6 +260,61 @@ def gather_todays_writing_by_stage(env):
         if stage in by_stage:
             by_stage[stage].append(get_prop(a, "Title", "title"))
     return by_stage
+
+
+def gather_write_now(env):
+    """ARu Studio v4.2 Zone 1: the single "next thing to write" for the
+    editor-first redesign. Selection cascade, in priority order:
+      1. Resume the most-advanced in-progress Article (Deep Writing before
+         Basic Writing before Headline Ready -- finishing something close to
+         done beats starting something new)
+      2. Otherwise start the #1 Research candidate by research_prioritizer.py's
+         existing 5-axis score (no new scoring logic)
+      3. Otherwise fall back to a Story Bank idea flagged Article Needed with
+         no Generated Article yet (manual-authorship path, matches Story
+         Bank's operator-guide description -- see add_operator_guide.py)
+    Each branch is a minimal, self-contained query; whichever branch fires
+    also carries the record's own Notion page URL so the caller can render a
+    real hyperlink straight to it (Rei's 2026-07-19 "3クリック以内で書き始め
+    られる" requirement)."""
+    token = env["NOTION_TOKEN"]
+    browse_url = notion_request(token, "GET", f"/databases/{env['RESEARCH_DB_ID']}").get("url")
+
+    for stage in ["Deep Writing", "Basic Writing", "Headline Ready"]:
+        pages = query_database(token, env["ARTICLES_DB_ID"], filter_obj={
+            "property": "Production Stage", "select": {"equals": stage}
+        })
+        if pages:
+            p = pages[0]
+            return {
+                "title": get_prop(p, "Title", "title"), "url": p.get("url"),
+                "source": "Articles", "meta": f"執筆中・{stage}", "browse_url": browse_url,
+            }
+
+    scored, _ = rank_research_candidates(env, limit=1)
+    if scored:
+        s = scored[0]
+        page = notion_request(token, "GET", f"/pages/{s['id']}")
+        return {
+            "title": s["topic"], "url": page.get("url"),
+            "source": "Research", "meta": f"Research候補 1位・スコア{s['total']}点",
+            "browse_url": browse_url,
+        }
+
+    story_bank = query_database(token, env["STORY_BANK_DB_ID"], filter_obj={
+        "and": [
+            {"property": "Article Needed", "checkbox": {"equals": True}},
+            {"property": "Generated Article", "relation": {"is_empty": True}},
+        ]
+    })
+    if story_bank:
+        p = story_bank[0]
+        return {
+            "title": get_prop(p, "Title", "title"), "url": p.get("url"),
+            "source": "Story Bank", "meta": "Story Bank・記事化待ち", "browse_url": browse_url,
+        }
+
+    return {"title": None, "url": None, "source": None, "meta": None, "browse_url": browse_url}
 
 
 def gather_source_monitor_alerts(env, limit=5):
@@ -479,272 +550,273 @@ def rt(text, link=None):
     return [{"text": obj}]
 
 
+def _toggle(label, children):
+    return {"toggle": {"rich_text": rt(label), "children": children}}
+
+
 def build_page_blocks(opportunities, critical, top_research, publishing_queue, recently_updated,
                        freshness, monitor_stats, pointers, dup_today, source_intel,
                        content_pipeline, law_update_queue, translation_queue, sns_pending,
                        updates_needed, publish_pending, production_stage,
-                       todays_writing, monitor_alerts):
+                       todays_writing, monitor_alerts, write_now):
     now = datetime.datetime.now().strftime("%Y-%m-%d %H:%M")
-
-    # Rei's instruction (2026-07-19): the title/explanation blocks are only
-    # useful for initial setup, not for daily use -- opening the home screen
-    # should show "🆕 今日追加するQA" immediately, not a wall of explanation.
-    # That content moves into a collapsible guide at the very bottom instead
-    # of sitting at the top (see the "📖 運営ガイド" toggle near the end of
-    # this function).
     blocks = []
 
-    # 1/7: 今日追加されたStory Bank QA（今日の記事・Deep Guide候補も含む -- 新規コンテンツ制作の活動全体）
-    blocks.append({"heading_2": {"rich_text": rt("📊 今日追加されたStory Bank QA")}})
-    blocks.append({"callout": {
-        "rich_text": rt(f"本日追加されたStory Bank QA: {len(content_pipeline['new_qa_today'])}件"),
-        "icon": {"type": "emoji", "emoji": "🆕" if content_pipeline["new_qa_today"] else "✅"},
-    }})
-    for t in content_pipeline["new_qa_today"][:5]:
-        blocks.append({"bulleted_list_item": {"rich_text": rt(t)}})
-    blocks.append({"bulleted_list_item": {"rich_text": rt(f"本日作成された記事: {len(content_pipeline['new_articles_today'])}件")}})
-    for t in content_pipeline["new_articles_today"][:5]:
-        blocks.append({"bulleted_list_item": {"rich_text": rt(f"　- {t}")}})
-    blocks.append({"bulleted_list_item": {"rich_text": rt(f"Deep Guide候補（Deep Article Needed、未着手）: {len(content_pipeline['deep_guide_candidates'])}件")}})
-    for t in content_pipeline["deep_guide_candidates"][:5]:
-        blocks.append({"bulleted_list_item": {"rich_text": rt(f"　- {t}")}})
+    # ================= Zone 1 -- 今すぐ書く (always expanded, top) =================
+    blocks.append({"heading_2": {"rich_text": rt("✍️ 今すぐ書く")}})
+    if write_now["title"]:
+        blocks.append({"callout": {
+            "rich_text": rt(write_now["title"], link=write_now["url"]),
+            "icon": {"type": "emoji", "emoji": "✍️"},
+        }})
+        blocks.append({"bulleted_list_item": {"rich_text": rt(f"{write_now['source']}・{write_now['meta']}")}})
+    else:
+        blocks.append({"callout": {
+            "rich_text": rt("今すぐ書ける候補がありません。Researchで新しい候補を検討してください。"),
+            "icon": {"type": "emoji", "emoji": "✅"},
+        }})
+    if write_now["browse_url"]:
+        blocks.append({"paragraph": {"rich_text": rt("他の候補を見る（Research）→", link=write_now["browse_url"])}})
     blocks.append({"divider": {}})
 
-    # 2/7: 執筆中の記事（Production Stage別）-- Headline Ready/Basic Writing/Deep Writingのみ
-    blocks.append({"heading_2": {"rich_text": rt("📊 執筆中の記事（Production Stage別）")}})
+    # ================= Zone 2 -- 今日の判断 (always expanded, 3 numbers only) =================
+    blocks.append({"heading_2": {"rich_text": rt("📋 今日の判断")}})
+    total_critical = len(critical["articles"]) + len(critical["source_changes"]) + len(critical["law_updates"])
+    blocks.append({"column_list": {"children": [
+        {"column": {"children": [{"callout": {
+            "rich_text": rt(f"{total_critical}件\n🔴 Critical"),
+            "icon": {"type": "emoji", "emoji": "🔴" if total_critical else "✅"},
+        }}]}},
+        {"column": {"children": [{"callout": {
+            "rich_text": rt(f"{publish_pending['articles_ready']}件\n🚀 公開判断待ち"),
+            "icon": {"type": "emoji", "emoji": "🚀" if publish_pending["articles_ready"] else "✅"},
+        }}]}},
+        {"column": {"children": [{"callout": {
+            "rich_text": rt(f"{updates_needed['total']}件\n🔧 更新が必要"),
+            "icon": {"type": "emoji", "emoji": "🔧" if updates_needed["total"] else "✅"},
+        }}]}},
+    ]}})
+    blocks.append({"divider": {}})
+
+    # ================= Zone 3 -- 詳細・AI監視 (collapsed, one small toggle per topic) =================
+    blocks.append({"heading_2": {"rich_text": rt("🔍 詳細・AI監視")}})
+    blocks.append({"paragraph": {"rich_text": rt(
+        "普段は開かなくて大丈夫です。Zone 1・2の数字の根拠と、AIが裏側で見ている信号はここに畳んであります。"
+    )}})
+
+    qa_children = [{"callout": {
+        "rich_text": rt(f"本日追加されたStory Bank QA: {len(content_pipeline['new_qa_today'])}件"),
+        "icon": {"type": "emoji", "emoji": "🆕" if content_pipeline["new_qa_today"] else "✅"},
+    }}]
+    for t in content_pipeline["new_qa_today"][:5]:
+        qa_children.append({"bulleted_list_item": {"rich_text": rt(t)}})
+    qa_children.append({"bulleted_list_item": {"rich_text": rt(f"本日作成された記事: {len(content_pipeline['new_articles_today'])}件")}})
+    for t in content_pipeline["new_articles_today"][:5]:
+        qa_children.append({"bulleted_list_item": {"rich_text": rt(f"　- {t}")}})
+    qa_children.append({"bulleted_list_item": {"rich_text": rt(f"Deep Guide候補（Deep Article Needed、未着手）: {len(content_pipeline['deep_guide_candidates'])}件")}})
+    for t in content_pipeline["deep_guide_candidates"][:5]:
+        qa_children.append({"bulleted_list_item": {"rich_text": rt(f"　- {t}")}})
+    blocks.append(_toggle("今日追加されたStory Bank QA", qa_children))
+
+    writing_children = []
     total_writing = sum(len(v) for v in todays_writing.values())
-    blocks.append({"callout": {
+    writing_children.append({"callout": {
         "rich_text": rt(f"執筆中・執筆待ち合計: {total_writing}件"),
         "icon": {"type": "emoji", "emoji": "✍" if total_writing else "✅"},
     }})
     for stage in WRITING_STAGES:
         titles = todays_writing[stage]
-        blocks.append({"bulleted_list_item": {"rich_text": rt(f"{stage}: {len(titles)}件")}})
+        writing_children.append({"bulleted_list_item": {"rich_text": rt(f"{stage}: {len(titles)}件")}})
         for t in titles[:5]:
-            blocks.append({"bulleted_list_item": {"rich_text": rt(f"　- {t}")}})
-    blocks.append({"divider": {}})
+            writing_children.append({"bulleted_list_item": {"rich_text": rt(f"　- {t}")}})
+    blocks.append(_toggle("執筆中の記事（Production Stage別）", writing_children))
 
-    # 3/7: 更新が必要な記事 -- Freshness Status／Current Validity／Next Review期限の統合ビュー
-    blocks.append({"heading_2": {"rich_text": rt("📊 更新が必要な記事")}})
-    blocks.append({"callout": {
+    updates_children = [{"callout": {
         "rich_text": rt(f"合計（重複除く）: {updates_needed['total']}件"),
         "icon": {"type": "emoji", "emoji": "🔴" if updates_needed["total"] else "✅"},
-    }})
-    blocks.append({"bulleted_list_item": {"rich_text": rt(
+    }}]
+    updates_children.append({"bulleted_list_item": {"rich_text": rt(
         f"内訳 -- Freshness（時間経過）: {updates_needed['freshness_count']}件 / "
         f"Current Validity（法改正等）: {updates_needed['validity_count']}件 / "
         f"定期レビュー期限超過（Next Review）: {updates_needed['review_due_count']}件"
     )}})
     for t in updates_needed["top"]:
-        blocks.append({"bulleted_list_item": {"rich_text": rt(t)}})
+        updates_children.append({"bulleted_list_item": {"rich_text": rt(t)}})
     if updates_needed["story_bank_review_due"]:
-        blocks.append({"bulleted_list_item": {"rich_text": rt(
+        updates_children.append({"bulleted_list_item": {"rich_text": rt(
             f"Story Bank側の定期レビュー期限超過: {len(updates_needed['story_bank_review_due'])}件"
             f"（{'、'.join(updates_needed['story_bank_review_due'][:5])}）"
         )}})
     if translation_queue["total"]:
-        blocks.append({"bulleted_list_item": {"rich_text": rt(f"翻訳の再翻訳待ち（Needs Re-Translation）: {translation_queue['total']}件")}})
-    blocks.append({"divider": {}})
+        updates_children.append({"bulleted_list_item": {"rich_text": rt(f"翻訳の再翻訳待ち（Needs Re-Translation）: {translation_queue['total']}件")}})
+    blocks.append(_toggle("更新が必要な記事（詳細）", updates_children))
 
-    # 4/7: 公開待ちコンテンツ -- Articles Ready to Publish／SNS Draft／Translation Pending の統合ビュー
-    blocks.append({"heading_2": {"rich_text": rt("📊 公開待ちコンテンツ")}})
-    blocks.append({"callout": {
+    publish_children = [{"callout": {
         "rich_text": rt(f"合計: {publish_pending['total']}件"),
         "icon": {"type": "emoji", "emoji": "🚀" if publish_pending["total"] else "✅"},
-    }})
-    blocks.append({"bulleted_list_item": {"rich_text": rt(f"記事 Ready to Publish: {publish_pending['articles_ready']}件")}})
+    }}]
+    publish_children.append({"bulleted_list_item": {"rich_text": rt(f"記事 Ready to Publish: {publish_pending['articles_ready']}件")}})
     for title in publish_pending["articles_top"]:
-        blocks.append({"bulleted_list_item": {"rich_text": rt(f"　- {title}")}})
-    blocks.append({"bulleted_list_item": {"rich_text": rt(f"SNS投稿 Draft: {publish_pending['sns_draft']}件")}})
-    blocks.append({"bulleted_list_item": {"rich_text": rt(f"翻訳レビュー待ち（Human Review Status=Pending）: {publish_pending['translation_pending']}件")}})
-    blocks.append({"divider": {}})
+        publish_children.append({"bulleted_list_item": {"rich_text": rt(f"　- {title}")}})
+    publish_children.append({"bulleted_list_item": {"rich_text": rt(f"SNS投稿 Draft: {publish_pending['sns_draft']}件")}})
+    publish_children.append({"bulleted_list_item": {"rich_text": rt(f"翻訳レビュー待ち（Human Review Status=Pending）: {publish_pending['translation_pending']}件")}})
+    blocks.append(_toggle("公開待ちコンテンツ（詳細）", publish_children))
 
-    # 5/7: Production Stage内訳（件数表示。カンバン=Board Viewは手動設定、Studio-v4.1-View-Setup-Guide.md参照）
-    blocks.append({"heading_2": {"rich_text": rt("📊 Production Stage内訳")}})
-    blocks.append({"paragraph": {"rich_text": rt(
+    stage_children = [{"paragraph": {"rich_text": rt(
         "カンバン表示（Board View）はNotion公開APIで作成できないため手動設定——"
         "Studio-v4.1-View-Setup-Guide.mdの「Production Stage Kanban」参照。以下は件数表示。"
-    )}})
-    blocks.append({"heading_3": {"rich_text": rt("Articles")}})
+    )}}, {"heading_3": {"rich_text": rt("Articles")}}]
     for stage in PRODUCTION_STAGE_OPTIONS:
         count = production_stage["articles_counts"][stage]
         if count:
-            blocks.append({"bulleted_list_item": {"rich_text": rt(f"{stage}: {count}件")}})
+            stage_children.append({"bulleted_list_item": {"rich_text": rt(f"{stage}: {count}件")}})
     if production_stage["articles_unset"]:
-        blocks.append({"bulleted_list_item": {"rich_text": rt(f"（未設定）: {production_stage['articles_unset']}件")}})
-    blocks.append({"heading_3": {"rich_text": rt("Story Bank")}})
+        stage_children.append({"bulleted_list_item": {"rich_text": rt(f"（未設定）: {production_stage['articles_unset']}件")}})
+    stage_children.append({"heading_3": {"rich_text": rt("Story Bank")}})
     for stage in PRODUCTION_STAGE_OPTIONS:
         count = production_stage["story_bank_counts"][stage]
         if count:
-            blocks.append({"bulleted_list_item": {"rich_text": rt(f"{stage}: {count}件")}})
+            stage_children.append({"bulleted_list_item": {"rich_text": rt(f"{stage}: {count}件")}})
     if production_stage["story_bank_unset"]:
-        blocks.append({"bulleted_list_item": {"rich_text": rt(f"（未設定）: {production_stage['story_bank_unset']}件")}})
-    blocks.append({"divider": {}})
+        stage_children.append({"bulleted_list_item": {"rich_text": rt(f"（未設定）: {production_stage['story_bank_unset']}件")}})
+    blocks.append(_toggle("Production Stage内訳", stage_children))
 
-    # 6/7: Source Monitor Alerts（Dashboard ⑦と同じ条件、実際に検知された変化を一覧表示）
-    blocks.append({"heading_2": {"rich_text": rt("📊 Source Monitor Alerts")}})
-    blocks.append({"callout": {
+    monitor_children = [{"callout": {
         "rich_text": rt(f"Change Detected: {monitor_alerts['total']}件"),
         "icon": {"type": "emoji", "emoji": "📡" if monitor_alerts["total"] else "✅"},
-    }})
+    }}]
     for name, impact in monitor_alerts["top"]:
-        blocks.append({"bulleted_list_item": {"rich_text": rt(f"[{impact or '未分類'}] {name}")}})
-    blocks.append({"divider": {}})
+        monitor_children.append({"bulleted_list_item": {"rich_text": rt(f"[{impact or '未分類'}] {name}")}})
+    blocks.append(_toggle("Source Monitor Alerts", monitor_children))
 
-    # 7/7: Recent Law Updates（Law Update Pipelineの状態別内訳を流用——単純な「全件リスト」より
-    # 人間が今どこで動くべきかが分かる形として、こちらを昇格させた）
-    blocks.append({"heading_2": {"rich_text": rt("📊 Law Update Pipeline")}})
+    law_children = []
     if law_update_queue["counts"]:
         breakdown = "、".join(f"{k}: {v}件" for k, v in law_update_queue["counts"].items())
-        blocks.append({"bulleted_list_item": {"rich_text": rt(f"内訳: {breakdown}")}})
+        law_children.append({"bulleted_list_item": {"rich_text": rt(f"内訳: {breakdown}")}})
     else:
-        blocks.append({"paragraph": {"rich_text": rt("Law Updateレコードはまだありません。")}})
+        law_children.append({"paragraph": {"rich_text": rt("Law Updateレコードはまだありません。")}})
     if law_update_queue["monitoring"]:
-        blocks.append({"bulleted_list_item": {"rich_text": rt(
+        law_children.append({"bulleted_list_item": {"rich_text": rt(
             f"⚠️ 人間の確認待ち（Monitoring）: {'、'.join(law_update_queue['monitoring'][:5])}"
         )}})
     if law_update_queue["approval_required"]:
-        blocks.append({"bulleted_list_item": {"rich_text": rt(
+        law_children.append({"bulleted_list_item": {"rich_text": rt(
             f"⚠️ 承認待ち（Approval Required）: {'、'.join(law_update_queue['approval_required'][:5])}"
         )}})
-    blocks.append({"divider": {}})
+    blocks.append(_toggle("Law Update Pipeline", law_children))
 
-    blocks.append({"paragraph": {"rich_text": rt(
-        "ここから下は詳細・分析セクションです（Today's Opportunities・Critical Updates・"
-        "Top Research Candidates・Coverage Analysis・Duplicate Prevention等）。削除はしていません。"
-    )}})
-    blocks.append({"divider": {}})
-
-    # --- Detail: Today's Opportunities ---
-    blocks.append({"heading_2": {"rich_text": rt("🎯 Today's Opportunities")}})
+    opp_children = []
     if opportunities["events"]:
-        blocks.append({"heading_3": {"rich_text": rt("直近2週間のイベント")}})
+        opp_children.append({"heading_3": {"rich_text": rt("直近2週間のイベント")}})
         for e in opportunities["events"]:
-            blocks.append({"bulleted_list_item": {"rich_text": rt(f"[{e['type']}] {e['name']}（{e['date']}、{e['location'] or '場所未定'}）")}})
+            opp_children.append({"bulleted_list_item": {"rich_text": rt(f"[{e['type']}] {e['name']}（{e['date']}、{e['location'] or '場所未定'}）")}})
     if opportunities["source_signals"]:
-        blocks.append({"heading_3": {"rich_text": rt("本日検知した重要な情報源の変化")}})
+        opp_children.append({"heading_3": {"rich_text": rt("本日検知した重要な情報源の変化")}})
         for s in opportunities["source_signals"]:
-            blocks.append({"bulleted_list_item": {"rich_text": rt(f"[{s['impact']}/{s['classification'] or '未分類'}] {s['name']}")}})
+            opp_children.append({"bulleted_list_item": {"rich_text": rt(f"[{s['impact']}/{s['classification'] or '未分類'}] {s['name']}")}})
     if opportunities["law_updates"]:
-        blocks.append({"heading_3": {"rich_text": rt("最近Confirmedされた法改正")}})
+        opp_children.append({"heading_3": {"rich_text": rt("最近Confirmedされた法改正")}})
         for l in opportunities["law_updates"]:
-            blocks.append({"bulleted_list_item": {"rich_text": rt(f"[{l['significance']}] {l['name']}（施行日: {l['effective_date'] or '未定'}）")}})
+            opp_children.append({"bulleted_list_item": {"rich_text": rt(f"[{l['significance']}] {l['name']}（施行日: {l['effective_date'] or '未定'}）")}})
     if opportunities["seasonal_research"]:
-        blocks.append({"heading_3": {"rich_text": rt("季節性の高いResearch候補")}})
+        opp_children.append({"heading_3": {"rich_text": rt("季節性の高いResearch候補")}})
         for r in opportunities["seasonal_research"]:
-            blocks.append({"bulleted_list_item": {"rich_text": rt(f"[{r['total']}点] {r['topic']}")}})
+            opp_children.append({"bulleted_list_item": {"rich_text": rt(f"[{r['total']}点] {r['topic']}")}})
     if not any(opportunities.values()):
-        blocks.append({"paragraph": {"rich_text": rt("本日、新たな機会は検知されていません。")}})
-    blocks.append({"divider": {}})
+        opp_children.append({"paragraph": {"rich_text": rt("本日、新たな機会は検知されていません。")}})
+    blocks.append(_toggle("🎯 Today's Opportunities", opp_children))
 
-    # --- Detail: Critical Updates ---
-    blocks.append({"heading_2": {"rich_text": rt("🔴 Critical Updates")}})
-    total_critical = len(critical["articles"]) + len(critical["source_changes"]) + len(critical["law_updates"])
-    blocks.append({"callout": {
+    critical_children = [{"callout": {
         "rich_text": rt(f"合計: {total_critical}件"),
         "icon": {"type": "emoji", "emoji": "🔴" if total_critical else "✅"},
-    }})
+    }}]
     for label, items in (("外部シグナルで要更新フラグの記事", critical["articles"]),
                          ("本日のCritical情報源変化", critical["source_changes"]),
                          ("重要度Majorの未反映法改正", critical["law_updates"])):
         if items:
-            blocks.append({"bulleted_list_item": {"rich_text": rt(f"{label}: {len(items)}件（{'、'.join(items[:5])}）")}})
-    blocks.append({"divider": {}})
+            critical_children.append({"bulleted_list_item": {"rich_text": rt(f"{label}: {len(items)}件（{'、'.join(items[:5])}）")}})
+    blocks.append(_toggle("🔴 Critical Updates（詳細）", critical_children))
 
-    # --- Detail: Top Research Candidates ---
-    blocks.append({"heading_2": {"rich_text": rt("📊 Top Research Candidates")}})
+    research_children = []
     if top_research:
-        for i, s in enumerate(top_research, 1):
-            blocks.append({"numbered_list_item": {"rich_text": rt(f"[{s['total']}点] {s['topic']}")}})
+        for s in top_research:
+            research_children.append({"numbered_list_item": {"rich_text": rt(f"[{s['total']}点] {s['topic']}")}})
     else:
-        blocks.append({"paragraph": {"rich_text": rt("Status=NewのResearchはありません。")}})
-    blocks.append({"divider": {}})
+        research_children.append({"paragraph": {"rich_text": rt("Status=NewのResearchはありません。")}})
+    blocks.append(_toggle("Top Research Candidates（全件）", research_children))
 
-    # --- Detail: Recently Updated Articles ---
-    blocks.append({"heading_2": {"rich_text": rt("🕐 Recently Updated Articles")}})
-    for a in recently_updated:
-        blocks.append({"bulleted_list_item": {"rich_text": rt(f"{a['title']}（{a['updated'] or '不明'}）")}})
-    blocks.append({"divider": {}})
+    recent_children = [{"bulleted_list_item": {"rich_text": rt(f"{a['title']}（{a['updated'] or '不明'}）")}} for a in recently_updated]
+    blocks.append(_toggle("🕐 Recently Updated Articles", recent_children))
 
-    # --- Phase 1/2 detail (unchanged) ---
-    blocks.append({"heading_2": {"rich_text": rt("🔴 Freshness 内訳（更新が必要な記事の根拠データ）")}})
-    blocks.append({"callout": {
+    freshness_children = [{"callout": {
         "rich_text": rt(f"合計: {freshness['total']}件"),
         "icon": {"type": "emoji", "emoji": "🔴" if freshness["total"] else "✅"},
-    }})
-    blocks.append({"bulleted_list_item": {"rich_text": rt(
+    }}]
+    freshness_children.append({"bulleted_list_item": {"rich_text": rt(
         f"外部シグナル起因（法改正・情報源変化・イベント中止）: {freshness['signal_flagged']}件"
     )}})
-    blocks.append({"bulleted_list_item": {"rich_text": rt(
+    freshness_children.append({"bulleted_list_item": {"rich_text": rt(
         f"時間経過による定期レビュー期限超過: {freshness['time_based_flagged']}件"
     )}})
     if freshness["validity_total"]:
         validity_breakdown = "、".join(f"{k}: {v}件" for k, v in freshness["validity_counts"].items())
-        blocks.append({"bulleted_list_item": {"rich_text": rt(
+        freshness_children.append({"bulleted_list_item": {"rich_text": rt(
             f"法改正等により事実確認が必要（Current Validity）: {freshness['validity_total']}件（{validity_breakdown}）"
         )}})
-    blocks.append({"divider": {}})
+    blocks.append(_toggle("Freshness 内訳（更新が必要な記事の根拠データ）", freshness_children))
 
-    blocks.append({"heading_2": {"rich_text": rt("🛡 Duplicate Prevention（本日）")}})
-    blocks.append({"bulleted_list_item": {"rich_text": rt(f"本日の生成件数: {dup_today['generated']}件")}})
-    blocks.append({"bulleted_list_item": {"rich_text": rt(f"本日の重複スキップ件数: {dup_today['skipped']}件")}})
-    blocks.append({"divider": {}})
+    dup_children = [
+        {"bulleted_list_item": {"rich_text": rt(f"本日の生成件数: {dup_today['generated']}件")}},
+        {"bulleted_list_item": {"rich_text": rt(f"本日の重複スキップ件数: {dup_today['skipped']}件")}},
+    ]
+    blocks.append(_toggle("🛡 Duplicate Prevention（本日）", dup_children))
 
-    # Source Monitor Alerts / Recent Law Updates moved up to sections 6/7 --
-    # this now only covers Event Calendar (see MONITOR_STAT_DEFS).
-    blocks.append({"heading_2": {"rich_text": rt("📅 その他の外部監視（Event Calendar）")}})
-    for s in monitor_stats:
-        icon = "✅" if s["count"] == 0 else "🔔"
-        blocks.append({"bulleted_list_item": {"rich_text": rt(f"{icon} {s['emoji']} {s['label']}: {s['count']}件")}})
-    blocks.append({"divider": {}})
+    monitor_stats_children = [
+        {"bulleted_list_item": {"rich_text": rt(f"{'✅' if s['count'] == 0 else '🔔'} {s['emoji']} {s['label']}: {s['count']}件")}}
+        for s in monitor_stats
+    ]
+    blocks.append(_toggle("📅 その他の外部監視（Event Calendar）", monitor_stats_children))
 
-    blocks.append({"heading_2": {"rich_text": rt("🌐 Source Intelligence")}})
-    blocks.append({"bulleted_list_item": {"rich_text": rt(
+    intel_children = [{"bulleted_list_item": {"rich_text": rt(
         f"監視対象ソース数: {source_intel['total_sources']}件（うちActive: {source_intel['active_sources']}件）"
-    )}})
-    blocks.append({"bulleted_list_item": {"rich_text": rt(f"本日の変化検知: {source_intel['todays_changes']}件")}})
+    )}}, {"bulleted_list_item": {"rich_text": rt(f"本日の変化検知: {source_intel['todays_changes']}件")}}]
     error_icon = "✅" if not source_intel["errored_sources"] else "⚠️"
     error_text = "なし" if not source_intel["errored_sources"] else "、".join(source_intel["errored_sources"])
-    blocks.append({"bulleted_list_item": {"rich_text": rt(f"{error_icon} エラー中のソース: {error_text}")}})
+    intel_children.append({"bulleted_list_item": {"rich_text": rt(f"{error_icon} エラー中のソース: {error_text}")}})
     if source_intel["classification_breakdown"]:
         breakdown_text = "、".join(f"{k}: {v}件" for k, v in source_intel["classification_breakdown"].items())
-        blocks.append({"bulleted_list_item": {"rich_text": rt(f"本日の内訳（Update Classification）: {breakdown_text}")}})
-    blocks.append({"divider": {}})
+        intel_children.append({"bulleted_list_item": {"rich_text": rt(f"本日の内訳（Update Classification）: {breakdown_text}")}})
+    blocks.append(_toggle("🌐 Source Intelligence", intel_children))
 
-    blocks.append({"heading_2": {"rich_text": rt("🧭 AI分析ページへのリンク")}})
+    pointer_children = []
     for p in pointers:
         if p["url"]:
-            blocks.append({"paragraph": {"rich_text": rt(f"{p['label']}（最終更新: {p['last_edited']}） →", link=p["url"])}})
+            pointer_children.append({"paragraph": {"rich_text": rt(f"{p['label']}（最終更新: {p['last_edited']}） →", link=p["url"])}})
         else:
-            blocks.append({"paragraph": {"rich_text": rt(f"{p['label']}: 未作成（対応スクリプトを一度実行してください）")}})
+            pointer_children.append({"paragraph": {"rich_text": rt(f"{p['label']}: 未作成（対応スクリプトを一度実行してください）")}})
+    blocks.append(_toggle("🧭 AI分析ページへのリンク", pointer_children))
+
     blocks.append({"divider": {}})
 
-    # 運営ガイド（初回セットアップ向け説明。折りたたみ、毎日は開かなくてよい） --
-    # Rei's instruction: title/last-updated/structure explanation move here,
-    # out of the way of the daily "open and see 🆕今日追加するQA immediately" flow.
-    # ARu Studio v4.2 (2026-07-19): extended with the same 5-field operator-guide
-    # format as add_operator_guide.py's per-database description text (役割／
-    # 使うタイミング／担当／確認する順番／次の作業) -- Dashboard isn't a database
-    # (no `description` field to set), so this toggle is the equivalent surface.
+    # 運営ガイド（初回セットアップ向け説明。折りたたみ、毎日は開かなくてよい）
     blocks.append({"toggle": {
         "rich_text": rt("📖 運営ガイド（初回セットアップ内容 -- 毎日確認する必要はありません）"),
         "children": [
             {"heading_1": {"rich_text": rt("🤖 AI Command Center — 編集長の毎日のホーム画面")}},
             {"paragraph": {"rich_text": rt(f"最終更新: {now}（ai_command_center.py）")}},
             {"paragraph": {"rich_text": rt(
-                "役割：ARu Studio運営の毎日のホーム画面。全データベースの「今日やるべきこと」を自動集計して一望できる場所"
+                "役割：ARu Studio運営の毎日のホーム画面。編集長が3クリック以内で執筆を始められることを最優先に設計"
             )}},
             {"paragraph": {"rich_text": rt("使うタイミング：毎日、作業を始める一番最初")}},
             {"paragraph": {"rich_text": rt(
-                "担当：AI（自動集計・毎朝の実行で最新化）＋人（内容を見て判断・実際の作業へ進む）"
+                "担当：AI（自動集計・毎朝の実行で最新化、Zone 1の候補選定も含む）＋人（内容を見て判断・実際の作業へ進む）"
             )}},
             {"paragraph": {"rich_text": rt(
-                "確認する順番：①今日追加されたStory Bank QA ②執筆中の記事(Production Stage別) ③更新が必要な記事 "
-                "④公開待ちコンテンツ ⑤Production Stage内訳 ⑥Source Monitor Alerts ⑦Law Update Pipeline"
-                "（🔴 Critical Updatesがあれば他の作業より先に確認）"
+                "確認する順番：① ✍️ 今すぐ書く（そのままクリックして着手）② 📋 今日の判断（3つの数字に問題がないか）"
+                "③ 必要なときだけ 🔍 詳細・AI監視 を開く"
             )}},
             {"paragraph": {"rich_text": rt(
-                "次の作業：\n気になった項目から、該当するデータベース（Story Bank／Research／Articles等）を開いて作業を進めます。"
+                "次の作業：\n① の記事タイトルをクリックすると、Research／Articles／Story Bankの該当ページが直接開きます。"
             )}},
         ],
     }})
@@ -849,10 +921,12 @@ def print_report(opportunities, critical, top_research, publishing_queue, recent
                   freshness, monitor_stats, pointers, dup_today, source_intel,
                   content_pipeline, law_update_queue, translation_queue, sns_pending,
                   updates_needed, publish_pending, production_stage,
-                  todays_writing, monitor_alerts):
+                  todays_writing, monitor_alerts, write_now):
     print("\n" + "=" * 70)
     print("🤖 AI Command Center — 編集長の毎日のホーム画面")
     print("=" * 70)
+    print(f"✍️ 今すぐ書く: {write_now['source']}・{write_now['title']} ({write_now['meta']})"
+          if write_now["title"] else "✍️ 今すぐ書く: 候補なし")
     print(f"🎯 Today's Opportunities: events={len(opportunities['events'])} "
           f"source_signals={len(opportunities['source_signals'])} "
           f"law_updates={len(opportunities['law_updates'])} "
@@ -960,18 +1034,21 @@ def main():
     log("Gathering Source Monitor Alerts...")
     monitor_alerts = gather_source_monitor_alerts(env)
 
+    log("Selecting Zone 1 'write now' candidate (resume in-progress > top Research > Story Bank)...")
+    write_now = gather_write_now(env)
+
     print_report(opportunities, critical, top_research, publishing_queue, recently_updated,
                  freshness, monitor_stats, pointers, dup_today, source_intel,
                  content_pipeline, law_update_queue, translation_queue, sns_pending,
                  updates_needed, publish_pending, production_stage,
-                 todays_writing, monitor_alerts)
+                 todays_writing, monitor_alerts, write_now)
 
     blocks = build_page_blocks(opportunities, critical, top_research, publishing_queue, recently_updated,
                                 freshness, monitor_stats, pointers, dup_today, source_intel,
                                 content_pipeline, law_update_queue, translation_queue, sns_pending,
                                 updates_needed, publish_pending, production_stage,
-                                todays_writing, monitor_alerts)
-    log("Writing v4.1 section to Dashboard (home screen unification -- old standalone AI Command "
+                                todays_writing, monitor_alerts, write_now)
+    log("Writing v4.2 editor-first section to Dashboard (3-zone redesign -- old standalone AI Command "
         "Center page is intentionally left untouched, per Rei's decision)...")
     page_id = write_to_dashboard(env, blocks)
     log(f"DONE. Dashboard page: {page_id}")
