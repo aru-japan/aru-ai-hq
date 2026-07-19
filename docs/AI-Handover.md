@@ -175,6 +175,7 @@ Research → Article → Article Review → Translation → Translation Review �
 
 ## ■ Remaining Tasks
 
+- **Studio v4.3の方向性候補（2026-07-19、まだ設計・実装は未着手）**：Article Brief初回実運用（外国人の社会保険、25分）で、Reiより「構造としては正しいが、編集者として大きな変化を体感できたとまでは言えなかった」というフィードバック。ネガティブな評価ではなく、次のテーマ選定の材料として記録——**候補テーマは「構造改善」ではなく「編集者がすぐに違いを感じられるUI/UX改善」**（具体例：SNSドラフトの見やすさ改善）。詳細は[Operating-Manual.md](./Operating-Manual.md)§13運用ログ参照。命名はBusiness Roadmapとは独立の「Studio v4.3」を想定（既存のBusiness Roadmap vs Studio vXの命名規則どおり）
 - **Article Briefのページレイアウト自体が未実装**（2026-07-19）：Research→Article Briefのスキーマ・リレーションは完了したが、モックアップで示した画面構成（トグル・Callout・埋め込みDatabase View・「記事を書く」ボタン）自体はまだNotion上に反映していない。次回実装対象
 - **既存13 Linked Viewの整理は保留中**（2026-07-19、Rei方針）：実運用を数週間進めた後、不要なセクション（Today's Opportunities的な旧構成等）を整理する。[Dashboard-Setup-Guide.md](./Dashboard-Setup-Guide.md)「ARu Studio v4.1 推奨並び順」に新規2種類（今日追加するQA＝Story Bank、今日作る記事＝Articles Production Stage別）の設定内容を記載済みだが、実際の追加・並べ替えは急がず後回しでよい方針
 - **旧AI Command Centerページの最終的な扱いが未決定**（2026-07-19）：削除・Archiveせず、更新のみ停止してバックアップ兼リファレンスとして保持中。実運用を進めながら将来判断する
