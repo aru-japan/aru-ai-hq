@@ -40,6 +40,7 @@ from source_categories import UPDATE_CLASSIFICATIONS  # noqa: E402
 from research_prioritizer import rank_research_candidates  # noqa: E402
 from today_opportunities import gather_opportunities  # noqa: E402
 from review_scheduler import find_review_due  # noqa: E402
+from add_production_stage import PRODUCTION_STAGE_OPTIONS  # noqa: E402
 import duplicate_prevention_report as dpr  # noqa: E402
 
 ENV_PATH = os.path.join(NOTION_BUILD_DIR, ".env")
@@ -198,6 +199,42 @@ def gather_content_pipeline_today(env, today):
         "new_qa_today": [get_prop(p, "Title", "title") for p in new_qa_today],
         "new_articles_today": [get_prop(p, "Title", "title") for p in new_articles_today],
         "deep_guide_candidates": [get_prop(p, "Title", "title") for p in deep_guide_candidates],
+    }
+
+
+def gather_production_stage_breakdown(env):
+    """ARu Studio v4.1: count-based Kanban view of Articles' (and Story
+    Bank's) Production Stage -- Notion Board views can't be created via API
+    (same limitation as every other View in this project, see
+    Studio-v4.1-View-Setup-Guide.md), so this is the count-display half of
+    Rei's request; the real drag-and-drop Kanban still needs the manual
+    Board view. Counts are reported in pipeline order, not alphabetically."""
+    token = env["NOTION_TOKEN"]
+
+    articles = query_database(token, env["ARTICLES_DB_ID"])
+    story_bank = query_database(token, env["STORY_BANK_DB_ID"])
+
+    articles_counts = {s: 0 for s in PRODUCTION_STAGE_OPTIONS}
+    articles_unset = 0
+    for p in articles:
+        stage = get_prop(p, "Production Stage", "select")
+        if stage in articles_counts:
+            articles_counts[stage] += 1
+        else:
+            articles_unset += 1
+
+    story_bank_counts = {s: 0 for s in PRODUCTION_STAGE_OPTIONS}
+    story_bank_unset = 0
+    for p in story_bank:
+        stage = get_prop(p, "Production Stage", "select")
+        if stage in story_bank_counts:
+            story_bank_counts[stage] += 1
+        else:
+            story_bank_unset += 1
+
+    return {
+        "articles_counts": articles_counts, "articles_unset": articles_unset,
+        "story_bank_counts": story_bank_counts, "story_bank_unset": story_bank_unset,
     }
 
 
@@ -392,7 +429,7 @@ def rt(text, link=None):
 def build_page_blocks(opportunities, critical, top_research, publishing_queue, recently_updated,
                        freshness, monitor_stats, pointers, dup_today, source_intel, dashboard_url,
                        content_pipeline, law_update_queue, translation_queue, sns_pending,
-                       updates_needed, publish_pending):
+                       updates_needed, publish_pending, production_stage):
     now = datetime.datetime.now().strftime("%Y-%m-%d %H:%M")
 
     blocks = [
@@ -416,6 +453,30 @@ def build_page_blocks(opportunities, critical, top_research, publishing_queue, r
     blocks.append({"bulleted_list_item": {"rich_text": rt(f"Deep Guide候補（Deep Article Needed、未着手）: {len(content_pipeline['deep_guide_candidates'])}件")}})
     for t in content_pipeline["deep_guide_candidates"][:5]:
         blocks.append({"bulleted_list_item": {"rich_text": rt(f"　- {t}")}})
+    blocks.append({"divider": {}})
+
+    # Production Stage件数表示（Rei指示：件数表示＋カンバン表示）。カンバン（Board View）自体は
+    # Notion公開APIで作成不可のため、Studio-v4.1-View-Setup-Guide.mdへ手動設定を委譲し、
+    # ここでは件数表示のみ自動化する。
+    blocks.append({"heading_2": {"rich_text": rt("📋 Production Stage内訳")}})
+    blocks.append({"paragraph": {"rich_text": rt(
+        "カンバン表示（Board View）はNotion公開APIで作成できないため手動設定——"
+        "Studio-v4.1-View-Setup-Guide.mdの「Articles: Production Stage Kanban」参照。以下は件数表示。"
+    )}})
+    blocks.append({"heading_3": {"rich_text": rt("Articles")}})
+    for stage in PRODUCTION_STAGE_OPTIONS:
+        count = production_stage["articles_counts"][stage]
+        if count:
+            blocks.append({"bulleted_list_item": {"rich_text": rt(f"{stage}: {count}件")}})
+    if production_stage["articles_unset"]:
+        blocks.append({"bulleted_list_item": {"rich_text": rt(f"（未設定）: {production_stage['articles_unset']}件")}})
+    blocks.append({"heading_3": {"rich_text": rt("Story Bank")}})
+    for stage in PRODUCTION_STAGE_OPTIONS:
+        count = production_stage["story_bank_counts"][stage]
+        if count:
+            blocks.append({"bulleted_list_item": {"rich_text": rt(f"{stage}: {count}件")}})
+    if production_stage["story_bank_unset"]:
+        blocks.append({"bulleted_list_item": {"rich_text": rt(f"（未設定）: {production_stage['story_bank_unset']}件")}})
     blocks.append({"divider": {}})
 
     # CORE 2/3: 更新が必要な記事 -- Freshness Status／Current Validity／Next Review期限の統合ビュー
@@ -621,7 +682,7 @@ def write_page(env, blocks):
 def print_report(opportunities, critical, top_research, publishing_queue, recently_updated,
                   freshness, monitor_stats, pointers, dup_today, source_intel,
                   content_pipeline, law_update_queue, translation_queue, sns_pending,
-                  updates_needed, publish_pending):
+                  updates_needed, publish_pending, production_stage):
     print("\n" + "=" * 70)
     print("🤖 AI Command Center — 編集長の毎日のホーム画面")
     print("=" * 70)
@@ -658,6 +719,10 @@ def print_report(opportunities, critical, top_research, publishing_queue, recent
     print(f"🚀 公開待ちコンテンツ（統合）: {publish_pending['total']}件 "
           f"(articles={publish_pending['articles_ready']} sns={publish_pending['sns_draft']} "
           f"translation={publish_pending['translation_pending']})")
+    print(f"📋 Production Stage (Articles): {production_stage['articles_counts']} "
+          f"(未設定={production_stage['articles_unset']})")
+    print(f"📋 Production Stage (Story Bank): {production_stage['story_bank_counts']} "
+          f"(未設定={production_stage['story_bank_unset']})")
     print()
 
 
@@ -716,10 +781,13 @@ def main():
     log("Gathering consolidated 公開待ちコンテンツ (Articles + SNS + Translation)...")
     publish_pending = gather_publish_pending(env, publishing_queue, sns_pending, translation_pending_review)
 
+    log("Gathering Production Stage breakdown...")
+    production_stage = gather_production_stage_breakdown(env)
+
     print_report(opportunities, critical, top_research, publishing_queue, recently_updated,
                  freshness, monitor_stats, pointers, dup_today, source_intel,
                  content_pipeline, law_update_queue, translation_queue, sns_pending,
-                 updates_needed, publish_pending)
+                 updates_needed, publish_pending, production_stage)
 
     log("Resolving Dashboard page URL...")
     dashboard_url = get_dashboard_url(env)
@@ -727,7 +795,7 @@ def main():
     blocks = build_page_blocks(opportunities, critical, top_research, publishing_queue, recently_updated,
                                 freshness, monitor_stats, pointers, dup_today, source_intel, dashboard_url,
                                 content_pipeline, law_update_queue, translation_queue, sns_pending,
-                                updates_needed, publish_pending)
+                                updates_needed, publish_pending, production_stage)
     log("Writing AI Command Center Notion page...")
     page_id = write_page(env, blocks)
     log(f"DONE. AI Command Center page: {page_id}")

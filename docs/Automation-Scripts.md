@@ -1,4 +1,4 @@
-<title>Automation Scripts v2.10</title>
+<title>Automation Scripts v2.11</title>
 
 # Automation Scripts
 ### ARu Studio — Roadmap Version 3 実装記録 ＋ Version 4準備 ＋ Version 4 Phase 5（Editor Experience）＋ ARu Intelligence Phase 1/2/3 ＋ ARu公式記事テンプレート再設計 ＋ Article Template Framework（G3-A／G3-B）＋ Story Bank Database v1.0 ＋ Story Bank Batch #001 ＋ Story Bankバッチ運用ルールの正式化 ＋ ARu Studio v4.1 Editorial Intelligence ＋ 編集運営フローの精緻化 ＋ Production Stage
@@ -1063,19 +1063,22 @@ Affected Stories／Affected Articlesのリレーションに加えて、以下�
 - 記事件数を`Content Type`別に内訳表示（Headline/Basic Article/Deep Guide/Premium/Update Notice/未分類）
 - 関連SNS投稿件数（該当記事の既存`Related to SNS Queue (Related Article)`リレーション経由、重複除去済み）
 
-### Production Stage（Story Bank新規プロパティ、2026-07-19）
+実データで検証：一時テストLaw Update（Affected Category=生活情報）で記事17件・SNS投稿45件を正しく検出・集計することを確認、検証後Archived。
 
-Reiが提示した1つのStoryの制作パイプライン（`Today's QA → Headline Ready → Basic Writing → Deep Writing → Translation → SNS → Ready → Published`）を、Story Bankの新規Selectプロパティ`Production Stage`として実装（`notion-build/add_production_stage.py`）。8つの選択肢はPriority/Urgencyのような重要度順ではなく、パイプラインの実行順そのままで定義した（Kanban的な並びとして読むため）。
+### Production Stage（Story Bank・Articles両方の新規プロパティ、2026-07-19、Articlesは2026-07-19に追加拡張）
 
-既存の2軸とは意図的に別軸として追加した：
-- `Story Status`（New/Approved/In Production/Archived）：粗い編集トリアージで、「In Production」の内訳（どの制作段階か）までは表さない。この8段階を`Story Status`へ統合すると、既存のフィルタ・運用が前提とする「New/Approved/Archived」というほぼ終端的な状態の意味を壊すおそれがあった
-- `Content Type`（Articles側、Headline/Basic Article/Deep Guide/Premium）：そのレコードが「どんな種類のコンテンツか」を分類するもので、「今どの制作段階にいるか」とは別の問い
+Reiが提示した1つのStoryの制作パイプライン（`Today's QA → Headline Ready → Basic Writing → Deep Writing → Translation → SNS → Ready → Published`）を、新規Selectプロパティ`Production Stage`として実装（`notion-build/add_production_stage.py`）。当初Story Bankのみに追加したが、Rei追加指示により「これはStatusを置き換えるものではなく制作工程を表す専用プロパティ」という明確な役割分離のもと、Articlesにも独立して追加した——Story Bankは起点Storyの全体的な位置づけ、Articlesは個別記事自体の位置づけを別々に追跡する（1つのStoryから複数Content Typeの記事が異なる段階で並行して生まれうるため、Story Bank単体では表現しきれない）。8つの選択肢はPriority/Urgencyのような重要度順ではなく、パイプラインの実行順そのままで定義した（Kanban的な並びとして読むため）。
 
-**スキーマのみ、既存21件のバックフィルは行っていない**：Batch #001の花火大会20件はいずれもQAカード化がまだ行われていない実データであり、架空の段階を割り当てることはStory Bankの捏造禁止ルールに反するため、実際にパイプラインへ入った時点で編集側が設定する運用とした。実データで検証：プロパティ追加後もStory Bank全21件・全プロパティ数32（Stage 1の28＋Stage 2のリレーション3＋今回の1）に矛盾なし、`template_migration_report.py`・`ai_command_center.py`とも正常完走。
+既存の軸とは意図的に別軸として追加した：
+- `Story Status`（New/Approved/In Production/Archived）：粗い編集トリアージで、「In Production」の内訳（どの制作段階か）までは表さない
+- Articles`Status`（Draft/AI Draft/Human Review/Approved/Published/Archived/Updating/Approval Required）：編集・承認状態（レビュー済みかどうか）であり、制作工程（今どの執筆・翻訳・SNS段階か）とは別の問い——Human Review承認済みでもProduction Stageは「Translation」のままということはありうる
+- `Content Type`（Headline/Basic Article/Deep Guide/Premium）：そのレコードが「どんな種類のコンテンツか」を分類するもので、「今どの制作段階にいるか」とは別の問い
+
+**スキーマのみ、既存レコードのバックフィルは行っていない**：Story Bank Batch #001の花火大会20件・既存Articles 59件のいずれも架空の段階を割り当てず未設定のまま（捏造禁止ルール）。実データで検証：Story Bank全21件・全プロパティ数32（Stage 1の28＋Stage 2のリレーション3＋Production Stage 1）、Articles全59件・全プロパティ数77（Stage 1〜編集運営フロー精緻化までの74＋Production Stage 1＋Refinement 2）に矛盾なし、`template_migration_report.py`・`publishing_center.py`・`ai_command_center.py`とも正常完走。
+
+**Dashboard**：`ai_command_center.py`に`gather_production_stage_breakdown()`を追加し、「📋 Production Stage内訳」セクションでArticles／Story Bankそれぞれのパイプライン順の件数表示を実装。カンバン（Board View）自体はNotion公開APIで作成不可のため（他のViewと同じ制約）、[Studio-v4.1-View-Setup-Guide.md](./Studio-v4.1-View-Setup-Guide.md)へ手動設定手順（Board View、Group by Production Stage）を追加した。
 
 **未実施事項**：Production Stageを自動で進める自動化（QA Question設定→Headline Ready、Content Type別記事生成→Basic/Deep Writing、等）は今回のスコープに含めていない。必要であれば別セッションで検討する。
-
-実データで検証：一時テストLaw Update（Affected Category=生活情報）で記事17件・SNS投稿45件を正しく検出・集計することを確認、検証後Archived。
 
 ### 定期レビューの自動抽出（`notion-build/automation/review_scheduler.py`、新規）
 
@@ -1100,4 +1103,4 @@ Reiが提示した1つのStoryの制作パイプライン（`Today's QA → Head
 
 ---
 
-*ARu HQ / Decode Japan — Automation Scripts v2.10 — 2026-07-19*
+*ARu HQ / Decode Japan — Automation Scripts v2.11 — 2026-07-19*

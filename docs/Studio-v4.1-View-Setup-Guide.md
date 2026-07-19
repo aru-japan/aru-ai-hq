@@ -17,7 +17,10 @@
 
 ---
 
-## Story Bank（7ビュー）
+## Story Bank（8ビュー）
+
+### 0. Production Stage Kanban（2026-07-19追加）
+Articlesと同じ手順（Board View、Group by `Production Stage`）。両DBに同名プロパティが独立して存在するため、Story Bank用・Articles用で別々にKanbanを作成すること（片方の設定がもう片方に影響しない）。
 
 ### 1. New QA
 QA Questionが設定済みでまだレビューされていないカード。
@@ -46,7 +49,15 @@ QA Questionが設定済みでまだレビューされていないカード。
 
 ---
 
-## Articles（7ビュー）
+## Articles（8ビュー）
+
+### 0. Production Stage Kanban（2026-07-19追加）
+Rei指示：Production Stageをもとにカンバン表示できるようにする。**Board View自体はNotion公開APIで作成できない**（Table以外のView種別は不可、他のViewと同じ制約）ため、この1つだけ手順が異なる。
+
+1. Articlesデータベースで「+ Add a view」→ **Board**（Tableではなく）を選択
+2. 「Group by」（グループ化の基準）に`Production Stage`を指定
+3. 列の並び順を手動でパイプライン順に揃える：Today's QA → Headline Ready → Basic Writing → Deep Writing → Translation → SNS → Ready → Published（＋未設定の列）
+4. 件数表示（自動化済み）はAI Command Centerの「📋 Production Stage内訳」セクションを参照——このKanban自体は手動でドラッグ＆ドロップして使う運用ビュー
 
 ### 1. Today's Articles
 本日作成された記事。
