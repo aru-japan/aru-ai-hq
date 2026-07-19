@@ -104,6 +104,38 @@ Dashboardページを開き、埋め込みたい見出し（例：「① Publish
 
 ---
 
+## ARu Studio v4.1 推奨並び順（2026-07-19追加）
+
+**目的**：「毎朝5分で今日やることが分かる」ことを最優先に、DashboardをAI Command Center（`ai_command_center.py`が自動生成する編集長ホーム）と同じ7項目の優先順に揃える。**NotionパブリックAPIはLinked Viewの作成・並べ替えができない**ため、以下はRei自身による手動作業が必要——AIが代行できるのはこの推奨順序のドキュメント化までである。
+
+### 新しい推奨順序（上から）
+
+| 順位 | セクション | 対応するセクション（既存／新規） |
+|---|---|---|
+| 1 | 🆕 今日追加するQA | **新規**：Story Bankの新規Linked View。Filter＝`QA Question` is not empty AND `Story Status` is `New`（[Studio-v4.1-View-Setup-Guide.md](./Studio-v4.1-View-Setup-Guide.md)のStory Bank「1. New QA」と同一設定） |
+| 2 | ✍ 今日作る記事（Production Stage別） | **新規**：Articlesの新規Linked View。Filter＝`Production Stage` is `Headline Ready` OR `Basic Writing` OR `Deep Writing`、Sort＝`Production Stage`昇順 |
+| 3 | 🔴 更新が必要な記事 | 既存「🔴 Update Needed」を流用。Current Validity起因も合わせて見たい場合は、Filterへ`Current Validity` is `Review Due` OR `Outdated`をOR条件として追加する（[Studio-v4.1-View-Setup-Guide.md](./Studio-v4.1-View-Setup-Guide.md)のArticles「5. Update Required」参照） |
+| 4 | 🚀 公開待ちコンテンツ | 既存「🚀 Ready to Publish」「④ SNS Draft Waiting」「① Publish Approval Pending」の3つを隣接配置。**Notion Linked Viewは1データベース1ビューのため、AI Command Centerのような単一の合算表示にはできない**——3つをまとめて見出しの下に並べることで代替する |
+| 5 | 📋 Production Stage内訳 | **新規**：Production Stage Kanban（Board View、Articles・Story Bank各1つ）。設定手順は[Studio-v4.1-View-Setup-Guide.md](./Studio-v4.1-View-Setup-Guide.md)の「Production Stage Kanban」参照 |
+| 6 | 📡 Source Monitor Alerts | 既存「⑦ Source Monitor Alerts」をそのまま使用（並べ替えのみ） |
+| 7 | ⚖ Recent Law Updates | 既存「⑧ Recent Law Updates」をそのまま使用（並べ替えのみ） |
+
+### 下部（または別ページ）へ移動する分析系セクション
+
+削除せず、上記7項目より下（もしくは別途「Analysis」ページを作りそちらへ移設）へ配置する：
+
+- 📊 Coverage Analysis（専用ページへのリンク）
+- 📝 Editorial Planner（専用ページへのリンク）
+- 🛡 Duplicate Prevention（専用ページへのリンク——本表には元々含まれていないが、AI Command Centerと対応させる場合はこちらも同様に下部へ）
+- ⑥ Today's Research
+- 🛠 Needs Update（公開済み）／📚 Published Articles／②③⑤⑨／🔴🆕 Critical Source Updates（優先度の低い監視・分析系として、7項目より下にまとめる）
+
+### 手順
+
+Notionの各Linked Viewブロックは、左端の「⠿」（ドラッグハンドル）をつかんでドラッグ&ドロップするだけで並べ替えられる（新しいブロックを作る必要はない、既存の6つはそのまま移動するだけ）。新規2種類（今日追加するQA、今日作る記事）は「共通手順」（本ページ冒頭）と同じ6ステップで追加してから、上記の順に並べる。
+
+---
+
 ## 完了チェックリスト
 
 - [ ] 🔴 Update Needed
@@ -131,4 +163,4 @@ Dashboardページを開き、埋め込みたい見出し（例：「① Publish
 
 ---
 
-*ARu HQ / Decode Japan — Dashboard Setup Guide v1.2 — 2026-07-17*
+*ARu HQ / Decode Japan — Dashboard Setup Guide v1.3 — 2026-07-19*

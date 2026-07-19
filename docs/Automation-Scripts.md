@@ -1,7 +1,7 @@
-<title>Automation Scripts v2.11</title>
+<title>Automation Scripts v2.12</title>
 
 # Automation Scripts
-### ARu Studio — Roadmap Version 3 実装記録 ＋ Version 4準備 ＋ Version 4 Phase 5（Editor Experience）＋ ARu Intelligence Phase 1/2/3 ＋ ARu公式記事テンプレート再設計 ＋ Article Template Framework（G3-A／G3-B）＋ Story Bank Database v1.0 ＋ Story Bank Batch #001 ＋ Story Bankバッチ運用ルールの正式化 ＋ ARu Studio v4.1 Editorial Intelligence ＋ 編集運営フローの精緻化 ＋ Production Stage
+### ARu Studio — Roadmap Version 3 実装記録 ＋ Version 4準備 ＋ Version 4 Phase 5（Editor Experience）＋ ARu Intelligence Phase 1/2/3 ＋ ARu公式記事テンプレート再設計 ＋ Article Template Framework（G3-A／G3-B）＋ Story Bank Database v1.0 ＋ Story Bank Batch #001 ＋ Story Bankバッチ運用ルールの正式化 ＋ ARu Studio v4.1 Editorial Intelligence ＋ 編集運営フローの精緻化 ＋ Production Stage ＋ AI Command Center・Dashboardの統一
 
 | | |
 |---|---|
@@ -1101,6 +1101,22 @@ Reiが提示した1つのStoryの制作パイプライン（`Today's QA → Head
 - **Story Bank→Article自動生成パイプライン自体が未実装**：Food Restriction Supportテンプレートはレジストリには存在するが、ディスパッチ経路（Story BankのContent Categoryを見て記事生成する処理）が無いため到達しない
 - **Next Reviewの自動算出**：Update Frequency区分から次回レビュー日を計算するロジックは未実装（現状は手動設定）
 
+## AI Command Center・Dashboardの統一（2026-07-19、v4.1正式リリース後の追加指示）
+
+**目的**：v4.1正式リリース後、Reiより「現在のDashboardがVersion4.0時代の構成のままでv4.1の運営フローと一致していない」との指摘を受け、AI Command Center（`ai_command_center.py`が自動生成する編集長ホーム）と手動設定のDashboard（13 Linked Database View、[Dashboard-Setup-Guide.md](./Dashboard-Setup-Guide.md)）の両方を、「毎朝5分で今日やることが分かる」という同じ思想・同じ7項目優先順に揃える。
+
+「Dashboard」という言葉が本リポジトリ内で2つの異なるページ（AI Command Center／手動Dashboard）を指しうる曖昧さがあったため、実装前にRei確認済み——**両方**を対象とする。
+
+### AI Command Center（`ai_command_center.py`）
+
+先頭7セクションをRei指定の優先順そのままに再構成：①🆕今日追加するQA ②✍今日作る記事（Production Stage別、新規`gather_todays_writing_by_stage()`——Headline Ready/Basic Writing/Deep Writingの3段階のみを対象とし、③⑤とは別の問い「今日何を書くべきか」に答える） ③🔴更新が必要な記事 ④🚀公開待ちコンテンツ ⑤📋Production Stage内訳 ⑥📡Source Monitor Alerts（新規`gather_source_monitor_alerts()`、既存`MONITOR_STAT_DEFS`の単純カウントから、実際に検知されたエントリ名＋Impact Levelを表示するリッチな表示へ昇格） ⑦⚖Recent Law Updates（既存のLaw Update Pipelineキュー内訳をそのまま昇格・流用、単純な「全件リスト」を新設せず重複を避けた）。
+
+`MONITOR_STAT_DEFS`から昇格させたSource Monitor Alerts／Recent Law Updatesの2行を削除し、Event Calendarのみ残した（見出しも「📡 外部監視フィード」→「📅 その他の外部監視（Event Calendar）」に変更、実態と一致させるため）。Coverage Analysis／Duplicate Prevention／Top Research Candidates（Today's Researchに相当）・Today's Opportunities・Critical Updates・Recently Updated Articlesはいずれも**削除せず**、7セクションの下に詳細として維持。実データで実行し、実際のNotionページのブロック順（heading_2の並び）をAPIで取得して7項目が正しい順序で書き込まれていることを確認済み。標準回帰テスト全通過。
+
+### Dashboard（手動13 Linked Database View）
+
+Notion公開APIはLinked Viewの作成・並べ替えができないため、コード側からの直接反映は不可能——[Dashboard-Setup-Guide.md](./Dashboard-Setup-Guide.md)に「ARu Studio v4.1 推奨並び順」節を追加し、同じ7項目優先順に対応する設定内容（新規2種類：今日追加するQA＝Story Bank Linked View、今日作る記事＝Articles Linked View　既存5つ＝並べ替えのみ）と、Coverage Analysis／Duplicate Prevention／Today's Research等の分析系を下部へ移動する指示を文書化した。**実際の並べ替えはRei自身の手動作業が必要**（ドラッグ&ドロップ、他のView関連作業と同じ制約）。
+
 ---
 
-*ARu HQ / Decode Japan — Automation Scripts v2.11 — 2026-07-19*
+*ARu HQ / Decode Japan — Automation Scripts v2.12 — 2026-07-19*

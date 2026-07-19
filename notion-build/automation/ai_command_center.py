@@ -2,18 +2,36 @@
 Phase 1/2/3 (Source Monitoring + Editorial Intelligence) + ARu Studio v4.1
 Editorial Intelligence.
 
-ARu Studio v4.1 (2026-07-19) restructured this page's daily-homepage top
-around Rei's three named priorities -- 今日追加するQA / 更新が必要な記事 /
-公開待ちコンテンツ -- as the first three sections. These are aggregates over
-existing per-DB gather functions (gather_updates_needed() folds together
-Freshness Status, Current Validity, and the new review_scheduler.py due-date
-signal; gather_publish_pending() folds together Articles Ready to Publish,
-SNS Queue Drafts, and Translation pending review) rather than duplicating
-those queries under new headings. Everything that isn't one of the three
-(Today's Opportunities, Critical Updates, Top Research Candidates, Recently
-Updated Articles, the Law Update Pipeline queue, and the original Phase 1/2
-monitoring detail) is kept, just demoted below as supporting detail -- not
-deleted, since each still answers a real question on its own.
+ARu Studio v4.1 (2026-07-19, restructured again same day per Rei's follow-up
+to unify this page with the manual Dashboard) orders this page's top around
+Rei's 7 named priorities -- the "5 minutes every morning" list:
+  1. 🆕 今日追加するQA
+  2. ✍ 今日作る記事（Production Stage別）
+  3. 🔴 更新が必要な記事
+  4. 🚀 公開待ちコンテンツ
+  5. 📋 Production Stage内訳
+  6. 📡 Source Monitor Alerts
+  7. ⚖ Recent Law Updates
+Items 3/4 are aggregates over existing per-DB gather functions
+(gather_updates_needed() folds together Freshness Status, Current Validity,
+and the review_scheduler.py due-date signal; gather_publish_pending() folds
+together Articles Ready to Publish, SNS Queue Drafts, and Translation
+pending review) rather than duplicating those queries under new headings.
+Item 7 reuses gather_law_update_queue() (the Law Update Pipeline status
+breakdown) rather than adding a second, flatter "recent" list next to it.
+
+Analysis-type sections (Coverage Analysis, Duplicate Prevention, Today's
+Research/Top Research Candidates) are explicitly NOT deleted -- they're
+demoted below a divider as supporting detail, per Rei's instruction. Same
+for Today's Opportunities, Critical Updates, Recently Updated Articles, and
+the original Phase 1/2 monitoring detail.
+
+The manual Notion "Dashboard" page (13 Linked Database Views, distinct from
+this page -- see docs/Dashboard-Setup-Guide.md) mirrors this same priority
+order, but since Notion's public API can't create or reorder Linked Views,
+that page's actual block order has to be rearranged by Rei by hand; this
+script only keeps the *documented* recommended order in sync (see
+Dashboard-Setup-Guide.md's "v4.1 recommended order" section).
 
 This page never recomputes Coverage Analysis or Editorial Planner's AI
 content itself (that would mean extra AI Gateway calls and a second copy
@@ -48,13 +66,17 @@ ENV_PATH = os.path.join(NOTION_BUILD_DIR, ".env")
 # (emoji, label, db env key, filter). Filters copied verbatim from
 # docs/Dashboard-Setup-Guide.md's 13-section table so these counts can never
 # drift from what the real Dashboard Linked Views show.
+# Source Monitor Alerts / Recent Law Updates moved out of this generic list
+# in the v4.1 reorder -- they're now their own promoted top-level sections
+# (gather_source_monitor_alerts / gather_law_update_queue) with richer
+# detail than a bare count, so keeping them here too would just duplicate
+# them. Event Calendar has no promoted section of its own, so it stays here.
 MONITOR_STAT_DEFS = [
-    ("⑦", "Source Monitor Alerts", "SOURCE_MONITOR_DB_ID",
-     {"property": "Change Detected", "checkbox": {"equals": True}}),
-    ("⑧", "Recent Law Updates", "LAW_UPDATE_DB_ID", None),
     ("⑨", "Recent Event Calendar", "EVENT_CALENDAR_DB_ID",
      {"property": "Status", "select": {"does_not_equal": "Cancelled"}}),
 ]
+
+WRITING_STAGES = ["Headline Ready", "Basic Writing", "Deep Writing"]
 
 # label -> env key holding that page's id, for the light metadata pointers.
 POINTER_PAGES = [
@@ -199,6 +221,39 @@ def gather_content_pipeline_today(env, today):
         "new_qa_today": [get_prop(p, "Title", "title") for p in new_qa_today],
         "new_articles_today": [get_prop(p, "Title", "title") for p in new_articles_today],
         "deep_guide_candidates": [get_prop(p, "Title", "title") for p in deep_guide_candidates],
+    }
+
+
+def gather_todays_writing_by_stage(env):
+    """ARu Studio v4.1 core section 2/7: "今日作る記事（Production Stage別）" --
+    Articles currently sitting in one of the three writing-in-progress
+    stages (Headline Ready/Basic Writing/Deep Writing), grouped by stage.
+    Distinct from gather_production_stage_breakdown() (section 5/7), which
+    is the full 8-stage pipeline count for both DBs -- this is narrower and
+    answers "what should I actually sit down and write today", not "what's
+    the overall pipeline state"."""
+    token = env["NOTION_TOKEN"]
+    articles = query_database(token, env["ARTICLES_DB_ID"])
+    by_stage = {s: [] for s in WRITING_STAGES}
+    for a in articles:
+        stage = get_prop(a, "Production Stage", "select")
+        if stage in by_stage:
+            by_stage[stage].append(get_prop(a, "Title", "title"))
+    return by_stage
+
+
+def gather_source_monitor_alerts(env, limit=5):
+    """ARu Studio v4.1 core section 6/7: "Source Monitor Alerts", promoted
+    from the generic MONITOR_STAT_DEFS count into its own section with the
+    actual flagged entries (Monitor Entry + Impact Level), matching
+    Dashboard-Setup-Guide.md's ⑦ Source Monitor Alerts columns."""
+    token = env["NOTION_TOKEN"]
+    pages = query_database(token, env["SOURCE_MONITOR_DB_ID"], filter_obj={
+        "property": "Change Detected", "checkbox": {"equals": True}
+    }, sorts=[{"property": "Checked At", "direction": "descending"}])
+    return {
+        "total": len(pages),
+        "top": [(get_prop(p, "Monitor Entry", "title"), get_prop(p, "Impact Level", "select")) for p in pages[:limit]],
     }
 
 
@@ -429,17 +484,22 @@ def rt(text, link=None):
 def build_page_blocks(opportunities, critical, top_research, publishing_queue, recently_updated,
                        freshness, monitor_stats, pointers, dup_today, source_intel, dashboard_url,
                        content_pipeline, law_update_queue, translation_queue, sns_pending,
-                       updates_needed, publish_pending, production_stage):
+                       updates_needed, publish_pending, production_stage,
+                       todays_writing, monitor_alerts):
     now = datetime.datetime.now().strftime("%Y-%m-%d %H:%M")
 
     blocks = [
         {"heading_1": {"rich_text": rt("🤖 AI Command Center — 編集長の毎日のホーム画面")}},
         {"paragraph": {"rich_text": rt(f"最終更新: {now}（ai_command_center.py）")}},
-        {"paragraph": {"rich_text": rt("ARu Studio v4.1: 以下3セクションを中心に構成——今日追加するQA／更新が必要な記事／公開待ちコンテンツ")}},
+        {"paragraph": {"rich_text": rt(
+            "ARu Studio v4.1：毎朝5分で今日やることが分かることを最優先に、以下7項目の優先順で構成——"
+            "①今日追加するQA ②今日作る記事(Production Stage別) ③更新が必要な記事 ④公開待ちコンテンツ "
+            "⑤Production Stage内訳 ⑥Source Monitor Alerts ⑦Recent Law Updates"
+        )}},
         {"divider": {}},
     ]
 
-    # CORE 1/3: 今日追加するQA（今日の記事・Deep Guide候補も含む -- 新規コンテンツ制作の活動全体）
+    # 1/7: 今日追加するQA（今日の記事・Deep Guide候補も含む -- 新規コンテンツ制作の活動全体）
     blocks.append({"heading_2": {"rich_text": rt("🆕 今日追加するQA")}})
     blocks.append({"callout": {
         "rich_text": rt(f"本日追加されたStory Bank QA: {len(content_pipeline['new_qa_today'])}件"),
@@ -455,31 +515,21 @@ def build_page_blocks(opportunities, critical, top_research, publishing_queue, r
         blocks.append({"bulleted_list_item": {"rich_text": rt(f"　- {t}")}})
     blocks.append({"divider": {}})
 
-    # Production Stage件数表示（Rei指示：件数表示＋カンバン表示）。カンバン（Board View）自体は
-    # Notion公開APIで作成不可のため、Studio-v4.1-View-Setup-Guide.mdへ手動設定を委譲し、
-    # ここでは件数表示のみ自動化する。
-    blocks.append({"heading_2": {"rich_text": rt("📋 Production Stage内訳")}})
-    blocks.append({"paragraph": {"rich_text": rt(
-        "カンバン表示（Board View）はNotion公開APIで作成できないため手動設定——"
-        "Studio-v4.1-View-Setup-Guide.mdの「Articles: Production Stage Kanban」参照。以下は件数表示。"
-    )}})
-    blocks.append({"heading_3": {"rich_text": rt("Articles")}})
-    for stage in PRODUCTION_STAGE_OPTIONS:
-        count = production_stage["articles_counts"][stage]
-        if count:
-            blocks.append({"bulleted_list_item": {"rich_text": rt(f"{stage}: {count}件")}})
-    if production_stage["articles_unset"]:
-        blocks.append({"bulleted_list_item": {"rich_text": rt(f"（未設定）: {production_stage['articles_unset']}件")}})
-    blocks.append({"heading_3": {"rich_text": rt("Story Bank")}})
-    for stage in PRODUCTION_STAGE_OPTIONS:
-        count = production_stage["story_bank_counts"][stage]
-        if count:
-            blocks.append({"bulleted_list_item": {"rich_text": rt(f"{stage}: {count}件")}})
-    if production_stage["story_bank_unset"]:
-        blocks.append({"bulleted_list_item": {"rich_text": rt(f"（未設定）: {production_stage['story_bank_unset']}件")}})
+    # 2/7: 今日作る記事（Production Stage別）-- Headline Ready/Basic Writing/Deep Writingのみ
+    blocks.append({"heading_2": {"rich_text": rt("✍ 今日作る記事（Production Stage別）")}})
+    total_writing = sum(len(v) for v in todays_writing.values())
+    blocks.append({"callout": {
+        "rich_text": rt(f"執筆中・執筆待ち合計: {total_writing}件"),
+        "icon": {"type": "emoji", "emoji": "✍" if total_writing else "✅"},
+    }})
+    for stage in WRITING_STAGES:
+        titles = todays_writing[stage]
+        blocks.append({"bulleted_list_item": {"rich_text": rt(f"{stage}: {len(titles)}件")}})
+        for t in titles[:5]:
+            blocks.append({"bulleted_list_item": {"rich_text": rt(f"　- {t}")}})
     blocks.append({"divider": {}})
 
-    # CORE 2/3: 更新が必要な記事 -- Freshness Status／Current Validity／Next Review期限の統合ビュー
+    # 3/7: 更新が必要な記事 -- Freshness Status／Current Validity／Next Review期限の統合ビュー
     blocks.append({"heading_2": {"rich_text": rt("🔴 更新が必要な記事")}})
     blocks.append({"callout": {
         "rich_text": rt(f"合計（重複除く）: {updates_needed['total']}件"),
@@ -501,7 +551,7 @@ def build_page_blocks(opportunities, critical, top_research, publishing_queue, r
         blocks.append({"bulleted_list_item": {"rich_text": rt(f"翻訳の再翻訳待ち（Needs Re-Translation）: {translation_queue['total']}件")}})
     blocks.append({"divider": {}})
 
-    # CORE 3/3: 公開待ちコンテンツ -- Articles Ready to Publish／SNS Draft／Translation Pending の統合ビュー
+    # 4/7: 公開待ちコンテンツ -- Articles Ready to Publish／SNS Draft／Translation Pending の統合ビュー
     blocks.append({"heading_2": {"rich_text": rt("🚀 公開待ちコンテンツ")}})
     blocks.append({"callout": {
         "rich_text": rt(f"合計: {publish_pending['total']}件"),
@@ -514,9 +564,59 @@ def build_page_blocks(opportunities, critical, top_research, publishing_queue, r
     blocks.append({"bulleted_list_item": {"rich_text": rt(f"翻訳レビュー待ち（Human Review Status=Pending）: {publish_pending['translation_pending']}件")}})
     blocks.append({"divider": {}})
 
+    # 5/7: Production Stage内訳（件数表示。カンバン=Board Viewは手動設定、Studio-v4.1-View-Setup-Guide.md参照）
+    blocks.append({"heading_2": {"rich_text": rt("📋 Production Stage内訳")}})
     blocks.append({"paragraph": {"rich_text": rt(
-        "ここから下は、上記3セクションの根拠となる詳細（Today's Opportunities・Critical Updates・"
-        "Law Update Pipeline・Freshness内訳・重複防止・外部監視・Source Intelligence）です。"
+        "カンバン表示（Board View）はNotion公開APIで作成できないため手動設定——"
+        "Studio-v4.1-View-Setup-Guide.mdの「Production Stage Kanban」参照。以下は件数表示。"
+    )}})
+    blocks.append({"heading_3": {"rich_text": rt("Articles")}})
+    for stage in PRODUCTION_STAGE_OPTIONS:
+        count = production_stage["articles_counts"][stage]
+        if count:
+            blocks.append({"bulleted_list_item": {"rich_text": rt(f"{stage}: {count}件")}})
+    if production_stage["articles_unset"]:
+        blocks.append({"bulleted_list_item": {"rich_text": rt(f"（未設定）: {production_stage['articles_unset']}件")}})
+    blocks.append({"heading_3": {"rich_text": rt("Story Bank")}})
+    for stage in PRODUCTION_STAGE_OPTIONS:
+        count = production_stage["story_bank_counts"][stage]
+        if count:
+            blocks.append({"bulleted_list_item": {"rich_text": rt(f"{stage}: {count}件")}})
+    if production_stage["story_bank_unset"]:
+        blocks.append({"bulleted_list_item": {"rich_text": rt(f"（未設定）: {production_stage['story_bank_unset']}件")}})
+    blocks.append({"divider": {}})
+
+    # 6/7: Source Monitor Alerts（Dashboard ⑦と同じ条件、実際に検知された変化を一覧表示）
+    blocks.append({"heading_2": {"rich_text": rt("📡 Source Monitor Alerts")}})
+    blocks.append({"callout": {
+        "rich_text": rt(f"Change Detected: {monitor_alerts['total']}件"),
+        "icon": {"type": "emoji", "emoji": "📡" if monitor_alerts["total"] else "✅"},
+    }})
+    for name, impact in monitor_alerts["top"]:
+        blocks.append({"bulleted_list_item": {"rich_text": rt(f"[{impact or '未分類'}] {name}")}})
+    blocks.append({"divider": {}})
+
+    # 7/7: Recent Law Updates（Law Update Pipelineの状態別内訳を流用——単純な「全件リスト」より
+    # 人間が今どこで動くべきかが分かる形として、こちらを昇格させた）
+    blocks.append({"heading_2": {"rich_text": rt("⚖ Recent Law Updates（Law Update Pipeline）")}})
+    if law_update_queue["counts"]:
+        breakdown = "、".join(f"{k}: {v}件" for k, v in law_update_queue["counts"].items())
+        blocks.append({"bulleted_list_item": {"rich_text": rt(f"内訳: {breakdown}")}})
+    else:
+        blocks.append({"paragraph": {"rich_text": rt("Law Updateレコードはまだありません。")}})
+    if law_update_queue["monitoring"]:
+        blocks.append({"bulleted_list_item": {"rich_text": rt(
+            f"⚠️ 人間の確認待ち（Monitoring）: {'、'.join(law_update_queue['monitoring'][:5])}"
+        )}})
+    if law_update_queue["approval_required"]:
+        blocks.append({"bulleted_list_item": {"rich_text": rt(
+            f"⚠️ 承認待ち（Approval Required）: {'、'.join(law_update_queue['approval_required'][:5])}"
+        )}})
+    blocks.append({"divider": {}})
+
+    blocks.append({"paragraph": {"rich_text": rt(
+        "ここから下は詳細・分析セクションです（Today's Opportunities・Critical Updates・"
+        "Top Research Candidates・Coverage Analysis・Duplicate Prevention等）。削除はしていません。"
     )}})
     blocks.append({"divider": {}})
 
@@ -571,23 +671,6 @@ def build_page_blocks(opportunities, critical, top_research, publishing_queue, r
         blocks.append({"bulleted_list_item": {"rich_text": rt(f"{a['title']}（{a['updated'] or '不明'}）")}})
     blocks.append({"divider": {}})
 
-    # --- Detail: Law Update Pipeline queue (covers "情報更新アラート" and "法改正・制度変更") ---
-    blocks.append({"heading_2": {"rich_text": rt("⚖️ 法改正・制度変更キュー（Law Update Pipeline）")}})
-    if law_update_queue["counts"]:
-        breakdown = "、".join(f"{k}: {v}件" for k, v in law_update_queue["counts"].items())
-        blocks.append({"bulleted_list_item": {"rich_text": rt(f"内訳: {breakdown}")}})
-    else:
-        blocks.append({"paragraph": {"rich_text": rt("Law Updateレコードはまだありません。")}})
-    if law_update_queue["monitoring"]:
-        blocks.append({"bulleted_list_item": {"rich_text": rt(
-            f"⚠️ 人間の確認待ち（Monitoring）: {'、'.join(law_update_queue['monitoring'][:5])}"
-        )}})
-    if law_update_queue["approval_required"]:
-        blocks.append({"bulleted_list_item": {"rich_text": rt(
-            f"⚠️ 承認待ち（Approval Required）: {'、'.join(law_update_queue['approval_required'][:5])}"
-        )}})
-    blocks.append({"divider": {}})
-
     # --- Phase 1/2 detail (unchanged) ---
     blocks.append({"heading_2": {"rich_text": rt("🔴 Freshness 内訳（更新が必要な記事の根拠データ）")}})
     blocks.append({"callout": {
@@ -614,7 +697,9 @@ def build_page_blocks(opportunities, critical, top_research, publishing_queue, r
     blocks.append({"bulleted_list_item": {"rich_text": rt(f"本日の重複スキップ件数: {dup_today['skipped']}件")}})
     blocks.append({"divider": {}})
 
-    blocks.append({"heading_2": {"rich_text": rt("📡 外部監視フィード")}})
+    # Source Monitor Alerts / Recent Law Updates moved up to sections 6/7 --
+    # this now only covers Event Calendar (see MONITOR_STAT_DEFS).
+    blocks.append({"heading_2": {"rich_text": rt("📅 その他の外部監視（Event Calendar）")}})
     for s in monitor_stats:
         icon = "✅" if s["count"] == 0 else "🔔"
         blocks.append({"bulleted_list_item": {"rich_text": rt(f"{icon} {s['emoji']} {s['label']}: {s['count']}件")}})
@@ -682,7 +767,8 @@ def write_page(env, blocks):
 def print_report(opportunities, critical, top_research, publishing_queue, recently_updated,
                   freshness, monitor_stats, pointers, dup_today, source_intel,
                   content_pipeline, law_update_queue, translation_queue, sns_pending,
-                  updates_needed, publish_pending, production_stage):
+                  updates_needed, publish_pending, production_stage,
+                  todays_writing, monitor_alerts):
     print("\n" + "=" * 70)
     print("🤖 AI Command Center — 編集長の毎日のホーム画面")
     print("=" * 70)
@@ -723,6 +809,9 @@ def print_report(opportunities, critical, top_research, publishing_queue, recent
           f"(未設定={production_stage['articles_unset']})")
     print(f"📋 Production Stage (Story Bank): {production_stage['story_bank_counts']} "
           f"(未設定={production_stage['story_bank_unset']})")
+    print(f"✍ 今日作る記事（Production Stage別）: "
+          + ", ".join(f"{stage}={len(titles)}" for stage, titles in todays_writing.items()))
+    print(f"📡 Source Monitor Alerts: {monitor_alerts['total']}件")
     print()
 
 
@@ -784,10 +873,17 @@ def main():
     log("Gathering Production Stage breakdown...")
     production_stage = gather_production_stage_breakdown(env)
 
+    log("Gathering today's writing by Production Stage...")
+    todays_writing = gather_todays_writing_by_stage(env)
+
+    log("Gathering Source Monitor Alerts...")
+    monitor_alerts = gather_source_monitor_alerts(env)
+
     print_report(opportunities, critical, top_research, publishing_queue, recently_updated,
                  freshness, monitor_stats, pointers, dup_today, source_intel,
                  content_pipeline, law_update_queue, translation_queue, sns_pending,
-                 updates_needed, publish_pending, production_stage)
+                 updates_needed, publish_pending, production_stage,
+                 todays_writing, monitor_alerts)
 
     log("Resolving Dashboard page URL...")
     dashboard_url = get_dashboard_url(env)
@@ -795,7 +891,8 @@ def main():
     blocks = build_page_blocks(opportunities, critical, top_research, publishing_queue, recently_updated,
                                 freshness, monitor_stats, pointers, dup_today, source_intel, dashboard_url,
                                 content_pipeline, law_update_queue, translation_queue, sns_pending,
-                                updates_needed, publish_pending, production_stage)
+                                updates_needed, publish_pending, production_stage,
+                                todays_writing, monitor_alerts)
     log("Writing AI Command Center Notion page...")
     page_id = write_page(env, blocks)
     log(f"DONE. AI Command Center page: {page_id}")
