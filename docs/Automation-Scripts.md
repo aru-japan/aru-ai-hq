@@ -1,4 +1,4 @@
-<title>Automation Scripts v2.13</title>
+<title>Automation Scripts v2.14</title>
 
 # Automation Scripts
 ### ARu Studio — Roadmap Version 3 実装記録 ＋ Version 4準備 ＋ Version 4 Phase 5（Editor Experience）＋ ARu Intelligence Phase 1/2/3 ＋ ARu公式記事テンプレート再設計 ＋ Article Template Framework（G3-A／G3-B）＋ Story Bank Database v1.0 ＋ Story Bank Batch #001 ＋ Story Bankバッチ運用ルールの正式化 ＋ ARu Studio v4.1 Editorial Intelligence ＋ 編集運営フローの精緻化 ＋ Production Stage ＋ AI Command Center・Dashboardの統一 ＋ ホーム画面の統一
@@ -1141,6 +1141,14 @@ Notion公開APIはブロックの挿入位置として`after`（指定ブロッ�
 - **新セクションを手動でページ上部へ移動する作業がRei側に残っている**（現状は最下部に追加されたまま。1回のドラッグ操作で完了する）
 - 旧AI Command Centerページ（`AI_COMMAND_CENTER_PAGE_ID`）の最終的な扱い（Archive／削除／恒久保持）は未決定。実運用を進めながら将来判断する
 
+## 運営ガイドの折りたたみ化（2026-07-19、追加指示）
+
+**目的**：見出し（`🤖 AI Command Center — ...`）・最終更新時刻・7項目構成の説明パラグラフは初回セットアップ時の説明であり、毎日の運用では不要——Reiの「ホーム画面を開いたら最初に🆕今日追加するQAが見える構成にしてほしい」という指示に対応。
+
+`build_page_blocks()`の先頭からこの3ブロック（見出し・最終更新・説明文）を削除し、代わりにページ最後尾（自動生成セクションの終了マーカーの直前）へ**toggle（折りたたみ）ブロック**「📖 運営ガイド（初回セットアップ内容）」として移設。中身は変えず、単に配置と表示形式（常時展開→折りたたみ）を変更しただけ。
+
+実データで確認：本セクションの先頭ブロックが`🆕 今日追加するQA`の見出しになったこと、および折りたたみブロックが終了マーカー直前の正しい位置に挿入されたことをAPIで確認済み。なお本番実行時、Reiが既に自動生成セクション全体をDashboard最上部へ手動移動済みだったため、開始マーカーの位置が43→47（既存Linked View側に別途手動追加があったと思われる）に変化していたが、マーカー追跡の仕組みにより正しい位置で更新されたことを確認——**マーカーベースの位置追従設計が実際に機能することを実運用で証明した最初のケース**。標準回帰テスト・全DBレコード件数とも変化なし。
+
 ---
 
-*ARu HQ / Decode Japan — Automation Scripts v2.13 — 2026-07-19*
+*ARu HQ / Decode Japan — Automation Scripts v2.14 — 2026-07-19*

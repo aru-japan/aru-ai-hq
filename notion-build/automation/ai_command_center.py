@@ -484,16 +484,13 @@ def build_page_blocks(opportunities, critical, top_research, publishing_queue, r
                        todays_writing, monitor_alerts):
     now = datetime.datetime.now().strftime("%Y-%m-%d %H:%M")
 
-    blocks = [
-        {"heading_1": {"rich_text": rt("🤖 AI Command Center — 編集長の毎日のホーム画面")}},
-        {"paragraph": {"rich_text": rt(f"最終更新: {now}（ai_command_center.py）")}},
-        {"paragraph": {"rich_text": rt(
-            "ARu Studio v4.1：毎朝5分で今日やることが分かることを最優先に、以下7項目の優先順で構成——"
-            "①今日追加するQA ②今日作る記事(Production Stage別) ③更新が必要な記事 ④公開待ちコンテンツ "
-            "⑤Production Stage内訳 ⑥Source Monitor Alerts ⑦Recent Law Updates"
-        )}},
-        {"divider": {}},
-    ]
+    # Rei's instruction (2026-07-19): the title/explanation blocks are only
+    # useful for initial setup, not for daily use -- opening the home screen
+    # should show "🆕 今日追加するQA" immediately, not a wall of explanation.
+    # That content moves into a collapsible guide at the very bottom instead
+    # of sitting at the top (see the "📖 運営ガイド" toggle near the end of
+    # this function).
+    blocks = []
 
     # 1/7: 今日追加するQA（今日の記事・Deep Guide候補も含む -- 新規コンテンツ制作の活動全体）
     blocks.append({"heading_2": {"rich_text": rt("🆕 今日追加するQA")}})
@@ -718,6 +715,23 @@ def build_page_blocks(opportunities, critical, top_research, publishing_queue, r
             blocks.append({"paragraph": {"rich_text": rt(f"{p['label']}（最終更新: {p['last_edited']}） →", link=p["url"])}})
         else:
             blocks.append({"paragraph": {"rich_text": rt(f"{p['label']}: 未作成（対応スクリプトを一度実行してください）")}})
+    blocks.append({"divider": {}})
+
+    # 運営ガイド（初回セットアップ向け説明。折りたたみ、毎日は開かなくてよい） --
+    # Rei's instruction: title/last-updated/structure explanation move here,
+    # out of the way of the daily "open and see 🆕今日追加するQA immediately" flow.
+    blocks.append({"toggle": {
+        "rich_text": rt("📖 運営ガイド（初回セットアップ内容 -- 毎日確認する必要はありません）"),
+        "children": [
+            {"heading_1": {"rich_text": rt("🤖 AI Command Center — 編集長の毎日のホーム画面")}},
+            {"paragraph": {"rich_text": rt(f"最終更新: {now}（ai_command_center.py）")}},
+            {"paragraph": {"rich_text": rt(
+                "ARu Studio v4.1：毎朝5分で今日やることが分かることを最優先に、以下7項目の優先順で構成——"
+                "①今日追加するQA ②今日作る記事(Production Stage別) ③更新が必要な記事 ④公開待ちコンテンツ "
+                "⑤Production Stage内訳 ⑥Source Monitor Alerts ⑦Recent Law Updates"
+            )}},
+        ],
+    }})
 
     return blocks
 
