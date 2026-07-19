@@ -33,6 +33,7 @@ sys.path.insert(0, AUTOMATION_DIR)
 from notion_api import load_env, notion_request, query_database, get_prop  # noqa: E402
 import ai_gateway  # noqa: E402
 from article_template import get_template, template_for_content, parse_body_sections, validate_sections  # noqa: E402
+import article_brief  # noqa: E402
 
 ENV_PATH = os.path.join(NOTION_BUILD_DIR, ".env")
 
@@ -113,7 +114,13 @@ def rich_text_chunks(content, chunk_size=1990):
     return [{"text": {"content": c}} for c in chunks]
 
 
-def review_article(article):
+def review_article(article, token=None):
+    """token is optional but should always be passed when available: it is what
+    lets the 2026-07-19 Grounding Check look up the Article's source Research
+    record (via the existing `Source Research` relation) and audit the body
+    against the actual approved Article Brief, rather than just AI-judged scores.
+    Without it, grounding/truncation/Sources-completeness checks are skipped and
+    review falls back to the pre-2026-07-19 score-only behavior."""
     title = get_prop(article, "Title", "title")
     body = get_prop(article, "Body", "rich_text")
     update_level = get_prop(article, "Update Level", "number") or 1
@@ -129,12 +136,61 @@ def review_article(article):
         raise RuntimeError(f"Could not parse all 5 scores from AI response:\n{text}")
 
     compliance_note = build_template_compliance_note(body, template=template)
-    suggestions = f"{compliance_note}\n\n{suggestions}" if suggestions else compliance_note
+
+    # --- 2026-07-19 fix: forced-Fail checks that no score can override ---------
+    # A factual/structural defect here means Pass is wrong regardless of how
+    # well-written or well-scored the AI review otherwise finds the article.
+    forced_fail_reasons = []
+    grounding_note = ""
+
+    if article_brief.is_body_truncated(body):
+        forced_fail_reasons.append("本文が途中で終了している可能性（文末が句点・URL等の終端で終わっていない）")
+
+    sections = parse_body_sections(body, template=template)
+    missing, _mandatory_missing = validate_sections(sections, template=template)
+    if content_type == "Premium" and "Sources" in missing:
+        forced_fail_reasons.append("PremiumコンテンツでSourcesセクションが欠落")
+
+    if token:
+        source_research_ids = get_prop(article, "Source Research", "relation")
+        if source_research_ids:
+            research_page = notion_request(token, "GET", f"/pages/{source_research_ids[0]}")
+            editor_notes = get_prop(research_page, "Editor's Notes", "rich_text")
+            parsed_brief = article_brief.parse_editor_notes(editor_notes)
+            if parsed_brief.get("reader_need") or parsed_brief.get("claims"):
+                gc = article_brief.grounding_check(body, parsed_brief, today=__import__("datetime").date.today().isoformat())
+                if gc["unsupported"]:
+                    forced_fail_reasons.append(f"Article Briefにない情報（決定論的） {len(gc['unsupported'])}件")
+                if gc["overclaiming"]:
+                    forced_fail_reasons.append(f"根拠以上の断定表現 {len(gc['overclaiming'])}件")
+                grounding_note = (
+                    f"【Grounding Check（決定論的）】Supported {len(gc['supported'])}件／"
+                    f"Unsupported {len(gc['unsupported'])}件／断定表現 {len(gc['overclaiming'])}件"
+                )
+                if gc["unsupported"] or gc["overclaiming"]:
+                    grounding_note += "\n" + "\n".join(f"  - {u}" for u in gc["unsupported"] + gc["overclaiming"])
+
+                # 2026-07-20: semantic (sentence-level, AI-judged) pass, combined
+                # with the deterministic one above -- catches prose (background/
+                # rationale/purpose paraphrases) the pattern-based check misses.
+                sgc = article_brief.semantic_grounding_check(body, parsed_brief)
+                if sgc["unsupported"]:
+                    forced_fail_reasons.append(f"Article Briefにない情報（意味的） {len(sgc['unsupported'])}件")
+                mapping_lines = [f"  - {s}" for s in sgc["supported"]] + [f"  - UNSUPPORTED: {u}" for u in sgc["unsupported"]]
+                grounding_note += (
+                    f"\n\n【Semantic Grounding Check】Supported {len(sgc['supported'])}件／"
+                    f"Unsupported {len(sgc['unsupported'])}件\n" + "\n".join(mapping_lines)
+                )
+
+    suggestions = "\n\n".join(filter(None, [compliance_note, grounding_note, suggestions]))
 
     overall = round(sum(scores.values()) / 5)
     risk = scores["RISK"]
 
-    if overall >= PASS_OVERALL_THRESHOLD and risk >= PASS_RISK_THRESHOLD:
+    if forced_fail_reasons:
+        result = "Fail"
+        suggestions = f"【Grounding/構造チェックにより強制Fail】{'; '.join(forced_fail_reasons)}\n\n{suggestions}"
+    elif overall >= PASS_OVERALL_THRESHOLD and risk >= PASS_RISK_THRESHOLD:
         result = "Pass"
     elif overall < 50 or risk < 40:
         result = "Fail"
@@ -169,7 +225,7 @@ def main():
     title = get_prop(article, "Title", "title")
     print(f"Reviewing: {title}")
 
-    provider, scores, overall, result, suggestions = review_article(article)
+    provider, scores, overall, result, suggestions = review_article(article, token=token)
     print(f"  provider={provider}")
     for dim in DIMENSIONS:
         print(f"  {dim}: {scores[dim]}")
