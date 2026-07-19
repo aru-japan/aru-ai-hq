@@ -3,14 +3,16 @@
 Dashboard on 2026-07-19 per Rei's decision to have a single home screen).
 
 Orders its section around Rei's 7 named priorities -- the "5 minutes every
-morning" list:
-  1. 🆕 今日追加するQA
-  2. ✍ 今日作る記事（Production Stage別）
-  3. 🔴 更新が必要な記事
-  4. 🚀 公開待ちコンテンツ
-  5. 📋 Production Stage内訳
-  6. 📡 Source Monitor Alerts
-  7. ⚖ Recent Law Updates
+morning" list. Headings all use a "📊" prefix and past-tense/report-style
+wording (2026-07-19) so the section reads as a generated summary, not an
+editable work queue -- the underlying data/logic per section is unchanged:
+  1. 📊 今日追加されたStory Bank QA
+  2. 📊 執筆中の記事（Production Stage別）
+  3. 📊 更新が必要な記事
+  4. 📊 公開待ちコンテンツ
+  5. 📊 Production Stage内訳
+  6. 📊 Source Monitor Alerts
+  7. 📊 Law Update Pipeline
 Items 3/4 are aggregates over existing per-DB gather functions
 (gather_updates_needed() folds together Freshness Status, Current Validity,
 and the review_scheduler.py due-date signal; gather_publish_pending() folds
@@ -227,7 +229,7 @@ def gather_content_pipeline_today(env, today):
 
 
 def gather_todays_writing_by_stage(env):
-    """ARu Studio v4.1 core section 2/7: "今日作る記事（Production Stage別）" --
+    """ARu Studio v4.1 core section 2/7: "執筆中の記事（Production Stage別）" --
     Articles currently sitting in one of the three writing-in-progress
     stages (Headline Ready/Basic Writing/Deep Writing), grouped by stage.
     Distinct from gather_production_stage_breakdown() (section 5/7), which
@@ -492,8 +494,8 @@ def build_page_blocks(opportunities, critical, top_research, publishing_queue, r
     # this function).
     blocks = []
 
-    # 1/7: 今日追加するQA（今日の記事・Deep Guide候補も含む -- 新規コンテンツ制作の活動全体）
-    blocks.append({"heading_2": {"rich_text": rt("🆕 今日追加するQA")}})
+    # 1/7: 今日追加されたStory Bank QA（今日の記事・Deep Guide候補も含む -- 新規コンテンツ制作の活動全体）
+    blocks.append({"heading_2": {"rich_text": rt("📊 今日追加されたStory Bank QA")}})
     blocks.append({"callout": {
         "rich_text": rt(f"本日追加されたStory Bank QA: {len(content_pipeline['new_qa_today'])}件"),
         "icon": {"type": "emoji", "emoji": "🆕" if content_pipeline["new_qa_today"] else "✅"},
@@ -508,8 +510,8 @@ def build_page_blocks(opportunities, critical, top_research, publishing_queue, r
         blocks.append({"bulleted_list_item": {"rich_text": rt(f"　- {t}")}})
     blocks.append({"divider": {}})
 
-    # 2/7: 今日作る記事（Production Stage別）-- Headline Ready/Basic Writing/Deep Writingのみ
-    blocks.append({"heading_2": {"rich_text": rt("✍ 今日作る記事（Production Stage別）")}})
+    # 2/7: 執筆中の記事（Production Stage別）-- Headline Ready/Basic Writing/Deep Writingのみ
+    blocks.append({"heading_2": {"rich_text": rt("📊 執筆中の記事（Production Stage別）")}})
     total_writing = sum(len(v) for v in todays_writing.values())
     blocks.append({"callout": {
         "rich_text": rt(f"執筆中・執筆待ち合計: {total_writing}件"),
@@ -523,7 +525,7 @@ def build_page_blocks(opportunities, critical, top_research, publishing_queue, r
     blocks.append({"divider": {}})
 
     # 3/7: 更新が必要な記事 -- Freshness Status／Current Validity／Next Review期限の統合ビュー
-    blocks.append({"heading_2": {"rich_text": rt("🔴 更新が必要な記事")}})
+    blocks.append({"heading_2": {"rich_text": rt("📊 更新が必要な記事")}})
     blocks.append({"callout": {
         "rich_text": rt(f"合計（重複除く）: {updates_needed['total']}件"),
         "icon": {"type": "emoji", "emoji": "🔴" if updates_needed["total"] else "✅"},
@@ -545,7 +547,7 @@ def build_page_blocks(opportunities, critical, top_research, publishing_queue, r
     blocks.append({"divider": {}})
 
     # 4/7: 公開待ちコンテンツ -- Articles Ready to Publish／SNS Draft／Translation Pending の統合ビュー
-    blocks.append({"heading_2": {"rich_text": rt("🚀 公開待ちコンテンツ")}})
+    blocks.append({"heading_2": {"rich_text": rt("📊 公開待ちコンテンツ")}})
     blocks.append({"callout": {
         "rich_text": rt(f"合計: {publish_pending['total']}件"),
         "icon": {"type": "emoji", "emoji": "🚀" if publish_pending["total"] else "✅"},
@@ -558,7 +560,7 @@ def build_page_blocks(opportunities, critical, top_research, publishing_queue, r
     blocks.append({"divider": {}})
 
     # 5/7: Production Stage内訳（件数表示。カンバン=Board Viewは手動設定、Studio-v4.1-View-Setup-Guide.md参照）
-    blocks.append({"heading_2": {"rich_text": rt("📋 Production Stage内訳")}})
+    blocks.append({"heading_2": {"rich_text": rt("📊 Production Stage内訳")}})
     blocks.append({"paragraph": {"rich_text": rt(
         "カンバン表示（Board View）はNotion公開APIで作成できないため手動設定——"
         "Studio-v4.1-View-Setup-Guide.mdの「Production Stage Kanban」参照。以下は件数表示。"
@@ -580,7 +582,7 @@ def build_page_blocks(opportunities, critical, top_research, publishing_queue, r
     blocks.append({"divider": {}})
 
     # 6/7: Source Monitor Alerts（Dashboard ⑦と同じ条件、実際に検知された変化を一覧表示）
-    blocks.append({"heading_2": {"rich_text": rt("📡 Source Monitor Alerts")}})
+    blocks.append({"heading_2": {"rich_text": rt("📊 Source Monitor Alerts")}})
     blocks.append({"callout": {
         "rich_text": rt(f"Change Detected: {monitor_alerts['total']}件"),
         "icon": {"type": "emoji", "emoji": "📡" if monitor_alerts["total"] else "✅"},
@@ -591,7 +593,7 @@ def build_page_blocks(opportunities, critical, top_research, publishing_queue, r
 
     # 7/7: Recent Law Updates（Law Update Pipelineの状態別内訳を流用——単純な「全件リスト」より
     # 人間が今どこで動くべきかが分かる形として、こちらを昇格させた）
-    blocks.append({"heading_2": {"rich_text": rt("⚖ Recent Law Updates（Law Update Pipeline）")}})
+    blocks.append({"heading_2": {"rich_text": rt("📊 Law Update Pipeline")}})
     if law_update_queue["counts"]:
         breakdown = "、".join(f"{k}: {v}件" for k, v in law_update_queue["counts"].items())
         blocks.append({"bulleted_list_item": {"rich_text": rt(f"内訳: {breakdown}")}})
@@ -727,8 +729,8 @@ def build_page_blocks(opportunities, critical, top_research, publishing_queue, r
             {"paragraph": {"rich_text": rt(f"最終更新: {now}（ai_command_center.py）")}},
             {"paragraph": {"rich_text": rt(
                 "ARu Studio v4.1：毎朝5分で今日やることが分かることを最優先に、以下7項目の優先順で構成——"
-                "①今日追加するQA ②今日作る記事(Production Stage別) ③更新が必要な記事 ④公開待ちコンテンツ "
-                "⑤Production Stage内訳 ⑥Source Monitor Alerts ⑦Recent Law Updates"
+                "①今日追加されたStory Bank QA ②執筆中の記事(Production Stage別) ③更新が必要な記事 ④公開待ちコンテンツ "
+                "⑤Production Stage内訳 ⑥Source Monitor Alerts ⑦Law Update Pipeline"
             )}},
         ],
     }})
