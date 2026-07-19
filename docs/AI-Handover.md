@@ -107,7 +107,9 @@ Research → Article → Article Review → Translation → Translation Review �
 
 ## ■ Current Phase
 
-**Roadmap Version 3.5（Pilot Operation）Day 2まで完了。** AI編集部を7日間実運用して検証する段階の2日目。
+**Roadmap Version 3.5（Pilot Operation）Day 2まで完了。** AI編集部を7日間実運用して検証する段階の2日目（Business Roadmap側の進行、v4.1とは独立）。
+
+**Studio側：ARu Studio v4.1「Editorial Intelligence」を2026-07-19付でReleased（正式リリース）とした。** [Studio-v4.1-Release-Notes.md](./Studio-v4.1-Release-Notes.md)・Gitタグ`studio-v4.1.0`参照。**Rei決定により、v4.1をもって新機能開発を一時停止し、実運用フェーズへ移行する。** Version 4.2は実運用から得られる知見にもとづいて設計する方針——次にAIセッションを開始する際は、明示的な実装依頼がない限り新機能を提案・実装しないこと。
 
 ## ■ Latest Commit
 
@@ -160,6 +162,7 @@ Research → Article → Article Review → Translation → Translation Review �
 - **Story Bank Database v1.0（2026-07-18、新規DB）**：Rei明示的承認によりNo New Database原則の例外として実装。詳細は本文書■ Current Automation・[Story-Bank-View-Setup-Guide.md](./Story-Bank-View-Setup-Guide.md)を参照
 - **Story Bank Batch #001（2026-07-18）**：ChatGPT選定の花火大会20件を`bulk_import_story_bank.py`でインポート（20/20成功、重複0件）。詳細は本文書■ Current Automation参照
 - **ARu Studio v4.1 Editorial Intelligence（2026-07-19）**：Story Bank(15→28)/Articles(66→74)/Source Monitor(18→25)/Law Update(31→41)へのプロパティ追加、7本の新規リレーション、Law Update Pipeline（Human-in-the-loop）、5テンプレート追加、Dashboard5セクション追加。詳細は本文書■ Current Automation・[Automation Scripts](./Automation-Scripts.md)・[Studio-v4.1-View-Setup-Guide.md](./Studio-v4.1-View-Setup-Guide.md)参照
+- **ARu Studio v4.1 正式リリース（Released、2026-07-19）**：編集運営フローの精緻化（Priority自動算出／Impact Summary構造化／review_scheduler.py／Dashboard再構成）とProduction Stage（Story Bank・Articles両方）を経て、[Studio-v4.1-Release-Notes.md](./Studio-v4.1-Release-Notes.md)として正式クローズ。Gitタグ`studio-v4.1.0`（Business Roadmapのタグ`v1.1.0`〜`v3.5.0`と混同しないよう、あえて`v4.1.0`ではなく`studio-`接頭辞とした）。**Rei決定により、v4.1をもって新機能開発を一時停止し実運用フェーズへ移行。Version 4.2は実運用の知見にもとづいて設計する方針**
 
 ## ■ Remaining Tasks
 

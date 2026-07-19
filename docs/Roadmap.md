@@ -159,7 +159,7 @@ Version 2・3で新規に必要となる6DB（Language Master／Region Master／
 
 **Version 1・2・3は完了（一部Deferred）。Version 3.5（Pilot Operation：7日間の実運用）に着手する。Version 4（Enterprise）はPilot Operation完了後、かつ対外的な意思決定・契約行為を伴うため、着手前に別途方針確認が必要。**
 
-**注記（2026-07-19）**：上記のBusiness Roadmap進行とは別に、Studio側のエンジニアリング・マイルストーンとして「ARu Studio v4」「ARu Studio v4.1 Editorial Intelligence」が完了している（[Version4-Completion-Report.md](./Version4-Completion-Report.md)、[Automation Scripts](./Automation-Scripts.md)参照）。両者は独立したカウンタであり、Studio vXの完了はBusiness Roadmapの本Versionを進めるものではない——[Version4-Completion-Report.md](./Version4-Completion-Report.md)で確立した命名規則にもとづく。なお本Roadmap自体はARu Intelligence Phase 1-3・記事テンプレート再設計・Architecture Phaseを含め複数フェーズ分の更新が反映されておらず、既知のドキュメントギャップとして残っている（別セッションでのDocumentation Session対応が必要）。
+**注記（2026-07-19、v4.1正式リリースにより更新）**：上記のBusiness Roadmap進行とは別に、Studio側のエンジニアリング・マイルストーンとして「ARu Studio v4」に続き「**ARu Studio v4.1 Editorial Intelligence」が2026-07-19付でReleased（正式リリース）**となった（[Studio-v4.1-Release-Notes.md](./Studio-v4.1-Release-Notes.md)、Gitタグ`studio-v4.1.0`）。両者は独立したカウンタであり、Studio vXの完了はBusiness Roadmapの本Versionを進めるものではない——[Version4-Completion-Report.md](./Version4-Completion-Report.md)で確立した命名規則にもとづく。**Rei決定：v4.1をもってStudio側の新機能開発を一時停止し、実運用フェーズへ移行する。Version 4.2は実運用から得られる知見にもとづいて設計する方針であり、着手時期は未定。** なお本Roadmap自体はARu Intelligence Phase 1-3・記事テンプレート再設計・Architecture Phaseを含め複数フェーズ分の更新が反映されておらず、既知のドキュメントギャップとして残っている（別セッションでのDocumentation Session対応が必要）。
 
 ---
 
