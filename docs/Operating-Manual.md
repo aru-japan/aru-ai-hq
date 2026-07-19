@@ -294,4 +294,53 @@ python3 bulk_generate_articles.py                                  # TOPICSリ�
 
 ---
 
-*ARu HQ / Decode Japan — ARu Intelligence Operating Manual v4.1 — 2026-07-18*
+## 13. Article Brief Workflow（Research活用の使い方、v4.2で追加）
+
+**Researchは「調査メモ」ではなく「記事執筆に必要な情報が1ページに集まったArticle Brief」として使う。** 目的は、記事を書く前に他のデータベース（Law Update／Story Bank／Source Library／Articles）を個別に開いて回る必要をなくすこと。
+
+### Summary と Editor's Notes の使い分け
+
+Researchには似た2つのrich_textフィールドがあるが、役割は明確に分かれている：
+
+| フィールド | 誰が書くか | 内容 |
+|---|---|---|
+| `Summary` | **AI専用**。編集者は直接書き換えない | AIがリサーチ内容から自動生成する要約。確信が持てない情報は「未確認」と明記される |
+| `Editor's Notes`（旧`Raw Notes`） | **編集者専用** | 編集者が気づいた点・AI要約への補足・修正指示を自由記述する欄 |
+
+AIの生成物と人間の判断を同じ欄に混在させない、というのがこの分離の目的。Summaryに手を入れたくなったら、代わりにEditor's Notesへ書く。
+
+### Freshness（このArticle Briefは最新か）
+
+新規プロパティは追加していない。以下の既存項目から判断する：
+
+- **最終確認日** → `Last AI Update`
+- **法改正検知の有無** → `Related Law Updates`（v4.2で追加したリレーション）に何か紐づいていれば「検知あり」
+- **更新推奨の目安** → 法改正が検知されている、かつまだConfirmed/反映が済んでいない場合
+
+### Source Confidence（この情報はどこまで信頼できるか）
+
+これも既存プロパティの組み合わせで判断する。新規追加していない：
+
+- `Evidence Level`（Official／Verified／Reported／Rumor／AI Suggested）——情報源の質
+- `Verification Status`（Unverified／Verified／Needs Recheck）——確認状況
+- `AI Generated`／`Human Reviewed`——AI生成か、人間が確認済みか
+
+執筆前に、この3つを合わせて「公式情報にもとづいているか」「まだAIが生成しただけで人間未確認か」を必ず確認する。**Evidence LevelがRumor／AI Suggestedのまま執筆に進まない。**
+
+### 執筆までの流れ
+
+1. Dashboard「✍️ 今すぐ書く」または「📊 Top Research Candidates」からResearchを開く
+2. Freshness／Source Confidenceを確認し、Evidence Levelが低ければ先にSource Libraryで裏取りする
+3. `Related Law Updates`で関連する法改正を確認し、未確認（Monitoring）のものは人間が内容を確認して`Confirmed`へ進める
+4. `Related Articles`（新規リレーション、`Converted Article`とは別）で既存の類似記事を確認し、重複でないか判断する
+5. `Related QA`でStory Bankの関連QAカードを確認し、記事に統合できるものがないか確認する
+6. 執筆を開始し、生成後は通常どおりレビュー・翻訳・SNS・公開の各フローへ進む（§1・§8参照）
+
+### 既知の制約
+
+- Research自体のページレイアウト（トグル・Callout・埋め込みDatabase View等の実際の画面構成）は、今回はスキーマ・リレーションの追加のみで、レイアウト自体はまだ実装していない（[Automation-Scripts.md](./Automation-Scripts.md)「Research → Article Brief」節参照）
+- 本マニュアルの§1（Daily Editor Workflow）は、Dashboard／AI Command Centerの度重なる再構成（v4.1の7項目・v4.2の3ゾーン）に追従できておらず、記載内容が古い。次のDocumentation Sessionで実態に合わせて更新すること
+
+---
+
+*ARu HQ / Decode Japan — ARu Intelligence Operating Manual v4.2 — 2026-07-19*

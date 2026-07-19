@@ -1,7 +1,7 @@
-<title>Automation Scripts v2.17</title>
+<title>Automation Scripts v2.18</title>
 
 # Automation Scripts
-### ARu Studio — Roadmap Version 3 実装記録 ＋ Version 4準備 ＋ Version 4 Phase 5（Editor Experience）＋ ARu Intelligence Phase 1/2/3 ＋ ARu公式記事テンプレート再設計 ＋ Article Template Framework（G3-A／G3-B）＋ Story Bank Database v1.0 ＋ Story Bank Batch #001 ＋ Story Bankバッチ運用ルールの正式化 ＋ ARu Studio v4.1 Editorial Intelligence ＋ 編集運営フローの精緻化 ＋ Production Stage ＋ AI Command Center・Dashboardの統一 ＋ ホーム画面の統一 ＋ ARu Studio v4.2 運営者向けガイド ＋ ARu Studio v4.2 編集長ファースト3ゾーン再設計
+### ARu Studio — Roadmap Version 3 実装記録 ＋ Version 4準備 ＋ Version 4 Phase 5（Editor Experience）＋ ARu Intelligence Phase 1/2/3 ＋ ARu公式記事テンプレート再設計 ＋ Article Template Framework（G3-A／G3-B）＋ Story Bank Database v1.0 ＋ Story Bank Batch #001 ＋ Story Bankバッチ運用ルールの正式化 ＋ ARu Studio v4.1 Editorial Intelligence ＋ 編集運営フローの精緻化 ＋ Production Stage ＋ AI Command Center・Dashboardの統一 ＋ ホーム画面の統一 ＋ ARu Studio v4.2 運営者向けガイド ＋ ARu Studio v4.2 編集長ファースト3ゾーン再設計 ＋ Research → Article Brief
 
 | | |
 |---|---|
@@ -1199,6 +1199,36 @@ Notion公開APIはブロックの挿入位置として`after`（指定ブロッ�
 
 Reiより、「Dashboardは案内板ではなく、編集長が一日中仕事をする場所にしたい」との明確な方向性が示された（参考例：ボタンを押すとその場で編集可能な作業画面が開く、他のNotion運用画面）。具体例：「更新が必要」を押すと該当記事＋更新理由＋修正対象箇所が開きそのまま本文修正できる、「今すぐ書く」を押すと候補記事のタイトル・目的・参考情報が開きそのまま執筆を開始できる、「公開判断待ち」を押すと本文・翻訳・レビュー結果・SNS準備状況が一望できてそのまま公開判断まで進められる、という「単なるリンク遷移ではなく作業完結画面」への発展。**これはv4.2以降の指針として確認されたのみで、まだ具体的な実装計画・承認は得ていない。** 次にこの領域に着手する際は、まずどのDBのどのプロパティを「その場で編集可能」にするか・Notion API側で実装できる範囲とRei手動設定が必要な範囲を明確に分けた構成案を提示し、承認を得てから実装すること（本プロジェクトの計画→承認→実装の原則どおり）。
 
+## Research → Article Brief（v4.2、2026-07-19）
+
+**目的**：「データベースを見る編集部」から「記事を書く編集部」への転換。上記「今後の方向性」で予告されていた"執筆完結画面"の第一弾として、Researchを単なる調査メモから、記事執筆に必要な情報が1ページに集約された「Article Brief」へ進化させる。実装前にモックアップ（Notion画面レベルの詳細UI、「外国人の社会保険」を題材、Freshness／Why now?／Source Confidence／Summary-Editor's Notes分離を含む）と、編集者の8段階ワークフロー（テーマ選定→情報確認→法改正確認→重複確認→執筆→翻訳→SNS→公開）のストーリーシミュレーションをReiと確認し、承認を得てから実装した。
+
+### 実装内容（`notion-build/add_article_brief_relations.py`、新規）
+
+**最小限の変更を原則とし、既存資産の再利用を優先**：
+
+- Research.`Raw Notes`（rich_text、既存だが実際にはどのスクリプトからも読み書きされていない未使用フィールドと確認済み）→ **`Editor's Notes`へリネーム**。AI専用の`Summary`と明確に役割分離するため、新規プロパティは追加せず既存の未使用フィールドを転用した
+- 新規リレーション3本（すべてdual_property、対象DB側に自動でミラー生成）：
+  - `Related Law Updates`（Research→Law Update）：Researchには従来Law Updateへの経路が一切なかった純粋な新規リレーション
+  - `Related QA`（Research↔Story Bank）：QAカードの起点（Story Bank）と記事調査の起点（Research）という2つの独立したパイプラインを初めて接続
+  - `Related Articles`（Research→Articles）：**既存の`Converted Article`（変換先1件）とは意図的に別軸**——変換先ではなく、文脈把握・重複防止のための「類似・関連する既存記事」を指す
+
+Research：32→35プロパティ。実データで確認：全76件のResearchレコード・対象4DB（Law Update 5／Story Bank 22／Articles 59）とも件数変化なし。重複リレーションなし——Articlesには既に`Source Research`（`Converted Article`のミラー）が存在していたが、これは変換元1件を指す既存の別リレーションであり、新設した`Related Articles`（複数の関連記事）とは役割が異なることを確認済み。標準回帰テスト（`ai_command_center.py`／`template_migration_report.py`／`publishing_center.py`）すべて正常完走。
+
+### UI専用（新規スキーマなし）の追加要素
+
+以下はすべて**既存プロパティの表示・解釈方法**であり、スキーマ変更を伴わない：
+
+- **Freshness**（最終確認日・更新推奨・法改正検知）：`Last AI Update`（既存）＋新設`Related Law Updates`の有無から算出
+- **Why now?**（なぜ今書くのか・検索需要・法改正・相談増加）：Editorial Planner／Coverage Analyzerの既存スコアリングと新設`Related Law Updates`を根拠に表示
+- **Source Confidence**（公式情報・AI生成・人間確認済み）：既存の`Evidence Level`／`Verification Status`／`AI Generated`／`Human Reviewed`をバッジとして可視化するのみ
+
+運用ルール（AI SummaryとEditor's Notesの使い分け、Freshness・Source Confidenceの確認方法）は`docs/Operating-Manual.md`「Article Brief」節に記載。
+
+### 未実装（Article Brief UIレイアウト自体）
+
+今回はスキーマ・リレーションの追加のみ。モックアップで示したページレイアウト（トグル・Callout・埋め込みDatabase View・「記事を書く」ボタン等）自体は、実際のResearchページへの反映（Notion手動設定、または`render_article_layout.py`的なAPI実装）としてはまだ着手していない——次のセッションでの実装対象。
+
 ---
 
-*ARu HQ / Decode Japan — Automation Scripts v2.17 — 2026-07-19*
+*ARu HQ / Decode Japan — Automation Scripts v2.18 — 2026-07-19*
