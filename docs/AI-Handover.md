@@ -113,7 +113,9 @@ Research → Article → Article Review → Translation → Translation Review �
 
 ## ■ Latest Commit
 
-`82262ea`（このHandover文書を書いた時点でのHEAD）。**必ず`git log --oneline -10`で実際の最新を確認すること。** このフィールドは経年劣化する。
+`26fd35c`（このHandover文書を書いた時点でのHEAD）。**必ず`git log --oneline -10`で実際の最新を確認すること。** このフィールドは経年劣化する。
+
+**Version 4.2着手（2026-07-19、Rei明示の実装依頼）**：上記「新機能開発を一時停止」の方針どおり、Rei本人からの明示的な依頼を受けて着手した最初の改善が「運営者向けガイド」（11データベース＋Dashboardの先頭に役割・使うタイミング・次に進むDB・AI／人の担当・具体例・次の作業を表示、詳細は[Automation-Scripts.md](./Automation-Scripts.md)「ARu Studio v4.2 — 運営者向けガイド」節参照）。新機能開発の一時停止方針そのものは継続中——本件のような明示的な依頼がない限り、新規実装を提案・着手しないこと。
 
 ## ■ Roadmap Current Position
 
