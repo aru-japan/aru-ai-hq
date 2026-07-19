@@ -1,7 +1,7 @@
-<title>Automation Scripts v2.12</title>
+<title>Automation Scripts v2.13</title>
 
 # Automation Scripts
-### ARu Studio — Roadmap Version 3 実装記録 ＋ Version 4準備 ＋ Version 4 Phase 5（Editor Experience）＋ ARu Intelligence Phase 1/2/3 ＋ ARu公式記事テンプレート再設計 ＋ Article Template Framework（G3-A／G3-B）＋ Story Bank Database v1.0 ＋ Story Bank Batch #001 ＋ Story Bankバッチ運用ルールの正式化 ＋ ARu Studio v4.1 Editorial Intelligence ＋ 編集運営フローの精緻化 ＋ Production Stage ＋ AI Command Center・Dashboardの統一
+### ARu Studio — Roadmap Version 3 実装記録 ＋ Version 4準備 ＋ Version 4 Phase 5（Editor Experience）＋ ARu Intelligence Phase 1/2/3 ＋ ARu公式記事テンプレート再設計 ＋ Article Template Framework（G3-A／G3-B）＋ Story Bank Database v1.0 ＋ Story Bank Batch #001 ＋ Story Bankバッチ運用ルールの正式化 ＋ ARu Studio v4.1 Editorial Intelligence ＋ 編集運営フローの精緻化 ＋ Production Stage ＋ AI Command Center・Dashboardの統一 ＋ ホーム画面の統一
 
 | | |
 |---|---|
@@ -1117,6 +1117,30 @@ Reiが提示した1つのStoryの制作パイプライン（`Today's QA → Head
 
 Notion公開APIはLinked Viewの作成・並べ替えができないため、コード側からの直接反映は不可能——[Dashboard-Setup-Guide.md](./Dashboard-Setup-Guide.md)に「ARu Studio v4.1 推奨並び順」節を追加し、同じ7項目優先順に対応する設定内容（新規2種類：今日追加するQA＝Story Bank Linked View、今日作る記事＝Articles Linked View　既存5つ＝並べ替えのみ）と、Coverage Analysis／Duplicate Prevention／Today's Research等の分析系を下部へ移動する指示を文書化した。**実際の並べ替えはRei自身の手動作業が必要**（ドラッグ&ドロップ、他のView関連作業と同じ制約）。
 
+## ホーム画面の統一：DashboardをAI Command Centerの正式ホームへ（2026-07-19、追加指示）
+
+**目的**：DashboardページとAI Command Centerページが重複しているとの指摘を受け、Dashboardを唯一のホーム画面として運用する。
+
+**方針決定（Rei確認済み）**：①既存13個のLinked Viewは削除せず残す（実運用を数週間進めた後に不要なものを整理する方針、安全性優先）、②新しいv4.1運営セクション（7項目優先順）をDashboardページへ追加、③旧AI Command Centerページは削除せず、更新のみ停止してバックアップ兼リファレンスとして保持。
+
+### 技術的制約と対応
+
+Notion公開APIはブロックの挿入位置として`after`（指定ブロックの直後）のみをサポートし、「先頭に挿入」はできない。既存の13 Linked Viewを一切壊さずに新セクションを追加するため、`ai_command_center.py`（引き続き同じファイル名、書き込み先のみDashboardへ変更）に以下を実装：
+
+- 開始・終了の目印として2つのcallout（`MARKER_START`／`MARKER_END`）を使い、この間だけを「自動生成セクション」として扱う
+- 初回実行：目印が存在しないため、新セクション全体（開始callout＋7項目＋終了callout）をページ最下部へ追加する（既存43ブロックは無変更）
+- 2回目以降：目印を（`_fetch_all_children()`でページネーション込みに全件走査して）探し、その間のブロックのみ削除して`after=<開始callout>`で再挿入。Reiがこのセクション全体をページ上部へ手動移動しても、目印さえ動かなければ次回以降も正しい位置で更新され続ける
+- **既知のバグを実装中に発見・修正**：初回実装ではブロック取得を`page_size=100`の単発取得のみにしていたため、Dashboardの合計ブロック数が137件（既存43＋新規94）となり100件を超えた結果、2回目の実行で終了目印を見失い、セクションが重複追加されるおそれがあった。`_fetch_all_children()`でページネーション（`has_more`／`next_cursor`）に対応して修正し、実データで2回連続実行してブロック数が137件のまま変化しない（重複が生成されない）ことを確認済み
+
+### 実データでの確認
+
+初回実行：既存43ブロック（Callout＋見出し＋Linked View）が一切変更されていないことをAPIで確認。2回目実行：目印を正しく発見し、間のコンテンツのみ差し替え（137ブロックのまま安定）。標準回帰テスト（`template_migration_report.py`／`publishing_center.py`）・全DBレコード件数（Story Bank 21／Articles 59／Source Monitor 2／Law Update 5）とも変化なし。
+
+### 未実施事項
+
+- **新セクションを手動でページ上部へ移動する作業がRei側に残っている**（現状は最下部に追加されたまま。1回のドラッグ操作で完了する）
+- 旧AI Command Centerページ（`AI_COMMAND_CENTER_PAGE_ID`）の最終的な扱い（Archive／削除／恒久保持）は未決定。実運用を進めながら将来判断する
+
 ---
 
-*ARu HQ / Decode Japan — Automation Scripts v2.12 — 2026-07-19*
+*ARu HQ / Decode Japan — Automation Scripts v2.13 — 2026-07-19*

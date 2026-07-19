@@ -1,10 +1,9 @@
-"""AI Command Center -- Version 4 Phase 5 (Editor Experience) + ARu Intelligence
-Phase 1/2/3 (Source Monitoring + Editorial Intelligence) + ARu Studio v4.1
-Editorial Intelligence.
+"""ARu Studio v4.1 home screen -- writes directly into the Dashboard page
+(formerly wrote to a separate "AI Command Center" page; unified into
+Dashboard on 2026-07-19 per Rei's decision to have a single home screen).
 
-ARu Studio v4.1 (2026-07-19, restructured again same day per Rei's follow-up
-to unify this page with the manual Dashboard) orders this page's top around
-Rei's 7 named priorities -- the "5 minutes every morning" list:
+Orders its section around Rei's 7 named priorities -- the "5 minutes every
+morning" list:
   1. 🆕 今日追加するQA
   2. ✍ 今日作る記事（Production Stage別）
   3. 🔴 更新が必要な記事
@@ -26,12 +25,15 @@ demoted below a divider as supporting detail, per Rei's instruction. Same
 for Today's Opportunities, Critical Updates, Recently Updated Articles, and
 the original Phase 1/2 monitoring detail.
 
-The manual Notion "Dashboard" page (13 Linked Database Views, distinct from
-this page -- see docs/Dashboard-Setup-Guide.md) mirrors this same priority
-order, but since Notion's public API can't create or reorder Linked Views,
-that page's actual block order has to be rearranged by Rei by hand; this
-script only keeps the *documented* recommended order in sync (see
-Dashboard-Setup-Guide.md's "v4.1 recommended order" section).
+Dashboard's existing 13 manually-configured Linked Database Views (see
+docs/Dashboard-Setup-Guide.md) are intentionally left alone -- Rei chose not
+to delete them (safety-first during the first weeks of real operation).
+Since Notion's public API can only insert blocks via "after: <existing
+block id>" (never "before" or "at position 0"), this script's own section is
+bounded by two marker callouts (see write_to_dashboard()) so every run can
+find and refresh only its own content, wherever Rei has placed it, without
+ever touching the Linked Views. The old standalone AI Command Center page is
+kept as a backup/reference but is no longer written to.
 
 This page never recomputes Coverage Analysis or Editorial Planner's AI
 content itself (that would mean extra AI Gateway calls and a second copy
@@ -52,7 +54,7 @@ sys.path.insert(0, NOTION_BUILD_DIR)
 sys.path.insert(0, os.path.join(REPO_ROOT, "scripts"))
 sys.path.insert(0, AUTOMATION_DIR)
 
-from notion_api import load_env, notion_request, query_database, get_prop, set_env_value  # noqa: E402
+from notion_api import load_env, notion_request, query_database, get_prop  # noqa: E402
 from article_freshness_monitor import FORCE_FLAG_URGENCY_SCORE  # noqa: E402
 from source_categories import UPDATE_CLASSIFICATIONS  # noqa: E402
 from research_prioritizer import rank_research_candidates  # noqa: E402
@@ -468,12 +470,6 @@ def gather_source_intelligence(env):
     }
 
 
-def get_dashboard_url(env):
-    token = env["NOTION_TOKEN"]
-    page = notion_request(token, "GET", f"/pages/{env['DASHBOARD_PAGE_ID']}")
-    return page.get("url", "")
-
-
 def rt(text, link=None):
     obj = {"content": str(text)[:2000]}
     if link:
@@ -482,7 +478,7 @@ def rt(text, link=None):
 
 
 def build_page_blocks(opportunities, critical, top_research, publishing_queue, recently_updated,
-                       freshness, monitor_stats, pointers, dup_today, source_intel, dashboard_url,
+                       freshness, monitor_stats, pointers, dup_today, source_intel,
                        content_pipeline, law_update_queue, translation_queue, sns_pending,
                        updates_needed, publish_pending, production_stage,
                        todays_writing, monitor_alerts):
@@ -688,8 +684,6 @@ def build_page_blocks(opportunities, critical, top_research, publishing_queue, r
         blocks.append({"bulleted_list_item": {"rich_text": rt(
             f"法改正等により事実確認が必要（Current Validity）: {freshness['validity_total']}件（{validity_breakdown}）"
         )}})
-    if dashboard_url:
-        blocks.append({"paragraph": {"rich_text": rt("→ Dashboardの「🔴 Update Needed」で見る", link=dashboard_url)}})
     blocks.append({"divider": {}})
 
     blocks.append({"heading_2": {"rich_text": rt("🛡 Duplicate Prevention（本日）")}})
@@ -728,39 +722,96 @@ def build_page_blocks(opportunities, critical, top_research, publishing_queue, r
     return blocks
 
 
-def get_or_create_page(env):
+# ARu Studio v4.1 (2026-07-19, home screen unification): Rei decided Dashboard
+# (the manually-configured 13-Linked-View page) becomes the single home
+# screen, absorbing AI Command Center's role -- but the 13 Linked Views stay
+# (Rei chose not to delete them; safety-first during the first weeks of real
+# operation, cleanup deferred to later). Notion's public API can insert
+# blocks only via "after: <existing block id>", never "before" or "at
+# position 0" -- so this section can't be forced to the very top
+# automatically. Instead it's bounded by two stable marker callouts
+# (MARKER_START/MARKER_END) that persist across runs regardless of where
+# Rei has dragged them: every run finds the markers, deletes only what's
+# between them, and reinserts fresh content right after MARKER_START,
+# leaving everything else on the page (the 13 Linked Views, their headers)
+# completely untouched. On the very first run (no markers yet) the whole
+# section is appended at the bottom, and Rei does one manual drag to move it
+# to the top -- a single action, not 13.
+#
+# The old standalone AI Command Center page (AI_COMMAND_CENTER_PAGE_ID) is
+# intentionally left alone from this point on -- not deleted, not archived,
+# simply no longer written to (Rei's choice: keep it as a backup/reference
+# during the transition).
+MARKER_START = "🤖 AI Command Center（自動生成セクション開始 -- 以下は毎回自動更新されます。手動編集しないでください）"
+MARKER_END = "🤖 AI Command Center（自動生成セクション終了）"
+
+
+def _block_plain_text(b):
+    rt_list = b.get(b["type"], {}).get("rich_text")
+    if not rt_list:
+        return None
+    return "".join(x.get("plain_text", "") for x in rt_list)
+
+
+def _append_children(token, page_id, children_batch, after=None):
+    body = {"children": children_batch}
+    if after:
+        body["after"] = after
+    result = notion_request(token, "PATCH", f"/blocks/{page_id}/children", body)
+    results = result.get("results") or []
+    return results[-1]["id"] if results else after
+
+
+def _fetch_all_children(token, page_id):
+    """Paginated children fetch -- the Dashboard page exceeds 100 top-level
+    blocks once this section is appended (13 Linked Views + this section),
+    so a single page_size=100 call would silently miss the END marker on
+    later runs and cause a duplicate section to be appended each time."""
+    all_blocks = []
+    cursor = None
+    while True:
+        url = f"/blocks/{page_id}/children?page_size=100"
+        if cursor:
+            url += f"&start_cursor={cursor}"
+        resp = notion_request(token, "GET", url)
+        all_blocks.extend(resp.get("results", []))
+        if not resp.get("has_more"):
+            break
+        cursor = resp.get("next_cursor")
+    return all_blocks
+
+
+def write_to_dashboard(env, blocks):
     token = env["NOTION_TOKEN"]
-    page_id = env.get("AI_COMMAND_CENTER_PAGE_ID")
-    if page_id:
-        try:
-            page = notion_request(token, "GET", f"/pages/{page_id}")
-            if not page.get("archived"):
-                return page_id
-        except RuntimeError:
-            pass
+    page_id = env["DASHBOARD_PAGE_ID"]
 
-    page = notion_request(token, "POST", "/pages", {
-        "parent": {"page_id": env["ARU_STUDIO_PAGE_ID"]},
-        "properties": {"title": {"title": rt("AI Command Center")}},
-    })
-    set_env_value(ENV_PATH, "AI_COMMAND_CENTER_PAGE_ID", page["id"])
-    log(f"Created new AI Command Center page: {page['id']}")
-    return page["id"]
+    results = _fetch_all_children(token, page_id)
 
+    start_idx = end_idx = None
+    for i, b in enumerate(results):
+        text = _block_plain_text(b)
+        if text == MARKER_START:
+            start_idx = i
+        elif text == MARKER_END:
+            end_idx = i
 
-def clear_page(token, page_id):
-    children = notion_request(token, "GET", f"/blocks/{page_id}/children?page_size=100")
-    for b in children.get("results", []):
-        notion_request(token, "DELETE", f"/blocks/{b['id']}")
+    if start_idx is not None and end_idx is not None and end_idx > start_idx:
+        log(f"  Found existing markers (start={start_idx}, end={end_idx}); refreshing in place.")
+        for b in results[start_idx + 1:end_idx]:
+            notion_request(token, "DELETE", f"/blocks/{b['id']}")
+        anchor = results[start_idx]["id"]
+        for i in range(0, len(blocks), 90):
+            anchor = _append_children(token, page_id, blocks[i:i + 90], after=anchor)
+    else:
+        log("  No existing markers found; appending new section to the BOTTOM of Dashboard "
+            "(existing Linked Views untouched). Move this section (between the two 🤖 marker "
+            "callouts) to the top once, manually -- future runs refresh it in place.")
+        start_marker = {"callout": {"rich_text": rt(MARKER_START), "icon": {"type": "emoji", "emoji": "🤖"}}}
+        end_marker = {"callout": {"rich_text": rt(MARKER_END), "icon": {"type": "emoji", "emoji": "🤖"}}}
+        all_new = [start_marker] + blocks + [end_marker]
+        for i in range(0, len(all_new), 90):
+            _append_children(token, page_id, all_new[i:i + 90])
 
-
-def write_page(env, blocks):
-    token = env["NOTION_TOKEN"]
-    page_id = get_or_create_page(env)
-    log("Clearing previous AI Command Center page content...")
-    clear_page(token, page_id)
-    for i in range(0, len(blocks), 90):
-        notion_request(token, "PATCH", f"/blocks/{page_id}/children", {"children": blocks[i:i + 90]})
     return page_id
 
 
@@ -885,17 +936,15 @@ def main():
                  updates_needed, publish_pending, production_stage,
                  todays_writing, monitor_alerts)
 
-    log("Resolving Dashboard page URL...")
-    dashboard_url = get_dashboard_url(env)
-
     blocks = build_page_blocks(opportunities, critical, top_research, publishing_queue, recently_updated,
-                                freshness, monitor_stats, pointers, dup_today, source_intel, dashboard_url,
+                                freshness, monitor_stats, pointers, dup_today, source_intel,
                                 content_pipeline, law_update_queue, translation_queue, sns_pending,
                                 updates_needed, publish_pending, production_stage,
                                 todays_writing, monitor_alerts)
-    log("Writing AI Command Center Notion page...")
-    page_id = write_page(env, blocks)
-    log(f"DONE. AI Command Center page: {page_id}")
+    log("Writing v4.1 section to Dashboard (home screen unification -- old standalone AI Command "
+        "Center page is intentionally left untouched, per Rei's decision)...")
+    page_id = write_to_dashboard(env, blocks)
+    log(f"DONE. Dashboard page: {page_id}")
 
 
 if __name__ == "__main__":
