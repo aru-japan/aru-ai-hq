@@ -722,15 +722,29 @@ def build_page_blocks(opportunities, critical, top_research, publishing_queue, r
     # 運営ガイド（初回セットアップ向け説明。折りたたみ、毎日は開かなくてよい） --
     # Rei's instruction: title/last-updated/structure explanation move here,
     # out of the way of the daily "open and see 🆕今日追加するQA immediately" flow.
+    # ARu Studio v4.2 (2026-07-19): extended with the same 5-field operator-guide
+    # format as add_operator_guide.py's per-database description text (役割／
+    # 使うタイミング／担当／確認する順番／次の作業) -- Dashboard isn't a database
+    # (no `description` field to set), so this toggle is the equivalent surface.
     blocks.append({"toggle": {
         "rich_text": rt("📖 運営ガイド（初回セットアップ内容 -- 毎日確認する必要はありません）"),
         "children": [
             {"heading_1": {"rich_text": rt("🤖 AI Command Center — 編集長の毎日のホーム画面")}},
             {"paragraph": {"rich_text": rt(f"最終更新: {now}（ai_command_center.py）")}},
             {"paragraph": {"rich_text": rt(
-                "ARu Studio v4.1：毎朝5分で今日やることが分かることを最優先に、以下7項目の優先順で構成——"
-                "①今日追加されたStory Bank QA ②執筆中の記事(Production Stage別) ③更新が必要な記事 ④公開待ちコンテンツ "
-                "⑤Production Stage内訳 ⑥Source Monitor Alerts ⑦Law Update Pipeline"
+                "役割：ARu Studio運営の毎日のホーム画面。全データベースの「今日やるべきこと」を自動集計して一望できる場所"
+            )}},
+            {"paragraph": {"rich_text": rt("使うタイミング：毎日、作業を始める一番最初")}},
+            {"paragraph": {"rich_text": rt(
+                "担当：AI（自動集計・毎朝の実行で最新化）＋人（内容を見て判断・実際の作業へ進む）"
+            )}},
+            {"paragraph": {"rich_text": rt(
+                "確認する順番：①今日追加されたStory Bank QA ②執筆中の記事(Production Stage別) ③更新が必要な記事 "
+                "④公開待ちコンテンツ ⑤Production Stage内訳 ⑥Source Monitor Alerts ⑦Law Update Pipeline"
+                "（🔴 Critical Updatesがあれば他の作業より先に確認）"
+            )}},
+            {"paragraph": {"rich_text": rt(
+                "次の作業：\n気になった項目から、該当するデータベース（Story Bank／Research／Articles等）を開いて作業を進めます。"
             )}},
         ],
     }})

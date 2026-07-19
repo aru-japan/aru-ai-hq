@@ -1,7 +1,7 @@
-<title>Automation Scripts v2.14</title>
+<title>Automation Scripts v2.15</title>
 
 # Automation Scripts
-### ARu Studio — Roadmap Version 3 実装記録 ＋ Version 4準備 ＋ Version 4 Phase 5（Editor Experience）＋ ARu Intelligence Phase 1/2/3 ＋ ARu公式記事テンプレート再設計 ＋ Article Template Framework（G3-A／G3-B）＋ Story Bank Database v1.0 ＋ Story Bank Batch #001 ＋ Story Bankバッチ運用ルールの正式化 ＋ ARu Studio v4.1 Editorial Intelligence ＋ 編集運営フローの精緻化 ＋ Production Stage ＋ AI Command Center・Dashboardの統一 ＋ ホーム画面の統一
+### ARu Studio — Roadmap Version 3 実装記録 ＋ Version 4準備 ＋ Version 4 Phase 5（Editor Experience）＋ ARu Intelligence Phase 1/2/3 ＋ ARu公式記事テンプレート再設計 ＋ Article Template Framework（G3-A／G3-B）＋ Story Bank Database v1.0 ＋ Story Bank Batch #001 ＋ Story Bankバッチ運用ルールの正式化 ＋ ARu Studio v4.1 Editorial Intelligence ＋ 編集運営フローの精緻化 ＋ Production Stage ＋ AI Command Center・Dashboardの統一 ＋ ホーム画面の統一 ＋ ARu Studio v4.2 運営者向けガイド
 
 | | |
 |---|---|
@@ -1149,6 +1149,18 @@ Notion公開APIはブロックの挿入位置として`after`（指定ブロッ�
 
 実データで確認：本セクションの先頭ブロックが`🆕 今日追加するQA`の見出しになったこと、および折りたたみブロックが終了マーカー直前の正しい位置に挿入されたことをAPIで確認済み。なお本番実行時、Reiが既に自動生成セクション全体をDashboard最上部へ手動移動済みだったため、開始マーカーの位置が43→47（既存Linked View側に別途手動追加があったと思われる）に変化していたが、マーカー追跡の仕組みにより正しい位置で更新されたことを確認——**マーカーベースの位置追従設計が実際に機能することを実運用で証明した最初のケース**。標準回帰テスト・全DBレコード件数とも変化なし。
 
+## ARu Studio v4.2 — 運営者向けガイド（2026-07-19、新規セッション）
+
+**目的**：v4.1リリース後、実運用フェーズ移行中にRei本人から明示的に依頼された、ARu Studio v4.2の最初の改善。「運営者（Rei）が迷わず毎日運営できること」を目的に、11データベースそれぞれの先頭に、①役割 ②使うタイミング ③次に進むデータベース ④AI／人のどちらが担当か ⑤具体例 ⑥次の作業（自然文での次アクション）の6項目からなる短い説明を表示する。データベースのプロパティ・スキーマ・リレーションは一切変更しない、というRei明示の制約付き。
+
+**実装方針**：Notion APIのデータベースオブジェクトが持つ`description`フィールド（タイトル直下に表示される標準の説明文欄、実データ確認時点で全11DBとも空）を利用。ページ本文へのブロック追加ではなくこのフィールドを使うことで、「ページ最上部に表示される」「プロパティ・スキーマ・リレーションに一切触れない」というRei制約の両方を同時に満たす。新規一回限りスクリプト`notion-build/add_operator_guide.py`（`add_production_stage.py`と同じ位置づけ、再実行しても安全＝冪等）を実装し、Story Bank／Research／Translation／Source Library／Source Monitor／Law Update／Event Calendar／Editorial Calendar／Experience Intelligence／SNS Queue／Articlesの11DB全てへ`PATCH /v1/databases/{id}`で`description`を設定した。
+
+**Story Bankの表現をReiが実装の実態に合わせて修正**：当初案は`docs/User-Journey-Architecture-v1.0.md`が描く理想形（Story Bank→QA Card→Article→Deep Guide→SNS）に寄せていたが、Story Bank→Article自動生成パイプライン自体が未実装（本書「未実施事項（要判断）」に既出の既知ギャップ）であるため、Reiの指示により「通常はResearchへ登録し、必要に応じてArticlesへ手動で記事化」という**現状の実装に即した表現**へ修正した。理想と現状を混同しない、というARu Studio共通の原則（Honest Maturity Labeling）をこの説明文でも徹底している。
+
+**Dashboardへの同様の説明追加**：DashboardはNotionデータベースではなくページのため`description`フィールドを持たない。同じ5項目（役割／使うタイミング／担当／確認する順番／次の作業）を、`ai_command_center.py`が既に生成している「📖 運営ガイド」折りたたみブロック（2026-07-19「運営ガイドの折りたたみ化」セクション参照）の中身として追加する形で実装した。新しいブロック挿入の仕組みは増やさず、既存のマーカーベース更新の枠組みをそのまま利用している。
+
+**実データでの確認**：`add_operator_guide.py`実行後、11DB全ての`description`をAPIで再取得し、意図した文面が正しく設定されていることを確認。あわせてStory Bankのプロパティ数が32件（変更前と同一）のままであることを確認し、スキーマが一切変更されていないことを実証した。`ai_command_center.py`も実データに対して再実行し、Dashboard運営ガイドの折りたたみブロック内に新しい5項目の説明が正しい順序で反映されていることをAPIで確認済み。標準回帰テストは今回の変更が`description`フィールドとページ内テキストのみに限定されるため実施していない（プロパティ・リレーション・生成ロジックへの影響なし）。
+
 ---
 
-*ARu HQ / Decode Japan — Automation Scripts v2.14 — 2026-07-19*
+*ARu HQ / Decode Japan — Automation Scripts v2.15 — 2026-07-19*
