@@ -113,7 +113,9 @@ Research → Article → Article Review → Translation → Translation Review �
 
 ## ■ Latest Commit
 
-`dba2fef`（このHandover文書を書いた時点でのHEAD）。**必ず`git log --oneline -10`で実際の最新を確認すること。** このフィールドは経年劣化する。
+`5b7b81a`（このHandover文書を書いた時点でのHEAD）。**必ず`git log --oneline -10`で実際の最新を確認すること。** このフィールドは経年劣化する。
+
+**Dashboard「作業開始画面」化（2026-07-19、方向性のみ確認・未実装）**：Reiより、Dashboardを「案内板」から「編集長が一日中仕事をする作業開始画面」へ発展させる方向性が明示された（詳細は[Automation-Scripts.md](./Automation-Scripts.md)「Zone 2の使いやすさ改善」節の「今後の方向性」参照）。次にこの領域へ着手する際は、具体的な構成案（DB・プロパティ単位でAPI実装可能な範囲とRei手動設定が必要な範囲を明示）を提示し承認を得てから実装すること。
 
 **Version 4.2着手（2026-07-19、Rei明示の実装依頼）**：上記「新機能開発を一時停止」の方針どおり、Rei本人からの明示的な依頼を受けて着手。①「運営者向けガイド」（11データベース＋Dashboardの先頭に役割・使うタイミング・次に進むDB・AI／人の担当・具体例・次の作業を表示）②「編集長ファースト3ゾーン再設計」（Dashboardを✍️今すぐ書く／📋今日の判断／🔍詳細・AI監視の3ゾーンへ再構成、「3クリック以内で記事を書き始められる」ことを必須要件として実装）。詳細は[Automation-Scripts.md](./Automation-Scripts.md)の該当節参照。新機能開発の一時停止方針そのものは継続中——本件のような明示的な依頼がない限り、新規実装を提案・着手しないこと。
 
