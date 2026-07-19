@@ -1,4 +1,4 @@
-<title>Automation Scripts v2.16</title>
+<title>Automation Scripts v2.17</title>
 
 # Automation Scripts
 ### ARu Studio — Roadmap Version 3 実装記録 ＋ Version 4準備 ＋ Version 4 Phase 5（Editor Experience）＋ ARu Intelligence Phase 1/2/3 ＋ ARu公式記事テンプレート再設計 ＋ Article Template Framework（G3-A／G3-B）＋ Story Bank Database v1.0 ＋ Story Bank Batch #001 ＋ Story Bankバッチ運用ルールの正式化 ＋ ARu Studio v4.1 Editorial Intelligence ＋ 編集運営フローの精緻化 ＋ Production Stage ＋ AI Command Center・Dashboardの統一 ＋ ホーム画面の統一 ＋ ARu Studio v4.2 運営者向けガイド ＋ ARu Studio v4.2 編集長ファースト3ゾーン再設計
@@ -1185,6 +1185,20 @@ Notion公開APIはブロックの挿入位置として`after`（指定ブロッ�
 - **既存13 Linked Viewsの整理**：Zone 3内への位置づけ言及のみで、実際の削除・再設定はRei判断で引き続き先送り
 - **Notion標準Buttonブロックの手動追加**：希望する場合はRei自身によるNotion UI上の一回限りの手動作業が必要
 
+## Zone 2の使いやすさ改善（2026-07-19、Reiレビュー後の3点修正）
+
+**目的**：v4.2 3ゾーン再設計のレビュー中にRei本人（実装者Claude Codeも同時に）が発見した3つの使いにくさを、push前に修正。
+
+1. **Zone 2の3タイルに色がついていなかった**：実装コードに`callout`の`color`フィールドが設定されておらず、絵文字だけが頼りだった。`gather_write_now()`の呼び出し元で、件数に応じて`red_background`（🔴Critical）／`yellow_background`（🚀公開判断待ち）／`orange_background`（🔧更新が必要）、0件時は`green_background`を設定するよう修正
+2. **Zone 2の数字から該当データベースへのリンクがなかった**：`gather_write_now()`が新たにArticles DBのURL（`articles_url`）も取得し、🚀公開判断待ち／🔧更新が必要の2タイルのテキスト自体をArticles DBへのリンクにした。🔴CriticalはArticles／Source Monitor／Law Updateの3DBにまたがる集計のため、単一DBへリンクすると実態と異なるので意図的にリンクなしのまま（内訳はZone 3の「🔴 Critical Updates（詳細）」toggleを参照）
+3. **「他の候補を見る」がスコア順の絞り込みビューではなく、Research DBの生データ全体を開くだけだった**：期待とのズレを防ぐため、ラベルを「Researchデータベースを開く（全件・未整列）→」という正直な表記に変更
+
+実データで実行し、🔴Critical=0件→`green_background`・href無し、🚀公開判断待ち=11件→`yellow_background`・Articles DBへのhref、🔧更新が必要=0件→`green_background`・Articles DBへのhrefであることをAPIで確認済み。
+
+### 今後の方向性（未実装、次のセッションへの申し送り）
+
+Reiより、「Dashboardは案内板ではなく、編集長が一日中仕事をする場所にしたい」との明確な方向性が示された（参考例：ボタンを押すとその場で編集可能な作業画面が開く、他のNotion運用画面）。具体例：「更新が必要」を押すと該当記事＋更新理由＋修正対象箇所が開きそのまま本文修正できる、「今すぐ書く」を押すと候補記事のタイトル・目的・参考情報が開きそのまま執筆を開始できる、「公開判断待ち」を押すと本文・翻訳・レビュー結果・SNS準備状況が一望できてそのまま公開判断まで進められる、という「単なるリンク遷移ではなく作業完結画面」への発展。**これはv4.2以降の指針として確認されたのみで、まだ具体的な実装計画・承認は得ていない。** 次にこの領域に着手する際は、まずどのDBのどのプロパティを「その場で編集可能」にするか・Notion API側で実装できる範囲とRei手動設定が必要な範囲を明確に分けた構成案を提示し、承認を得てから実装すること（本プロジェクトの計画→承認→実装の原則どおり）。
+
 ---
 
-*ARu HQ / Decode Japan — Automation Scripts v2.16 — 2026-07-19*
+*ARu HQ / Decode Japan — Automation Scripts v2.17 — 2026-07-19*

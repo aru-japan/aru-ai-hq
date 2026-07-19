@@ -276,9 +276,16 @@ def gather_write_now(env):
     Each branch is a minimal, self-contained query; whichever branch fires
     also carries the record's own Notion page URL so the caller can render a
     real hyperlink straight to it (Rei's 2026-07-19 "3クリック以内で書き始め
-    られる" requirement)."""
+    られる" requirement).
+
+    Also fetches and returns the Research/Articles database URLs once here
+    (browse_url / articles_url) so Zone 1's "他の候補を見る" and Zone 2's
+    stat tiles can all link straight to the right database instead of
+    leaving Rei to hunt for it among the 13 Linked Views -- a gap Rei flagged
+    after reviewing the first Zone 2 mockup (2026-07-19)."""
     token = env["NOTION_TOKEN"]
     browse_url = notion_request(token, "GET", f"/databases/{env['RESEARCH_DB_ID']}").get("url")
+    articles_url = notion_request(token, "GET", f"/databases/{env['ARTICLES_DB_ID']}").get("url")
 
     for stage in ["Deep Writing", "Basic Writing", "Headline Ready"]:
         pages = query_database(token, env["ARTICLES_DB_ID"], filter_obj={
@@ -288,7 +295,8 @@ def gather_write_now(env):
             p = pages[0]
             return {
                 "title": get_prop(p, "Title", "title"), "url": p.get("url"),
-                "source": "Articles", "meta": f"執筆中・{stage}", "browse_url": browse_url,
+                "source": "Articles", "meta": f"執筆中・{stage}",
+                "browse_url": browse_url, "articles_url": articles_url,
             }
 
     scored, _ = rank_research_candidates(env, limit=1)
@@ -298,7 +306,7 @@ def gather_write_now(env):
         return {
             "title": s["topic"], "url": page.get("url"),
             "source": "Research", "meta": f"Research候補 1位・スコア{s['total']}点",
-            "browse_url": browse_url,
+            "browse_url": browse_url, "articles_url": articles_url,
         }
 
     story_bank = query_database(token, env["STORY_BANK_DB_ID"], filter_obj={
@@ -311,10 +319,14 @@ def gather_write_now(env):
         p = story_bank[0]
         return {
             "title": get_prop(p, "Title", "title"), "url": p.get("url"),
-            "source": "Story Bank", "meta": "Story Bank・記事化待ち", "browse_url": browse_url,
+            "source": "Story Bank", "meta": "Story Bank・記事化待ち",
+            "browse_url": browse_url, "articles_url": articles_url,
         }
 
-    return {"title": None, "url": None, "source": None, "meta": None, "browse_url": browse_url}
+    return {
+        "title": None, "url": None, "source": None, "meta": None,
+        "browse_url": browse_url, "articles_url": articles_url,
+    }
 
 
 def gather_source_monitor_alerts(env, limit=5):
@@ -576,24 +588,41 @@ def build_page_blocks(opportunities, critical, top_research, publishing_queue, r
             "icon": {"type": "emoji", "emoji": "✅"},
         }})
     if write_now["browse_url"]:
-        blocks.append({"paragraph": {"rich_text": rt("他の候補を見る（Research）→", link=write_now["browse_url"])}})
+        # Rei's feedback (2026-07-19): this link opens the raw, unfiltered
+        # Research database, not a score-sorted shortlist -- the label says
+        # so plainly rather than implying a curated "other candidates" view
+        # that doesn't actually exist (Notion's API can't create a filtered/
+        # sorted Linked View).
+        blocks.append({"paragraph": {"rich_text": rt(
+            "Researchデータベースを開く（全件・未整列）→", link=write_now["browse_url"]
+        )}})
     blocks.append({"divider": {}})
 
     # ================= Zone 2 -- 今日の判断 (always expanded, 3 numbers only) =================
+    # Rei's feedback (2026-07-19): the 3 tiles need (1) a background color so
+    # severity reads at a glance without parsing the emoji/number, and (2) a
+    # direct link to the relevant database instead of being a dead-end
+    # number. Critical intentionally has no link -- it aggregates 3 different
+    # DBs (Articles/Source Monitor/Law Update), so a single database link
+    # would misrepresent what's actually behind the count; its breakdown
+    # lives in Zone 3's "🔴 Critical Updates（詳細）" toggle instead.
     blocks.append({"heading_2": {"rich_text": rt("📋 今日の判断")}})
     total_critical = len(critical["articles"]) + len(critical["source_changes"]) + len(critical["law_updates"])
     blocks.append({"column_list": {"children": [
         {"column": {"children": [{"callout": {
             "rich_text": rt(f"{total_critical}件\n🔴 Critical"),
             "icon": {"type": "emoji", "emoji": "🔴" if total_critical else "✅"},
+            "color": "red_background" if total_critical else "green_background",
         }}]}},
         {"column": {"children": [{"callout": {
-            "rich_text": rt(f"{publish_pending['articles_ready']}件\n🚀 公開判断待ち"),
+            "rich_text": rt(f"{publish_pending['articles_ready']}件\n🚀 公開判断待ち", link=write_now["articles_url"]),
             "icon": {"type": "emoji", "emoji": "🚀" if publish_pending["articles_ready"] else "✅"},
+            "color": "yellow_background" if publish_pending["articles_ready"] else "green_background",
         }}]}},
         {"column": {"children": [{"callout": {
-            "rich_text": rt(f"{updates_needed['total']}件\n🔧 更新が必要"),
+            "rich_text": rt(f"{updates_needed['total']}件\n🔧 更新が必要", link=write_now["articles_url"]),
             "icon": {"type": "emoji", "emoji": "🔧" if updates_needed["total"] else "✅"},
+            "color": "orange_background" if updates_needed["total"] else "green_background",
         }}]}},
     ]}})
     blocks.append({"divider": {}})
