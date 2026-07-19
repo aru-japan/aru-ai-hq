@@ -32,6 +32,7 @@ ARu HQ（AI編集部）の運営思想・設計・実装を1つにまとめた�
 | [Version 4 Status Report](docs/Version4-Status.md) | Version 4準備状況のスナップショット（実装機能／記事数等のコンテンツ量／完成率／課題／次にやること） |
 | [Article Property Panel Guide](docs/Article-Property-Panel-Guide.md) | Articleページのプロパティを【本文】【公開情報】【AI Review】【System】へグループ化する手動Notion UI手順（Version 4 Phase 5） |
 | [Editorial Workflow](docs/Editorial-Workflow.md) | 情報源監視から公開・鮮度管理までの編集ワークフロー全体像（ARu Intelligence Phase 3） |
+| [Studio v4.2 Editor-First Guide](docs/Studio-v4.2-Editor-First-Guide.md) | 編集長が毎朝どのように使うかを5分で理解できる運営フロー（Dashboardの✍️今すぐ書く／📋今日の判断／🔍詳細・AI監視の3ゾーン） |
 
 ## 実装
 
