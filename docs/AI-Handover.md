@@ -113,7 +113,7 @@ Research → Article → Article Review → Translation → Translation Review �
 
 ## ■ Latest Commit
 
-`e3aec1f`（このHandover文書を書いた時点でのHEAD）。**必ず`git log --oneline -10`で実際の最新を確認すること。** このフィールドは経年劣化する。
+`a5ea29d`（このHandover文書を書いた時点でのHEAD）。**必ず`git log --oneline -10`で実際の最新を確認すること。** このフィールドは経年劣化する。
 
 ## ■ Roadmap Current Position
 
