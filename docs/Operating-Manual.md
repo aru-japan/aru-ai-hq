@@ -341,6 +341,16 @@ AIの生成物と人間の判断を同じ欄に混在させない、というの
 - Research自体のページレイアウト（トグル・Callout・埋め込みDatabase View等の実際の画面構成）は、今回はスキーマ・リレーションの追加のみで、レイアウト自体はまだ実装していない（[Automation-Scripts.md](./Automation-Scripts.md)「Research → Article Brief」節参照）
 - 本マニュアルの§1（Daily Editor Workflow）は、Dashboard／AI Command Centerの度重なる再構成（v4.1の7項目・v4.2の3ゾーン）に追従できておらず、記載内容が古い。次のDocumentation Sessionで実態に合わせて更新すること
 
+### 運用ログ
+
+実際にArticle Briefを使って記事を書いた際の気づき・改善点をここに記録する（新規DBは作らず、このセクションに直接追記する）。
+
+**2026-07-19｜外国人の社会保険**
+- 作業時間：25分
+- 良かった点：Law Updateが分かりやすかった／関連記事が便利だった
+- 詰まった点：SNS確認に少し時間がかかった
+- 改善案：SNSドラフトをもっと見やすくしたい（未対応、次回検討）
+
 ---
 
 *ARu HQ / Decode Japan — ARu Intelligence Operating Manual v4.2 — 2026-07-19*
