@@ -173,11 +173,25 @@
   - 未分類・詳細未確認（Status=New/Reviewing かつ Experience Genre・Dietary Accommodation Typeがともに空欄のレコードを実データ表示。タグは自動設定・推測分類しない）
   - 【テスト】接頭辞で始まる内部テストフィクスチャ2件は、Experience Intelligence内に保持したまま、Dashboard表示からのみ除外（削除・Status変更・プロパティ変更はしていない）
   - ライブ確認件数：文化体験2件／食の安心17件／未分類・詳細未確認14件／運用画面表示合計33件
-- 準備中：
-  - 今日の新着のクロスDB集計
+
+### 🎎日本文化体験窓の5DB横断拡張（2026-07-20、同日中の第2次修正）
+
+上記の🎎窓（Experience Intelligence単独、`Experience Genre`非空のみ）では、保存先DBが異なる文化体験関連情報（Event Calendarの期間限定企画、Source Library/Research）をReiが個別にDBを開かないと確認できないという課題が見つかり、新規プロパティを追加せずに5DB横断設計へ再設計した（詳細は`docs/Version4-Status.md`§13）。
+
+- 通年・通常営業の体験：5件（`Intelligence Type=Culture` OR `Experience Genre`非空。うち1件＝あんざい果樹園は第三者情報・未確認と明記）
+- 期間限定企画：3件（Event Calendarのうち、Culture系Experience Intelligenceへ`Related Experience Intelligence`で接続されたレコード。`Type`値には依存しない）
+- 文化・交流イベント候補｜内容確認待ち：4件（Event Calendar`Type=文化イベント`だが関連なし、進行中のもの。文化体験と確定しない）
+- 終了・過去の候補：8件（同条件でStatus=Completed/Cancelled、削除はしない）
+- 情報源のみ確認済み：0件、Research連携済み：0件
+- **一意な文化体験表示対象は20件**（5＋3＋4＋8、重複なし）。「今日の新着」の20件はこの20件をcreated_time基準で横断的に見た**別集計**であり、合計へさらに加算するものではない
+- **Research.`Category=日本文化`14件（お辞儀のマナー等、既にArticle化済みの一般教養記事）はこの文化体験窓に含めない**（体験施設・イベントではないため）
+- Event Calendar「中込農園 黒系ぶどう狩り」「体験農園みとか ぶどう狩り」の`Related Experience Intelligence`不足を修正し、両EIの`Region`を「中部」に設定（新規プロパティ・新規レコードは作成せず、既存プロパティの値のみ変更）
+- 回帰テスト`test_editor_desk_digest.py`は合計18件PASS
+- 準備中（変更なし）：
+  - 今日の新着の全セクション横断集計（食・未分類含む統合版）
   - 本日開催・近日開催
   - 変更・中止・期限切れ
-  - Research連携・記事候補の整理（「深い記事候補」は自動判定していない。Related Research設定済みという意味の「Research連携済み」件数のみ表示）
-  - Rei確認待ちのクロスDB集計
+  - Research連携・記事候補の整理（「深い記事候補」は自動判定していない）
+  - Rei確認待ちの全セクション横断集計（食・未分類含む統合版）
 
-*ARu HQ / Decode Japan — Nationwide Intelligence Collection Design — 2026-07-20*
+*ARu HQ / Decode Japan — Nationwide Intelligence Collection Design — 2026-07-20（🎎窓の5DB横断拡張を同日中に追記）*

@@ -337,4 +337,19 @@ Section 7の10件はSource Monitorに未登録のため、今回のURLクリッ�
 
 ---
 
-*ARu HQ / Decode Japan — Nationwide Registration Ledger — 2026-07-20 — 本番Notion API直接クエリにより作成、Notion書き込みなし*
+## 13. 🎎日本文化体験窓の5DB横断拡張に伴うNotion更新履歴（2026-07-20 追記、上記1〜12の記録は削除・再作成していません）
+
+食のお店16件登録後、🎎日本文化体験窓をExperience Intelligence単独表示から5DB横断設計へ拡張した際、事前diff確認（タイトル・ページID・Source URL完全一致）のうえ、以下4件のプロパティ値のみを更新した。新規DB・新規プロパティ・新規レコードの作成はなし。
+
+| # | 対象ページ | 保存先DB | プロパティ | 更新前 | 更新後 |
+|---|---|---|---|---|---|
+| 1 | 中込農園 黒系ぶどう狩り | Event Calendar | Related Experience Intelligence | 空欄 | Experience Intelligence「中込農園」へ接続 |
+| 2 | 体験農園みとか ぶどう狩り | Event Calendar | Related Experience Intelligence | 空欄 | Experience Intelligence「体験農園みとか」へ接続 |
+| 3 | 中込農園 | Experience Intelligence | Region | 未設定 | 中部 |
+| 4 | 体験農園みとか | Experience Intelligence | Region | 未設定 | 中部 |
+
+既存の「中込農園 シャインマスカット狩り」のリレーション、および他の全レコードのプロパティは変更していない。詳細な監査結果・件数・回帰テスト結果は`docs/Version4-Status.md`§13および`docs/Nationwide-Intelligence-Collection-Design-2026-07-20.md`を参照。
+
+---
+
+*ARu HQ / Decode Japan — Nationwide Registration Ledger — 2026-07-20 — 本番Notion API直接クエリにより作成（§13のみ実際のNotion更新を記録）*

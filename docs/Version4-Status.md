@@ -270,4 +270,32 @@ Version 4 / ARu Intelligenceとは別トラックとして、ARu Studio Home「�
 
 ---
 
-*ARu HQ / Decode Japan — Version 4 Current Status Report — 2026-07-14（8〜9節は2026-07-16追記、10〜11節は2026-07-18追記、12節は2026-07-20追記）*
+## 13. 🎎日本文化体験窓 ― Experience Intelligence単独表示から5DB横断設計へ拡張（2026-07-20）
+
+§12時点の🎎窓はExperience Intelligenceの`Experience Genre`非空レコードのみを表示しており、保存先DBが異なる情報（Event Calendarの期間限定企画、Source Monitor/Source Libraryの情報源、Research）はReiが各DBを個別に開かないと確認できなかった。5DB（Experience Intelligence／Event Calendar／Source Monitor／Source Library／Research）を横断監査し、新規プロパティを追加せずに窓を再設計した。
+
+**監査で判明した既存の分類根拠**：Experience Intelligence`Intelligence Type=Culture`、Event Calendar`Type=文化イベント`、Source Library`Category=Culture`、Research`Category=日本文化`。ただしEvent Calendarの`Type=文化イベント`は実体の多くが国際交流団体主催の一般セミナー（ハンズオンの文化体験ではない）であることが判明し、単独の分類根拠としては採用しなかった。**Research.Category=日本文化の14件は一般教養記事（お辞儀のマナー、お盆と正月等、既にStatus=Converted）であり、体験施設・体験イベントではないため、今回の文化体験窓には含めていない。**
+
+**新しい窓の構成と表示件数（ライブ集計、editor_desk_digest.py実行時に毎回再計算）**：
+- 通年・通常営業の体験：**5件**（Experience Intelligenceの`Intelligence Type=Culture`または`Experience Genre`非空。庵an東京／阿波友禅工場／体験農園みとか／中込農園／あんざい果樹園。あんざい果樹園は第三者情報・未確認と明記し「公式確認済み」とは表示しない）
+- 期間限定企画：**3件**（Event Calendarのうち、上記のCulture系Experience Intelligenceへ`Related Experience Intelligence`で接続されたレコード。Type値には依存しない）
+- 文化・交流イベント候補｜内容確認待ち：**4件**（Event Calendar`Type=文化イベント`だがCulture系Experience Intelligenceとの関連がない、進行中・未確定のレコード。文化体験と確定はしない）
+- 終了・過去の候補：**8件**（同条件でStatus=Completed/Cancelledのレコード。削除はしていない）
+- 情報源のみ確認済み：0件（Source Library`Category=Culture`2件は両方ともExperience Intelligenceと接続済みのため該当なし）
+- Research連携済み：0件
+
+**一意な文化体験表示対象は20件**（5＋3＋4＋8、ページIDの重複なし。回帰テストで重複なしを保証）。**「今日の新着」20件は、この20件をNotionのcreated_time（JST）で横断的に見ているだけの別集計であり、20件という数字が上記の合計と一致しているのは今回たまたま全件が同日作成だったためで、別途加算するものではない。**
+
+**修正した既存データの不整合（書き込み内容）**：
+- Event Calendar「中込農園 黒系ぶどう狩り」に`Related Experience Intelligence`（→Experience Intelligence「中込農園」）を追加（修正前は空欄）
+- Event Calendar「体験農園みとか ぶどう狩り」に`Related Experience Intelligence`（→Experience Intelligence「体験農園みとか」）を追加（修正前は空欄）
+- Experience Intelligence「中込農園」の`Region`を「中部」に設定（修正前は未設定）
+- Experience Intelligence「体験農園みとか」の`Region`を「中部」に設定（修正前は未設定）
+- 上記4件はいずれも書き込み前にタイトル・ページID・Source URLの完全一致を確認したうえで実施。他のリレーション・プロパティには触れていない
+- 3件目のテストフィクスチャ（Event Calendar「【テスト】京都 東福寺 紅葉ライトアップ」）を発見、既存のタイトル接頭辞ルールで同様にDashboard非表示に設定（DB内は保持）
+
+新規DB・新規プロパティ・新規レコードは作成していない。実装ファイルは`editor_desk_digest.py`のみ（`is_culture_ei`／`classify_culture_source`／`CONFIRMED_OFFICIAL_SOURCE_PAGE_IDS`等を追加）。回帰テスト`test_editor_desk_digest.py`は合計**18件PASS**（新規8件を追加）。既存AI Command Center・ARu Studio Homeのcalloutは無変更。
+
+---
+
+*ARu HQ / Decode Japan — Version 4 Current Status Report — 2026-07-14（8〜9節は2026-07-16追記、10〜11節は2026-07-18追記、12〜13節は2026-07-20追記）*

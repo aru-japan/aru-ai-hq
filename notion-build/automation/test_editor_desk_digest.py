@@ -13,14 +13,34 @@ notion_request double for classify_source_type's Related Source Library lookup.
 import editor_desk_digest as d
 
 
-def _page(page_id, title, status=None, genre=None, dietary=None, related_source_ids=None):
+def _page(page_id, title, status=None, genre=None, dietary=None, related_source_ids=None,
+          intelligence_type=None, related_research_ids=None):
     props = {
         "Title": {"type": "title", "title": [{"plain_text": title, "text": {"content": title}}]},
         "Experience Genre": {"type": "multi_select", "multi_select": [{"name": g} for g in (genre or [])]},
         "Dietary Accommodation Type": {"type": "multi_select", "multi_select": [{"name": t} for t in (dietary or [])]},
         "Related Source Library": {"type": "relation", "relation": [{"id": rid} for rid in (related_source_ids or [])]},
+        "Related Research": {"type": "relation", "relation": [{"id": rid} for rid in (related_research_ids or [])]},
         "Last AI Update": {"type": "date", "date": None},
         "Source URL": {"type": "url", "url": "https://example.com/x"},
+        "Intelligence Type": {"type": "select", "select": {"name": intelligence_type} if intelligence_type else None},
+    }
+    if status is not None:
+        props["Status"] = {"type": "select", "select": {"name": status}}
+    else:
+        props["Status"] = {"type": "select", "select": None}
+    return {"id": page_id, "created_time": "2026-07-20T01:00:00.000Z", "properties": props}
+
+
+def _ec_page(page_id, title, status=None, etype=None, related_ei_ids=None, related_source_ids=None):
+    props = {
+        "Event Name": {"type": "title", "title": [{"plain_text": title, "text": {"content": title}}]},
+        "Type": {"type": "select", "select": {"name": etype} if etype else None},
+        "Related Experience Intelligence": {"type": "relation", "relation": [{"id": rid} for rid in (related_ei_ids or [])]},
+        "Related Source Library": {"type": "relation", "relation": [{"id": rid} for rid in (related_source_ids or [])]},
+        "Last AI Update": {"type": "date", "date": None},
+        "Source URL": {"type": "url", "url": "https://example.com/ec"},
+        "Event Date": {"type": "date", "date": None},
     }
     if status is not None:
         props["Status"] = {"type": "select", "select": {"name": status}}
@@ -184,6 +204,132 @@ def test_no_overlap_across_sections_after_test_exclusion():
     print("PASSED: culture / food / unclassified remain non-overlapping after test-record exclusion")
 
 
+def test_is_culture_ei_catches_intelligence_type_culture_without_genre():
+    """Reproduces the 2026-07-20 cross-DB audit finding: 体験農園みとか／
+    中込農園／あんざい果樹園 were tagged Intelligence Type=Culture but never
+    got an Experience Genre value, so the old Genre-only filter missed them."""
+    p = _page("mitoka", "体験農園みとか", status="New", intelligence_type="Culture")
+    assert d.multi_select_names(p, "Experience Genre") == []
+    assert d.is_culture_ei(p) is True
+    print("PASSED: Intelligence Type=Culture with empty Experience Genre is still recognized as culture")
+
+
+def test_unclassified_excludes_intelligence_type_culture_records():
+    """The record from the previous test must not also appear in 未分類・
+    詳細未確認 -- it now belongs to 🎎, and must not be shown in two sections."""
+    p = _page("mitoka", "体験農園みとか", status="New", intelligence_type="Culture")
+    unclassified = [
+        q for q in [p]
+        if d.status_name(q) in ("New", "Reviewing")
+        and not d.multi_select_names(q, "Experience Genre")
+        and not d.multi_select_names(q, "Dietary Accommodation Type")
+        and not d.is_culture_ei(q)
+    ]
+    assert unclassified == [], "an Intelligence Type=Culture record must not double-list in 未分類・詳細未確認"
+    print("PASSED: Intelligence Type=Culture record is excluded from 未分類・詳細未確認")
+
+
+def test_period_ec_requires_relation_to_culture_ei_not_type_value():
+    """A real-world shape: 中込農園 黒系ぶどう狩り has Type=季節イベント (not
+    文化イベント) but IS related to a culture-tagged Experience Intelligence
+    record -- it must land in period_ec via the relation, regardless of Type."""
+    ei = _page("nakagomi", "中込農園", status="New", intelligence_type="Culture")
+    ec_linked = _ec_page("nakagomi_grape", "中込農園 黒系ぶどう狩り", status="Planning",
+                          etype="季節イベント", related_ei_ids=["nakagomi"])
+    culture_ei_ids = {ei["id"]}
+    period_ec = [p for p in [ec_linked] if any(
+        rid in culture_ei_ids for rid in d.related_experience_intelligence_ids(p))]
+    assert period_ec == [ec_linked]
+    print("PASSED: Event Calendar record with Type≠文化イベント but related to a culture EI still counts as 期間限定")
+
+
+def test_low_confidence_excludes_records_linked_to_culture_ei():
+    """A Type=文化イベント record that IS related to a culture EI must not
+    also be counted as a low-confidence (unlinked) candidate."""
+    ei = _page("anan", "庵an東京", status="New", intelligence_type="Culture")
+    ec_linked = _ec_page("anan_event", "庵an東京 特別企画", status="Planning",
+                          etype="文化イベント", related_ei_ids=["anan"])
+    ec_unlinked = _ec_page("seminar", "モントリオールの日", status="Completed",
+                            etype="文化イベント", related_ei_ids=[])
+    culture_ei_ids = {ei["id"]}
+    ec_pages = [ec_linked, ec_unlinked]
+    period_ec_ids = {p["id"] for p in ec_pages
+                     if any(rid in culture_ei_ids for rid in d.related_experience_intelligence_ids(p))}
+    low_confidence = [p for p in ec_pages
+                      if d.select_name(p, "Type") == "文化イベント" and p["id"] not in period_ec_ids]
+    assert [p["id"] for p in low_confidence] == ["seminar"]
+    print("PASSED: Type=文化イベント record linked to a culture EI is excluded from low-confidence candidates")
+
+
+def test_low_confidence_splits_pending_vs_ended():
+    completed = _ec_page("done", "写真展「歴史や文化から学ぶ平和」", status="Completed", etype="文化イベント")
+    planning = _ec_page("open", "Have a Chat!（アメリカ）", status="Planning", etype="文化イベント")
+    low_confidence = [completed, planning]
+    ended = [p for p in low_confidence if d.status_name(p) in ("Completed", "Cancelled")]
+    pending = [p for p in low_confidence if p["id"] not in {q["id"] for q in ended}]
+    assert [p["id"] for p in ended] == ["done"]
+    assert [p["id"] for p in pending] == ["open"]
+    print("PASSED: 低確度候補 correctly splits into 終了・過去 vs 内容確認待ち by Status")
+
+
+def test_official_source_allowlist_is_explicit_not_inferred():
+    """classify_culture_source must return 公式情報 only for the explicit
+    CONFIRMED_OFFICIAL_SOURCE_PAGE_IDS allowlist, and must fall through to
+    classify_source_type (never guessing 公式情報) for anything else -- even
+    a page whose linked Source Library entry looks superficially official."""
+    fake = _FakeNotion({"src1": ("観光協会の一般ページ", "https://example-tourism-board.jp/")})
+    d.notion_request = fake
+
+    allowlisted = _page("3a2157f0-f15d-8135-be43-f2311684b1c3", "庵an東京", status="New",
+                         related_source_ids=["src1"])
+    assert d.classify_culture_source("tok", allowlisted) == "公式情報"
+
+    not_allowlisted = _page("some-other-id", "別の施設", status="New", related_source_ids=["src1"])
+    assert d.classify_culture_source("tok", not_allowlisted) == "区分未確認", (
+        "a page not in the explicit allowlist must never be auto-classified as 公式情報, "
+        "even if its related source looks official"
+    )
+    print("PASSED: 公式情報 is only ever returned for the explicit allowlist, never inferred")
+
+
+def test_is_test_record_excludes_event_calendar_fixture_too():
+    """The 2026-07-20 audit found a 3rd test fixture in Event Calendar
+    ('【テスト】京都 東福寺 紅葉ライトアップ'), related to the known test EI
+    record. is_test_record must catch it via its own 'Event Name' title."""
+    ec_fixture = _ec_page("ec_test", "【テスト】京都 東福寺 紅葉ライトアップ", status="Confirmed")
+    assert d.is_test_record(ec_fixture) is True
+    print("PASSED: is_test_record excludes an Event Calendar fixture via its own title property")
+
+
+def test_culture_buckets_partition_without_overlap():
+    """Full-shape regression: culture_ei, period_ec, and low_confidence
+    (pending + ended) must never share a page id."""
+    ei_culture = _page("ei1", "阿波友禅工場", status="New", intelligence_type="Culture")
+    ei_other = _page("ei2", "ハビービ", status="New", dietary=["ヴィーガン"])
+    ec_period = _ec_page("ec1", "阿波友禅工場 特別企画", status="Planning",
+                          etype="季節イベント", related_ei_ids=["ei1"])
+    ec_candidate_open = _ec_page("ec2", "やさしい日本語キャラバン", status="Planning", etype="文化イベント")
+    ec_candidate_ended = _ec_page("ec3", "写真展", status="Completed", etype="文化イベント")
+
+    ei_pages = [ei_culture, ei_other]
+    ec_pages = [ec_period, ec_candidate_open, ec_candidate_ended]
+
+    culture_ei = [p for p in ei_pages if d.is_culture_ei(p)]
+    culture_ei_ids = {p["id"] for p in culture_ei}
+    period_ec = [p for p in ec_pages if any(
+        rid in culture_ei_ids for rid in d.related_experience_intelligence_ids(p))]
+    period_ec_ids = {p["id"] for p in period_ec}
+    low_confidence = [p for p in ec_pages
+                      if d.select_name(p, "Type") == "文化イベント" and p["id"] not in period_ec_ids]
+
+    assert [p["id"] for p in culture_ei] == ["ei1"]
+    assert [p["id"] for p in period_ec] == ["ec1"]
+    assert sorted(p["id"] for p in low_confidence) == ["ec2", "ec3"]
+    culture_ids = culture_ei_ids | period_ec_ids | {p["id"] for p in low_confidence}
+    assert len(culture_ids) == len(culture_ei) + len(period_ec) + len(low_confidence), "must not overlap"
+    print("PASSED: 通年 / 期間限定 / 低確度候補 buckets partition cleanly with no overlap")
+
+
 if __name__ == "__main__":
     test_bug_reproduction_empty_genre_and_dietary_is_unclassified_not_invisible()
     test_culture_and_food_and_unclassified_partition_without_overlap()
@@ -195,4 +341,12 @@ if __name__ == "__main__":
     test_ordinary_title_merely_containing_test_word_is_not_excluded()
     test_target_three_records_still_shown_after_test_exclusion()
     test_no_overlap_across_sections_after_test_exclusion()
+    test_is_culture_ei_catches_intelligence_type_culture_without_genre()
+    test_unclassified_excludes_intelligence_type_culture_records()
+    test_period_ec_requires_relation_to_culture_ei_not_type_value()
+    test_low_confidence_excludes_records_linked_to_culture_ei()
+    test_low_confidence_splits_pending_vs_ended()
+    test_official_source_allowlist_is_explicit_not_inferred()
+    test_is_test_record_excludes_event_calendar_fixture_too()
+    test_culture_buckets_partition_without_overlap()
     print("\nALL TESTS PASSED")

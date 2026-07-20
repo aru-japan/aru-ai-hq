@@ -29,7 +29,27 @@ every section by an explicit title-prefix allowlist (TEST_TITLE_PREFIXES) --
 not deleted, not Status-changed, still fully present in Experience
 Intelligence. The match is a strict startswith() against a short, explicit
 prefix list, never a substring/keyword scan -- a normal record whose title or
-body merely contains the word "テスト" must not be caught by this.
+body merely contains the word "テスト" must not be caught by this. A third
+test fixture (Event Calendar "【テスト】京都 東福寺 紅葉ライトアップ",
+related to the same test Experience Intelligence record) was found during the
+2026-07-20 cross-DB culture-window audit and is excluded the same way.
+
+🎎 日本文化体験 (redesigned 2026-07-20, cross-DB): storage location per record
+is unchanged (通年→Experience Intelligence, 期間限定→Event Calendar, 情報源→
+Source Library) -- nothing is copied into a new DB or a new property. A
+record counts as culture if Intelligence Type=Culture OR Experience Genre is
+non-empty (the OR is itself a fix: the old filter used Genre alone and missed
+3 records tagged Culture with no Genre value). Event Calendar's own Type=
+文化イベント is deliberately NOT trusted as a standalone signal -- a
+same-day audit found most of its 12 records are international-exchange
+seminars, not hands-on culture experiences, and none of them link back to any
+Experience Intelligence record. Those 12 are shown as a separate, explicitly
+unconfirmed "文化・交流イベント候補｜内容確認待ち" bucket (split into
+still-open vs 終了・過去 by Status) rather than being merged into the
+confirmed list. "公式情報" is only ever shown for the small, individually
+verified CONFIRMED_OFFICIAL_SOURCE_PAGE_IDS allowlist -- Source Type=観光協会
+or Verification Status=Verified alone are not sufficient per Rei's
+instruction, since neither proves the linked URL is the venue's own domain.
 
 "深い記事候補" is deliberately never computed as a yes/no judgment. Rei
 corrected this explicitly: Related Research being set only means the record
@@ -176,73 +196,222 @@ def card_line(page):
     return f"{title} ｜ {region} ｜ {tag} ｜ 確認状態: {status}"
 
 
-def build_culture_section(ei_pages):
-    culture = [p for p in ei_pages if multi_select_names(p, "Experience Genre")]
-    today = datetime.now(JST).date()
-    today_new = [p for p in culture if created_date_jst(p) == today]
-    pending = [p for p in culture if status_name(p) in ("New", "Reviewing")]
-    research_linked = [p for p in culture
-                        if p.get("properties", {}).get("Related Research", {}).get("relation")]
-    recheck = [p for p in culture if needs_recheck(p)]
+# Individually verified (2026-07-20 cross-DB audit) records where the linked
+# Source Library URL's own domain/operator name was confirmed to match the
+# venue itself. This is a short, explicit allowlist -- Source Type=観光協会 or
+# Verification Status=Verified alone are NOT sufficient evidence of "official"
+# per Rei's instruction; those values only gate entry into this allowlist
+# after a human (or a prior session's direct WebFetch) confirmed the domain
+# actually belongs to the venue. Never grown automatically.
+CONFIRMED_OFFICIAL_SOURCE_PAGE_IDS = {
+    "3a2157f0-f15d-8135-be43-f2311684b1c3",  # 庵an東京 (Experience Intelligence)
+    "3a2157f0-f15d-81f2-93cb-ddf6ee25f779",  # 阿波友禅工場 (Experience Intelligence)
+    "3a2157f0-f15d-811b-87df-ef2606d43212",  # 体験農園みとか (Experience Intelligence)
+    "3a2157f0-f15d-81ba-8716-d04f68d6bd66",  # 中込農園 (Experience Intelligence)
+    "3a2157f0-f15d-81df-b4da-da87658cb9a9",  # 中込農園 シャインマスカット狩り (Event Calendar)
+    "3a2157f0-f15d-81d0-8b9c-de5c489ba99c",  # 中込農園 黒系ぶどう狩り (Event Calendar)
+    "3a2157f0-f15d-81cb-af39-eee73f15e8a0",  # 体験農園みとか ぶどう狩り (Event Calendar)
+}
 
-    by_region = {}
-    by_genre = {}
-    reservation_yes = []
-    lang_yes = []
-    family_yes = []
-    unconfirmed = []
-    for p in culture:
-        r = select_name(p, "Region") or "未確認"
-        by_region.setdefault(r, []).append(p)
-        for g in multi_select_names(p, "Experience Genre"):
-            by_genre.setdefault(g, []).append(p)
-        resv = select_name(p, "Reservation Status")
-        if resv and resv not in ("記載なし", "未確認"):
-            reservation_yes.append(p)
-        lang_names = multi_select_names(p, "Language Support")
-        # "日本語のみと記載" is a confirmed answer but means the opposite of
-        # multilingual support -- must not be counted alongside the
-        # positive tags, or "多言語ページあり" silently includes Japanese-only
-        # records.
-        if any(n in ("多言語Webページあり", "現地外国語対応を公式確認済み", "多言語予約対応") for n in lang_names):
-            lang_yes.append(p)
-        fam = select_name(p, "Family Participation Status")
-        if fam and fam not in ("記載なし", "未確認"):
-            family_yes.append(p)
-        if status_name(p) in ("New", "Reviewing"):
-            unconfirmed.append(p)
+
+def classify_culture_source(token, page):
+    if page["id"] in CONFIRMED_OFFICIAL_SOURCE_PAGE_IDS:
+        return "公式情報"
+    return classify_source_type(token, page)
+
+
+def is_culture_ei(page):
+    """Intelligence Type=Culture OR Experience Genre non-empty -- the OR is the
+    2026-07-20 fix: the old filter (Experience Genre alone) missed 3 records
+    (体験農園みとか／中込農園／あんざい果樹園) that were tagged
+    Intelligence Type=Culture but never got an Experience Genre value."""
+    return select_name(page, "Intelligence Type") == "Culture" or bool(multi_select_names(page, "Experience Genre"))
+
+
+def related_experience_intelligence_ids(ec_page):
+    rel = ec_page.get("properties", {}).get("Related Experience Intelligence", {})
+    return [r["id"] for r in rel.get("relation", [])] if rel.get("type") == "relation" else []
+
+
+def related_research_ids(page):
+    rel = page.get("properties", {}).get("Related Research", {})
+    return [r["id"] for r in rel.get("relation", [])] if rel.get("type") == "relation" else []
+
+
+def culture_card_runs(page, db_label, status_kind, next_action, source_type):
+    title = title_of(page) or "(無題)"
+    region = select_name(page, "Region") or "未確認"
+    genre_names = multi_select_names(page, "Experience Genre")
+    genre = ", ".join(genre_names) if genre_names else "未確認"
+    status = status_name(page) or "-"
+    last_ai = page.get("properties", {}).get("Last AI Update", {}).get("date")
+    last_ai_str = last_ai["start"] if last_ai else "未確認"
+    event_date = page.get("properties", {}).get("Event Date", {}).get("date")
+    schedule = event_date.get("start", "未確認") if event_date else "通年・常設"
+    source_url = page.get("properties", {}).get("Source URL", {}).get("url")
+
+    runs = [{"text": {"content": title, "link": {"url": page_url(page["id"])}}}]
+    runs.append({"text": {"content": (
+        f" ｜ 状態: {status_kind} ｜ 地域: {region} ｜ ジャンル: {genre} ｜ "
+        f"開催日/営業形態: {schedule} ｜ 確認状態: {status} ｜ 最終確認日: {last_ai_str} ｜ "
+        f"情報元の区分: {source_type} ｜ 保存先: {db_label} ｜ 次に確認: {next_action} ｜ Source: "
+    )}})
+    if source_url:
+        runs.append({"text": {"content": source_url, "link": {"url": source_url}}})
+    else:
+        runs.append({"text": {"content": "未確認"}})
+    return runs
+
+
+def _toggle(label, count, children):
+    if not children:
+        children = [{"paragraph": {"rich_text": rt("該当レコードなし")}}]
+    return {"toggle": {"rich_text": rt(f"{label}（{count}件）"), "children": children}}
+
+
+def build_culture_section(token, ei_pages, ec_pages, source_library_pages):
+    """Cross-DB 🎎 日本文化体験 window (2026-07-20 redesign). Does not copy any
+    record into a new DB -- every card links back to its own original
+    Experience Intelligence / Event Calendar / Source Library page. Storage
+    location is unchanged: 通年 stays in Experience Intelligence, 期間限定 stays
+    in Event Calendar, undecided Web/Source finds stay in Source Library.
+    """
+    culture_ei = [p for p in ei_pages if is_culture_ei(p)]
+    culture_ei_ids = {p["id"] for p in culture_ei}
+
+    period_ec = [p for p in ec_pages
+                 if any(rid in culture_ei_ids for rid in related_experience_intelligence_ids(p))]
+    period_ec_ids = {p["id"] for p in period_ec}
+
+    # C. 低確度候補: Type=文化イベントだが、Culture系Experience Intelligenceとの
+    # 関連がないレコード。2026-07-20監査で、この12件の実体の多くが国際交流・
+    # 啓発イベント（ハンズオンの日本文化体験ではない）と判明したため、
+    # タイトルやTypeの値だけで文化体験と確定せず、常に「候補」として扱う。
+    low_confidence = [p for p in ec_pages
+                       if select_name(p, "Type") == "文化イベント" and p["id"] not in period_ec_ids]
+    ended_low_confidence = [p for p in low_confidence if status_name(p) in ("Completed", "Cancelled")]
+    ended_ids = {p["id"] for p in ended_low_confidence}
+    pending_low_confidence = [p for p in low_confidence if p["id"] not in ended_ids]
+
+    culture_source_library = [p for p in source_library_pages if select_name(p, "Category") == "Culture"]
+
+    def sl_has_ei_link(p):
+        rel = p.get("properties", {}).get("Related to Experience Intelligence (Related Source Library)", {})
+        return bool(rel.get("relation")) if rel.get("type") == "relation" else False
+
+    source_only = [p for p in culture_source_library if not sl_has_ei_link(p)]
+
+    research_linked_ei_ids = {p["id"] for p in culture_ei if related_research_ids(p)}
+    research_linked = (
+        [p for p in culture_ei if p["id"] in research_linked_ei_ids]
+        + [p for p in period_ec if any(rid in research_linked_ei_ids for rid in related_experience_intelligence_ids(p))]
+    )
+
+    pending_ei = [p for p in culture_ei if status_name(p) in ("New", "Reviewing")]
+    pending_ec_period = [p for p in period_ec if status_name(p) == "Planning"]
+    rei_pending = pending_ei + pending_ec_period + pending_low_confidence
+
+    today = datetime.now(JST).date()
+    all_candidates = culture_ei + period_ec + low_confidence
+    today_new = [p for p in all_candidates if created_date_jst(p) == today]
+
+    # Cache classify_culture_source (each call may fetch a related Source
+    # Library page) so records rendered in more than one bucket (e.g. a
+    # pending 低確度候補 shown both under its own bucket and under Rei確認待ち)
+    # only trigger one Notion read.
+    source_type_cache = {}
+
+    def cached_source_type(p):
+        if p["id"] not in source_type_cache:
+            source_type_cache[p["id"]] = classify_culture_source(token, p)
+        return source_type_cache[p["id"]]
 
     blocks = []
     blocks.append({"heading_3": {"rich_text": rt("🎎 日本文化体験")}})
     blocks.append({"callout": {
         "rich_text": rt(
-            f"今日見つけた文化体験: {len(today_new)}件（Notion Created time基準・JST） / "
-            f"Rei確認待ち: {len(pending)}件（Status=New または Reviewing。まだReiが最終確認していない候補という意味で、公開可否の判断ではありません） / "
-            f"全国の文化体験: {len(culture)}件（Experience Genre設定済み）"
+            f"今日見つけた文化体験: {len(today_new)}件（各DBのcreated_time基準・JST） / "
+            f"Rei確認待ち: {len(rei_pending)}件（Status=New/Reviewing/Planning等、まだ確定していないもの。公開可否の判断ではありません） / "
+            f"通年・常設: {len(culture_ei)}件 / 期間限定: {len(period_ec)}件 / "
+            f"文化・交流イベント候補: {len(low_confidence)}件（うち終了済み{len(ended_low_confidence)}件）"
         ),
         "icon": {"type": "emoji", "emoji": "🎎"}, "color": "yellow_background",
     }})
-    filter_children = []
-    filter_children.append({"paragraph": {"rich_text": rt(
-        f"地域別: " + ", ".join(f"{k}={len(v)}" for k, v in sorted(by_region.items())) if by_region else "該当なし"
-    )}})
-    filter_children.append({"paragraph": {"rich_text": rt(
-        f"ジャンル別: " + ", ".join(f"{k}={len(v)}" for k, v in sorted(by_genre.items())) if by_genre else "該当なし"
-    )}})
-    filter_children.append({"paragraph": {"rich_text": rt(f"予約情報あり: {len(reservation_yes)}件")}})
-    filter_children.append({"paragraph": {"rich_text": rt(f"多言語ページあり: {len(lang_yes)}件")}})
-    filter_children.append({"paragraph": {"rich_text": rt(f"家族で参加できる（公式確認・条件あり含む）: {len(family_yes)}件")}})
-    filter_children.append({"paragraph": {"rich_text": rt(f"詳細未確認（Status=New/Reviewing）: {len(unconfirmed)}件")}})
-    filter_children.append({"paragraph": {"rich_text": rt(f"Research連携済み（旧称: 深い記事候補。Related Research設定済みという意味で、AIによる候補判定ではありません）: {len(research_linked)}件")}})
-    filter_children.append({"paragraph": {"rich_text": rt(f"営業・提供状況の再確認が必要（Last AI Update 90日超 または Status=Reviewing）: {len(recheck)}件")}})
-    blocks.append({"toggle": {"rich_text": rt("絞り込みビュー"), "children": filter_children}})
 
-    card_children = []
-    for p in culture:
-        card_children.append({"paragraph": {"rich_text": rt(card_line(p), link=page_url(p["id"]))}})
-    if not card_children:
-        card_children = [{"paragraph": {"rich_text": rt("該当レコードなし")}}]
-    blocks.append({"toggle": {"rich_text": rt(f"全国の文化体験 一覧（{len(culture)}件）"), "children": card_children}})
+    # 通年・通常営業の体験（期間限定企画があれば、施設の下に入れ子で表示）
+    facility_children = []
+    for p in culture_ei:
+        source_type = cached_source_type(p)
+        runs = culture_card_runs(p, "Experience Intelligence", "常設", "情報の鮮度再確認（最終確認日を参照）", source_type)
+        facility_children.append({"paragraph": {"rich_text": runs}})
+        for q in period_ec:
+            if p["id"] in related_experience_intelligence_ids(q):
+                q_source_type = cached_source_type(q)
+                q_runs = culture_card_runs(q, "Event Calendar", "期間限定（このEIの企画）", "開催内容・日程の最新確認", q_source_type)
+                q_runs[0]["text"]["content"] = "　└ " + q_runs[0]["text"]["content"]
+                facility_children.append({"paragraph": {"rich_text": q_runs}})
+    blocks.append(_toggle("通年・通常営業の体験 一覧", len(culture_ei), facility_children))
+
+    # 期間限定・近日開催（施設ごとの入れ子とは別に、期間限定企画だけを平坦に一覧化）
+    period_children = [
+        {"paragraph": {"rich_text": culture_card_runs(p, "Event Calendar", "期間限定", "開催内容・日程の最新確認", cached_source_type(p))}}
+        for p in period_ec
+    ]
+    blocks.append(_toggle("期間限定・近日開催 一覧", len(period_ec), period_children))
+
+    # 文化・交流イベント候補｜内容確認待ち（低確度、進行中/未確定のみ）
+    candidate_children = [
+        {"paragraph": {"rich_text": culture_card_runs(
+            p, "Event Calendar", "文化・交流イベント候補｜内容確認待ち",
+            "文化体験か国際交流イベントかの内容確認", cached_source_type(p))}}
+        for p in pending_low_confidence
+    ]
+    blocks.append(_toggle("文化・交流イベント候補｜内容確認待ち 一覧", len(pending_low_confidence), candidate_children))
+
+    # 終了・過去の候補（削除しない、アーカイブとして保持）
+    ended_children = [
+        {"paragraph": {"rich_text": culture_card_runs(
+            p, "Event Calendar", "終了", "アーカイブとして保持のみ、対応不要", cached_source_type(p))}}
+        for p in ended_low_confidence
+    ]
+    blocks.append(_toggle("終了・過去の候補 一覧", len(ended_low_confidence), ended_children))
+
+    # 情報源のみ確認済み（Source Library Category=CultureでEI/EC未接続のもの）
+    source_only_children = []
+    for p in source_only:
+        title = title_of(p) or "(無題)"
+        region = select_name(p, "Region") or "未確認"
+        verif = select_name(p, "Verification Status") or "未確認"
+        url = p.get("properties", {}).get("URL", {}).get("url")
+        runs = [{"text": {"content": title, "link": {"url": page_url(p["id"])}}}]
+        runs.append({"text": {"content": (
+            f" ｜ 地域: {region} ｜ Verification Status: {verif} ｜ 保存先: Source Library ｜ "
+            f"次に確認: Experience Intelligence/Event Calendarへの登録要否を判断 ｜ Source: "
+        )}})
+        runs.append({"text": {"content": url, "link": {"url": url}}} if url else {"text": {"content": "未確認"}})
+        source_only_children.append({"paragraph": {"rich_text": runs}})
+    blocks.append(_toggle("情報源のみ確認済み 一覧", len(source_only), source_only_children))
+
+    # Research連携済み（Related Research設定済みという意味。AIによる候補判定ではない）
+    research_children = []
+    for p in research_linked:
+        db_label = "Experience Intelligence" if p["id"] in culture_ei_ids else "Event Calendar"
+        research_children.append({"paragraph": {"rich_text": culture_card_runs(
+            p, db_label, "Research連携済み", "深掘り記事化の判断", cached_source_type(p))}})
+    blocks.append(_toggle("Research連携済み 一覧", len(research_linked), research_children))
+
+    # Rei確認待ち（常設・期間限定・低確度候補のうち未確定のものを横断表示）
+    pending_children = []
+    for p in pending_ei:
+        pending_children.append({"paragraph": {"rich_text": culture_card_runs(
+            p, "Experience Intelligence", "常設・要確認", "登録内容の最終確認", cached_source_type(p))}})
+    for p in pending_ec_period:
+        pending_children.append({"paragraph": {"rich_text": culture_card_runs(
+            p, "Event Calendar", "期間限定・要確認", "開催内容の最終確認", cached_source_type(p))}})
+    for p in pending_low_confidence:
+        pending_children.append({"paragraph": {"rich_text": culture_card_runs(
+            p, "Event Calendar", "候補・要確認", "文化体験か国際交流イベントかの内容確認", cached_source_type(p))}})
+    blocks.append(_toggle("Rei確認待ち 一覧", len(rei_pending), pending_children))
 
     return blocks
 
@@ -339,11 +508,16 @@ def classify_source_type(token, page):
 
 
 def build_unclassified_section(token, ei_pages):
+    # is_culture_ei also catches Intelligence Type=Culture records whose
+    # Experience Genre is empty (体験農園みとか／中込農園／あんざい果樹園) --
+    # those now belong to the 🎎 culture section (2026-07-20 fix) and must not
+    # also show up here, or the same record would appear in two sections.
     unclassified = [
         p for p in ei_pages
         if status_name(p) in ("New", "Reviewing")
         and not multi_select_names(p, "Experience Genre")
         and not multi_select_names(p, "Dietary Accommodation Type")
+        and not is_culture_ei(p)
     ]
 
     blocks = []
@@ -392,10 +566,13 @@ def build_unclassified_section(token, ei_pages):
 def build_section_blocks(env):
     token = env["NOTION_TOKEN"]
     ei_pages = query_database(token, env["EXPERIENCE_INTELLIGENCE_DB_ID"])
+    ec_pages = query_database(token, env["EVENT_CALENDAR_DB_ID"])
+    source_library_pages = query_database(token, env["SOURCE_LIBRARY_DB_ID"])
     # Exclude known internal test fixtures from every section below (not from
-    # Experience Intelligence itself -- records, Status, and properties are
-    # untouched; this only affects what this script renders on Dashboard).
+    # the underlying databases themselves -- records, Status, and properties
+    # are untouched; this only affects what this script renders on Dashboard).
     ei_pages = [p for p in ei_pages if not is_test_record(p)]
+    ec_pages = [p for p in ec_pages if not is_test_record(p)]
 
     blocks = []
     blocks.append({"heading_2": {"rich_text": rt("ARu編集デスク｜今日の情報")}})
@@ -411,7 +588,7 @@ def build_section_blocks(env):
         blocks.append({"heading_3": {"rich_text": rt(h)}})
         blocks.append({"paragraph": {"rich_text": rt("準備中（今回のスコープ外）")}})
 
-    blocks.extend(build_culture_section(ei_pages))
+    blocks.extend(build_culture_section(token, ei_pages, ec_pages, source_library_pages))
 
     blocks.extend(build_food_section(ei_pages))
 
