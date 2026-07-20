@@ -352,4 +352,73 @@ Section 7の10件はSource Monitorに未登録のため、今回のURLクリッ�
 
 ---
 
-*ARu HQ / Decode Japan — Nationwide Registration Ledger — 2026-07-20 — 本番Notion API直接クエリにより作成（§13のみ実際のNotion更新を記録）*
+## 14. QAカード候補 第1バッチ8件（Story Bank、2026-07-20 追記）
+
+ARu編集部3分野拡充（文化体験・QAカード・外国人人物）の一環。Story Bank実データ（花火大会22件、変更なし）は保持したまま、新規QA候補8件を登録。既存Research／Articlesとの意味的重複を確認し、対応関係が明確なもののみRelationを設定（無理に接続していない）。
+
+| # | 質問 | ページID | Story Status | Source Status | Related Research | Generated Article |
+|---|---|---|---|---|---|---|
+| 1 | 日本に引っ越したら、住民登録はどこで行いますか？ | 3a3157f0-f15d-8156-8653-f885bb449a69 | New | Unverified | なし | なし |
+| 2 | 健康保険証がまだないとき、病院へ行くことはできますか？ | 3a3157f0-f15d-819d-b3df-f12426bb6862 | New | Unverified | なし | なし |
+| 3 | 会社を辞めたら、健康保険と年金はどうなりますか？ | 3a3157f0-f15d-81ad-9b35-d11af6e536c6 | New | Unverified | 「転職・退職時に必要な行政手続きは？」(39d157f0-f15d-81ce-a025-df9383358fe0) | あり(39d157f0-f15d-8121-be5f-edbc35ac019d) |
+| 4 | 帰国するとき、支払った年金を受け取れる制度はありますか？ | 3a3157f0-f15d-81b6-88c8-f6974c7cd52d | New | Unverified | 「外国人労働者が日本で年金に入る義務はある？帰国するときはどうなる？」(39d157f0-f15d-81e0-9ac3-e3dc85160728、Status=New・記事未生成) | なし |
+| 5 | 在留カードの住所が変わったら、どこへ届け出ますか？ | 3a3157f0-f15d-81dd-b15d-e8bd3b8eae55 | New | Unverified | なし | なし |
+| 6 | ごみの分け方が分からないとき、どこで確認できますか？ | 3a3157f0-f15d-8185-8cf7-e8ea66f9a9cf | New | Unverified | 「日本のゴミ分別ルールを理解する」(39c157f0-f15d-81a1-83ee-eb1b8a480658) | あり(39c157f0-f15d-811a-b6b3-c9a7bbd062a9) |
+| 7 | 賃貸住宅を借りるとき、保証人がいない場合はどうすればよいですか？ | 3a3157f0-f15d-81a1-8666-d797646c6d45 | New | Unverified | なし | なし |
+| 8 | 地震が起きたとき、最初に何をすればよいですか？ | 3a3157f0-f15d-81c3-88b7-e377d26d7b73 | New | Unverified | なし | なし |
+
+全件Short Answer空欄・Premium Candidate=False・Production Stage未設定（初期値通り）。既存Research側に同一タイトルが2件ずつ重複登録されている箇所（#3・#6の元記事）を発見したが、今回はいずれか1件にのみ接続し、Research側の重複整理は対象外（別途監査予定）。花火大会22件・既存Research/Articlesのプロパティは一切変更していない。
+
+登録後、QAカード窓（Dashboard）で回答作成待ち8件・Source確認待ち8件を確認済み。
+
+## 15. QAカード候補 第2バッチ8件（Story Bank、2026-07-20 追記）
+
+質問14は銀行口座／携帯電話で必要書類・確認先が異なるため、14-A・14-Bの2枚に分割して登録（合計16件）。
+
+| # | 質問 | ページID | Story Status | Source Status | Related Research | Generated Article |
+|---|---|---|---|---|---|---|
+| 9 | 日本語に自信がなくても受診できる病院をどう探しますか？ | 3a3157f0-f15d-8183-8022-db3efb53110d | New | Unverified | なし | なし |
+| 10 | 外国籍の子どもは、日本の公立学校へ通えますか？ | 3a3157f0-f15d-8134-83c4-d4cd06bda971 | New | Unverified | 「外国人の子どもが日本の小学校に入学するための手続きと準備は？」(39d157f0-f15d-81e3-a28b-e1f2cee5abda、Status=New・記事未生成) | なし |
+| 11 | 電車が遅れて仕事や学校に遅れたとき、遅延証明書はもらえますか？ | 3a3157f0-f15d-8106-8d62-c1687125e413 | New | Unverified | なし | なし |
+| 12 | 日本で自転車を購入したら、防犯登録は必要ですか？ | 3a3157f0-f15d-81e1-9679-e1bb5d552ed9 | New | Unverified | なし | なし |
+| 13 | 外国の運転免許を日本の運転免許へ切り替えるには何が必要ですか？ | 3a3157f0-f15d-81be-a5a7-e82caece0588 | New | Unverified | 「日本で運転免許を取得・切り替えするには？」(39d157f0-f15d-81f4-95d5-e26b36c5b57a) | あり(39d157f0-f15d-818b-9c87-d8c3173c1173) |
+| 14-A | 日本で銀行口座を開設するとき、何が必要ですか？ | 3a3157f0-f15d-8115-b043-de63a7090b6e | New | Unverified | 「銀行口座の開設方法」(39c157f0-f15d-81b0-80b1-e486aa6d47bd) | あり(39c157f0-f15d-81bb-b11e-fded67654d26) |
+| 14-B | 日本で携帯電話を契約するとき、何が必要ですか？ | 3a3157f0-f15d-817d-b140-d9f9e061b396 | New | Unverified | 「携帯電話（スマートフォン）を契約するには？」(39d157f0-f15d-81aa-be71-d918613ec628) | あり(39d157f0-f15d-8115-95d5-e5b8ba3778e8) |
+| 15 | ハラール、ヴィーガン、豚肉不使用のお店をどう探せますか？ | 3a3157f0-f15d-8163-9ef4-f9f4f3c8acce | New | Unverified | なし（🥗食の安心窓のExperience Intelligenceデータとの将来的な相互参照候補として記録） | なし |
+
+**QAカード候補 合計16件登録完了。** Story Bank総件数：花火大会22件（変更なし）＋QA16件＝38件。登録後、QAカード窓（Dashboard）で回答作成待ち16件・Source確認待ち16件を確認済み。全件Short Answer空欄・Premium Candidate=False・記事生成・アプリ公開は行っていない。
+
+## 16. 日本文化体験 第1バッチ8件（Experience Intelligence、2026-07-20 追記）
+
+登録前にSource Library（61件）を全件URLで重複確認し、対象8ドメインとも既存レコードなしを確認したうえで、各1件ずつ新規Source Libraryを作成し、Experience Intelligenceとリレーションで接続。
+
+| # | 施設名 | 地域 | ジャンル | EI ページID | Source Library ページID | Source URL | Reservation Status | Language Support | Family Participation Status | 情報元区分 |
+|---|---|---|---|---|---|---|---|---|---|---|
+| 1 | 平取町立二風谷アイヌ文化博物館 | 北海道 | 木工・竹細工・漆器 | 3a3157f0-f15d-819b-8402-e5f5fb826c72 | 3a3157f0-f15d-8167-99ef-d89e941d3bc7 | https://www.biratori-ainu-culture.com/en/trip/experience/ | 予約必須 | 多言語Webページあり | 記載なし | 自治体系ポータル経由（施設単独の公式サイトではない） |
+| 2 | 大館曲げわっぱ協同組合 | 東北 | 曲げわっぱ作り | 3a3157f0-f15d-8170-9e54-cf73347e817f | 3a3157f0-f15d-8138-b0e4-f8fe3536eb6e | https://odate-magewappa.com/experience/ | 予約必須 | 記載なし | 記載なし | 公式（施設自身のドメイン確認済み） |
+| 3 | 陶あん（京焼・清水焼） | 関西 | 陶器・焼き物 | 3a3157f0-f15d-81f9-9be6-f5f0ee49041a | 3a3157f0-f15d-8155-b561-efaa903a1ddd | https://touan.co.jp/taiken/index.html | 予約方法のみ確認済み | 記載なし | 記載なし | 公式 |
+| 4 | 金継工房 鹿田喜造漆店 | 関西 | 金継ぎ | 3a3157f0-f15d-8137-8d70-c2bdd2dbba37 | 3a3157f0-f15d-8174-9229-ee18c4cc5764 | https://kintsugi.shikataurushi.com/trial/ | 予約必須 | 多言語Webページあり | 年齢・人数等の条件あり | 公式 |
+| 5 | 夢幻庵備前焼工房 | 中国 | 陶器・焼き物 | 3a3157f0-f15d-81a2-bfca-e81c1c905efa | 3a3157f0-f15d-812b-b36d-d30d09166ae0 | https://mugenan.co.jp/ceramics/ | 予約受付あり・必須か未確認 | 多言語Webページあり | 記載なし | 公式 |
+| 6 | 石州和紙会館 | 中国 | 和紙作り | 3a3157f0-f15d-8178-80e9-e40c6885fd0b | 3a3157f0-f15d-8170-8e54-fc307079a723 | https://www.sekishu-washikaikan.com/ | 予約必須 | 記載なし | 記載なし | 公式 |
+| 7 | 沖縄空手会館 | 九州・沖縄 | 武道 | 3a3157f0-f15d-81d4-8793-e526401f1bc4 | 3a3157f0-f15d-8139-bdc4-de8c903c7e46 | https://karatekaikan.jp/en/ | 未確認 | 多言語Webページあり | 記載なし | 公式 |
+| 8 | 有田ポーセリンパーク 有田焼工房 | 九州・沖縄 | 陶器・焼き物 | 3a3157f0-f15d-81f8-b177-e65f9af96c87 | 3a3157f0-f15d-8158-afa8-d1bf5ed3f660 | https://www.arita.jp/experience/post.html | 予約受付あり・必須か未確認 | 記載なし | 家族参加可を公式確認 | 観光協会経由（施設公式サイトarita-touki.comは接続エラーで直接確認不可） |
+
+**注記（#8）**：施設公式サイト（`https://www.arita-touki.com/experience`）へは3回アクセスを試みたがいずれも接続エラー（ECONNRESET／socket hang up）で直接開けなかったため、有田観光協会公式サイト（arita.jp）のページを根拠として使用。情報元区分を「観光協会経由」と正しく記録し、「公式情報」の確定判定（`CONFIRMED_OFFICIAL_SOURCE_PAGE_IDS`）には含めていない。
+
+**注記（#1）**：Source URLは平取町のアイヌ文化ポータルページで、二風谷アイヌ文化博物館単独の公式サイトではなく複数施設が併記されている。同様に「公式情報」の確定判定には含めていない。
+
+登録後、🎎日本文化体験窓「通年・通常営業の体験」が既存5件＋新規8件＝**13件**になったことをDashboardで確認済み。期間限定3件・文化交流イベント候補4件・終了8件は変更なし。花火大会22件・既存の他レコードは変更していない。
+
+## 17. 🌏日本で活躍する外国人・人物とお店 第1件（Experience Intelligence、2026-07-20 追記）
+
+Wikipediaのみを現在活動中の根拠にせず、木下酒造有限会社の公式サイトを直接確認したうえで登録。
+
+| 表示名 | EI ページID | Source Library ページID | Intelligence Type | Status | Source URL | 確認内容 |
+|---|---|---|---|---|---|---|
+| フィリップ・ハーパー（木下酒造 杜氏） | 3a3157f0-f15d-8140-a44e-e3151c51acb9 | 3a3157f0-f15d-81dd-a476-e68db698205b | User | New | https://www.sake-tamagawa.com/company/ | 公式サイト会社概要（役員欄）に「常務取締役 フィリップ・ハーパー（杜氏）」、酒造りページにも現在形で杜氏として記載を直接確認 |
+
+**未確認のまま残した点**：ページ自体に最終更新日・公開日の表示がなく、日付での「現在活動中」の裏付けは取れていない（会社概要への現職役員としての掲載を根拠とした）。出身国（イギリス）はWikipedia記載であり、公式サイト本体では未確認。私的な住所・連絡先は収集していない。Source Libraryは`sake-tamagawa.com`ドメインの重複なしを確認したうえで新規作成（1件）。
+
+登録後、🌏日本で活躍する外国人・人物とお店窓に1件、未分類・詳細未確認窓は11件のまま（二重表示なし）をDashboardで確認済み。
+
+**残り7件の人物・店舗候補**：優先対象（旅館・宿泊施設運営者、母国料理店オーナー、武道家・指導者、職人・工芸家、地域コミュニティ運営者）について、Wikipediaのみに依拠せず本人・店舗・団体の公式サイトまたは公式SNSを確認できたものだけを次バッチで登録する。今回見送った元銀山温泉の人物は、現在日本で活動中という要件を満たさない可能性が高いため対象へ戻していない。

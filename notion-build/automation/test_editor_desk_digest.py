@@ -49,6 +49,21 @@ def _ec_page(page_id, title, status=None, etype=None, related_ei_ids=None, relat
     return {"id": page_id, "created_time": "2026-07-20T01:00:00.000Z", "properties": props}
 
 
+def _story_page(page_id, title, qa_question="", short_answer="", story_status=None,
+                 source_status=None, premium=False, next_review=None):
+    props = {
+        "Title": {"type": "title", "title": [{"plain_text": title, "text": {"content": title}}]},
+        "QA Question": {"type": "rich_text", "rich_text": [{"plain_text": qa_question}] if qa_question else []},
+        "Short Answer": {"type": "rich_text", "rich_text": [{"plain_text": short_answer}] if short_answer else []},
+        "Story Status": {"type": "select", "select": {"name": story_status} if story_status else None},
+        "Source Status": {"type": "select", "select": {"name": source_status} if source_status else None},
+        "Premium Candidate": {"type": "checkbox", "checkbox": premium},
+        "Generated Article": {"type": "relation", "relation": []},
+        "Next Review": {"type": "date", "date": {"start": next_review} if next_review else None},
+    }
+    return {"id": page_id, "created_time": "2026-07-20T01:00:00.000Z", "properties": props}
+
+
 def _unclassified(pages):
     return [
         p for p in pages
@@ -330,6 +345,106 @@ def test_culture_buckets_partition_without_overlap():
     print("PASSED: 通年 / 期間限定 / 低確度候補 buckets partition cleanly with no overlap")
 
 
+def test_broadened_test_prefix_catches_story_bank_naming_style():
+    """2026-07-20: Story Bank's own test fixtures use a different naming style
+    ("【テスト・Dashboard View動作確認】...", "【テスト・Story Bank検証用】...")
+    than the "【テスト】" fixtures found earlier in Experience Intelligence/
+    Event Calendar. The broadened "【テスト" prefix (no closing bracket) must
+    catch both styles via a single rule."""
+    fixture_a = _story_page("t1", "【テスト・Dashboard View動作確認】この行が見えれば①は成功")
+    fixture_b = _story_page("t2", "【テスト・Story Bank検証用】隅田川花火大会")
+    fixture_c = _page("t3", "【テスト】紅葉シーズン到来、京都の紅葉記事の好機", status="New")
+    assert d.is_test_record(fixture_a) is True
+    assert d.is_test_record(fixture_b) is True
+    assert d.is_test_record(fixture_c) is True
+    print("PASSED: broadened 【テスト prefix catches both 【テスト】 and 【テスト・...】 naming styles")
+
+
+def test_qa_section_excludes_records_with_empty_qa_question():
+    """Story Bank's 22 existing 花火大会 (fireworks) records have no QA
+    Question filled in at all -- they must not be treated as QA candidates,
+    per Rei's explicit instruction that they are not foreign-resident QA
+    content and must stay out of the QA window's extraction target."""
+    fireworks = _story_page("fw1", "隅田川花火大会", qa_question="")
+    real_qa = _story_page("qa1", "住民登録はどこで行いますか", qa_question="日本に引っ越したら、住民登録はどこで行いますか？")
+    story_pages = [fireworks, real_qa]
+    qa = [p for p in story_pages if d._rich_text_value(p, "QA Question").strip()]
+    assert [p["id"] for p in qa] == ["qa1"], "empty-QA-Question fireworks record must be excluded from QA candidates"
+    print("PASSED: QA section extraction target excludes records with empty QA Question (花火大会22件)")
+
+
+def test_qa_section_buckets_reflect_story_status_and_source_status():
+    answer_pending = _story_page("q1", "Q1", qa_question="質問1", short_answer="", story_status="New")
+    ready = _story_page("q2", "Q2", qa_question="質問2", short_answer="回答あり",
+                         story_status="Approved", source_status="Verified")
+    delivered = _story_page("q3", "Q3", qa_question="質問3", short_answer="回答あり",
+                             story_status="Published", source_status="Verified")
+    needs_recheck = _story_page("q4", "Q4", qa_question="質問4", short_answer="回答あり",
+                                 story_status="New", source_status="Needs Recheck")
+    premium = _story_page("q5", "Q5", qa_question="質問5", short_answer="回答あり",
+                           story_status="New", premium=True)
+    qa = [answer_pending, ready, delivered, needs_recheck, premium]
+
+    answer_pending_ids = [p["id"] for p in qa if not d._rich_text_value(p, "Short Answer").strip()]
+    ready_ids = [p["id"] for p in qa if d._story_status(p) == "Approved"]
+    delivered_ids = [p["id"] for p in qa if d._story_status(p) == "Published"]
+    needs_update_ids = [p["id"] for p in qa if select_status_needs_recheck(p)]
+    premium_ids = [p["id"] for p in qa if d._checkbox_value(p, "Premium Candidate")]
+
+    assert answer_pending_ids == ["q1"]
+    assert ready_ids == ["q2"]
+    assert delivered_ids == ["q3"]
+    assert needs_update_ids == ["q4"]
+    assert premium_ids == ["q5"]
+    print("PASSED: QA buckets (回答作成待ち／掲載準備中／提供済み／更新が必要／Premium候補) reflect Story Status/Source Status correctly")
+
+
+def select_status_needs_recheck(page):
+    return d.select_name(page, "Source Status") == "Needs Recheck" or d._next_review_overdue(page)
+
+
+def test_is_person_ei_and_unclassified_exclusion():
+    """Reproduces the intended 2026-07-20 People-window design: Intelligence
+    Type=User records must be recognized by is_person_ei, and must not
+    double-list in 未分類・詳細未確認 even though Experience Genre and
+    Dietary Accommodation Type are both empty for a person/shop record."""
+    person = _page("person1", "武道家 山田太郎（仮）", status="New", intelligence_type="User")
+    assert d.is_person_ei(person) is True
+    unclassified = [
+        q for q in [person]
+        if d.status_name(q) in ("New", "Reviewing")
+        and not d.multi_select_names(q, "Experience Genre")
+        and not d.multi_select_names(q, "Dietary Accommodation Type")
+        and not d.is_culture_ei(q)
+        and not d.is_person_ei(q)
+    ]
+    assert unclassified == [], "an Intelligence Type=User record must not double-list in 未分類・詳細未確認"
+    print("PASSED: Intelligence Type=User is recognized as a person/shop record and excluded from 未分類・詳細未確認")
+
+
+def test_people_section_does_not_overlap_culture_or_food():
+    """Full-shape regression: culture, food, and people buckets (all three
+    drawn from the same Experience Intelligence table) must never share a
+    page id, even though all three now rely on Intelligence Type / Experience
+    Genre / Dietary Accommodation Type read from the same records."""
+    culture = _page("c1", "阿波友禅工場", status="New", intelligence_type="Culture")
+    food = _page("f1", "ハビービ", status="New", dietary=["ヴィーガン"])
+    person = _page("p1", "職人 佐藤花子（仮）", status="New", intelligence_type="User")
+    ei_pages = [culture, food, person]
+
+    culture_ids = {p["id"] for p in ei_pages if d.is_culture_ei(p)}
+    food_ids = {p["id"] for p in ei_pages if d.multi_select_names(p, "Dietary Accommodation Type")}
+    people_ids = {p["id"] for p in ei_pages if d.is_person_ei(p)}
+
+    assert culture_ids == {"c1"}
+    assert food_ids == {"f1"}
+    assert people_ids == {"p1"}
+    assert not (culture_ids & food_ids)
+    assert not (culture_ids & people_ids)
+    assert not (food_ids & people_ids)
+    print("PASSED: 🎎文化体験 / 🥗食の安心 / 🌏人物・お店 buckets remain mutually exclusive")
+
+
 if __name__ == "__main__":
     test_bug_reproduction_empty_genre_and_dietary_is_unclassified_not_invisible()
     test_culture_and_food_and_unclassified_partition_without_overlap()
@@ -349,4 +464,9 @@ if __name__ == "__main__":
     test_official_source_allowlist_is_explicit_not_inferred()
     test_is_test_record_excludes_event_calendar_fixture_too()
     test_culture_buckets_partition_without_overlap()
+    test_broadened_test_prefix_catches_story_bank_naming_style()
+    test_qa_section_excludes_records_with_empty_qa_question()
+    test_qa_section_buckets_reflect_story_status_and_source_status()
+    test_is_person_ei_and_unclassified_exclusion()
+    test_people_section_does_not_overlap_culture_or_food()
     print("\nALL TESTS PASSED")

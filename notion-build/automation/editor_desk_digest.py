@@ -99,7 +99,10 @@ SNS_SOURCE_MARKERS = ["instagram.com", "twitter.com", "x.com", "facebook.com", "
 # Explicit, exact-prefix allowlist of known internal test-fixture titles.
 # Deliberately NOT a substring/keyword match -- a real record whose title or
 # Description happens to contain the word "テスト" must not be excluded.
-TEST_TITLE_PREFIXES = ["【テスト】"]
+# "【テスト" (no closing bracket) is intentional: it catches both "【テスト】..."
+# (Experience Intelligence/Event Calendar fixtures) and "【テスト・...】" (the
+# Story Bank fixture naming style found 2026-07-20), via a single prefix.
+TEST_TITLE_PREFIXES = ["【テスト"]
 
 
 def is_test_record(page):
@@ -211,6 +214,18 @@ CONFIRMED_OFFICIAL_SOURCE_PAGE_IDS = {
     "3a2157f0-f15d-81df-b4da-da87658cb9a9",  # 中込農園 シャインマスカット狩り (Event Calendar)
     "3a2157f0-f15d-81d0-8b9c-de5c489ba99c",  # 中込農園 黒系ぶどう狩り (Event Calendar)
     "3a2157f0-f15d-81cb-af39-eee73f15e8a0",  # 体験農園みとか ぶどう狩り (Event Calendar)
+    # 2026-07-20, culture batch 1 (8 venues) -- 6 of 8 confirmed as the venue's
+    # own domain (name/operator matches the URL directly). The remaining 2
+    # (二風谷アイヌ文化博物館, 有田ポーセリンパーク) are deliberately NOT
+    # listed here: their Source URL is a town portal / tourism-association
+    # page, not the venue's own site, so classify_source_type's conservative
+    # default applies to them instead.
+    "3a3157f0-f15d-8170-9e54-cf73347e817f",  # 大館曲げわっぱ協同組合
+    "3a3157f0-f15d-81f9-9be6-f5f0ee49041a",  # 陶あん（京焼・清水焼）
+    "3a3157f0-f15d-8137-8d70-c2bdd2dbba37",  # 金継工房 鹿田喜造漆店
+    "3a3157f0-f15d-81a2-bfca-e81c1c905efa",  # 夢幻庵備前焼工房
+    "3a3157f0-f15d-8178-80e9-e40c6885fd0b",  # 石州和紙会館
+    "3a3157f0-f15d-81d4-8793-e526401f1bc4",  # 沖縄空手会館
 }
 
 
@@ -236,6 +251,14 @@ def related_experience_intelligence_ids(ec_page):
 def related_research_ids(page):
     rel = page.get("properties", {}).get("Related Research", {})
     return [r["id"] for r in rel.get("relation", [])] if rel.get("type") == "relation" else []
+
+
+def is_person_ei(page):
+    """Experience Intelligence.Intelligence Type=User -- the agreed storage
+    location for 日本で活躍する外国人・人物とお店 (2026-07-20). No new
+    property or database; person/shop candidates are ordinary Experience
+    Intelligence pages distinguished only by this existing select value."""
+    return select_name(page, "Intelligence Type") == "User"
 
 
 def culture_card_runs(page, db_label, status_kind, next_action, source_type):
@@ -416,6 +439,64 @@ def build_culture_section(token, ei_pages, ec_pages, source_library_pages):
     return blocks
 
 
+def person_card_runs(token, page, next_action):
+    """Experience Intelligence.Intelligence Type=User records store their
+    structured fields inside Description (## Public Profile / ## Source /
+    ## Public Business Information / ## Verification Notes), same pattern as
+    the food-store records -- no new properties. This card only surfaces the
+    properties that do exist (Title, Region, Status, Last AI Update, Source
+    URL) plus a link to the record; the structured Description itself is read
+    directly in Notion, not duplicated into the digest text."""
+    title = title_of(page) or "(無題)"
+    region = select_name(page, "Region") or "未確認"
+    status = status_name(page) or "-"
+    last_ai = page.get("properties", {}).get("Last AI Update", {}).get("date")
+    last_ai_str = last_ai["start"] if last_ai else "未確認"
+    source_url = page.get("properties", {}).get("Source URL", {}).get("url")
+    source_type = classify_source_type(token, page)
+
+    runs = [{"text": {"content": title, "link": {"url": page_url(page["id"])}}}]
+    runs.append({"text": {"content": (
+        f" ｜ 地域: {region} ｜ 確認状態: {status} ｜ 最終確認日: {last_ai_str} ｜ "
+        f"情報元の区分: {source_type} ｜ 次に確認: {next_action} ｜ Source: "
+    )}})
+    runs.append({"text": {"content": source_url, "link": {"url": source_url}}} if source_url
+                 else {"text": {"content": "未確認"}})
+    return runs
+
+
+def build_people_section(token, ei_pages):
+    people = [p for p in ei_pages if is_person_ei(p)]
+    today = datetime.now(JST).date()
+    today_new = [p for p in people if created_date_jst(p) == today]
+    pending = [p for p in people if status_name(p) in ("New", "Reviewing")]
+
+    blocks = []
+    blocks.append({"heading_3": {"rich_text": rt("🌏 日本で活躍する外国人・人物とお店")}})
+    blocks.append({"callout": {
+        "rich_text": rt(
+            f"今日見つけた候補: {len(today_new)}件（created_time基準・JST） / "
+            f"Rei確認待ち: {len(pending)}件（Status=New/Reviewing。公開可否の判断ではありません） / "
+            f"登録件数: {len(people)}件（Intelligence Type=User）"
+        ),
+        "icon": {"type": "emoji", "emoji": "🌏"}, "color": "blue_background",
+    }})
+
+    all_children = [
+        {"paragraph": {"rich_text": person_card_runs(token, p, "掲載可否の判断に必要な情報を確認")}}
+        for p in people
+    ]
+    blocks.append(_toggle("人物・お店 一覧", len(people), all_children))
+
+    pending_children = [
+        {"paragraph": {"rich_text": person_card_runs(token, p, "登録内容の最終確認")}}
+        for p in pending
+    ]
+    blocks.append(_toggle("Rei確認待ち 一覧", len(pending), pending_children))
+
+    return blocks
+
+
 def build_food_section(ei_pages):
     food = [p for p in ei_pages if multi_select_names(p, "Dietary Accommodation Type")]
     today = datetime.now(JST).date()
@@ -512,12 +593,15 @@ def build_unclassified_section(token, ei_pages):
     # Experience Genre is empty (体験農園みとか／中込農園／あんざい果樹園) --
     # those now belong to the 🎎 culture section (2026-07-20 fix) and must not
     # also show up here, or the same record would appear in two sections.
+    # is_person_ei (Intelligence Type=User) is excluded the same way (2026-07-20
+    # second addition) -- person/shop candidates belong to 🌏, not here.
     unclassified = [
         p for p in ei_pages
         if status_name(p) in ("New", "Reviewing")
         and not multi_select_names(p, "Experience Genre")
         and not multi_select_names(p, "Dietary Accommodation Type")
         and not is_culture_ei(p)
+        and not is_person_ei(p)
     ]
 
     blocks = []
@@ -563,23 +647,132 @@ def build_unclassified_section(token, ei_pages):
     return blocks
 
 
+def _rich_text_value(page, prop_name):
+    v = page.get("properties", {}).get(prop_name, {})
+    if v.get("type") != "rich_text":
+        return ""
+    return "".join(t.get("plain_text", "") for t in v.get("rich_text", []))
+
+
+def _checkbox_value(page, prop_name):
+    v = page.get("properties", {}).get(prop_name, {})
+    return bool(v.get("checkbox")) if v.get("type") == "checkbox" else False
+
+
+def _story_status(page):
+    return select_name(page, "Story Status")
+
+
+def _generated_article_ids(page):
+    rel = page.get("properties", {}).get("Generated Article", {})
+    return [r["id"] for r in rel.get("relation", [])] if rel.get("type") == "relation" else []
+
+
+def _next_review_overdue(page):
+    v = page.get("properties", {}).get("Next Review", {})
+    d = v.get("date")
+    if not d or not d.get("start"):
+        return False
+    try:
+        dt = datetime.fromisoformat(d["start"])
+    except ValueError:
+        return False
+    if dt.tzinfo is None:
+        dt = dt.replace(tzinfo=JST)
+    return dt.astimezone(JST).date() < datetime.now(JST).date()
+
+
+def qa_card_runs(page, status_label):
+    question = _rich_text_value(page, "QA Question") or title_of(page) or "(質問未設定)"
+    story_status = _story_status(page) or "-"
+    stage = select_name(page, "Production Stage") or "未設定"
+    source_status = select_name(page, "Source Status") or "未確認"
+    premium = "対象" if _checkbox_value(page, "Premium Candidate") else "対象外"
+    has_answer = "あり" if _rich_text_value(page, "Short Answer").strip() else "未作成"
+
+    runs = [{"text": {"content": question, "link": {"url": page_url(page["id"])}}}]
+    runs.append({"text": {"content": (
+        f" ｜ 状態: {status_label} ｜ Story Status: {story_status} ｜ Production Stage: {stage} ｜ "
+        f"回答: {has_answer} ｜ Source Status: {source_status} ｜ Premium候補: {premium}"
+    )}})
+    return runs
+
+
+def build_qa_section(token, story_pages):
+    """❓ QAカード・提供情報一覧 (2026-07-20). Story Bank is the existing DB --
+    no new database. Only records with a non-empty QA Question count as QA
+    candidates, so the 22 existing 花火大会 (fireworks) records (none of
+    which have QA Question filled in) are excluded automatically, per Rei's
+    instruction not to treat them as foreign-resident QA content. Their
+    Status/properties are never touched here (read-only digest).
+    """
+    qa = [p for p in story_pages if _rich_text_value(p, "QA Question").strip()]
+    today = datetime.now(JST).date()
+    today_new = [p for p in qa if created_date_jst(p) == today]
+
+    answer_pending = [p for p in qa if not _rich_text_value(p, "Short Answer").strip()]
+    source_pending = [p for p in qa if select_name(p, "Source Status") in ("Unverified", "Needs Recheck")]
+    ready = [p for p in qa if _story_status(p) == "Approved"]
+    delivered = [p for p in qa if _story_status(p) == "Published"]
+    needs_update = [p for p in qa if _next_review_overdue(p) or select_name(p, "Source Status") == "Needs Recheck"]
+    premium_candidates = [p for p in qa if _checkbox_value(p, "Premium Candidate")]
+
+    published_ids = set()
+    for p in qa:
+        for aid in _generated_article_ids(p):
+            ap = notion_request(token, "GET", f"/pages/{aid}")
+            pub = ap.get("properties", {}).get("Publishing Status", {}).get("select")
+            if pub and pub.get("name") == "Published":
+                published_ids.add(p["id"])
+                break
+    published = [p for p in qa if p["id"] in published_ids]
+
+    blocks = []
+    blocks.append({"heading_3": {"rich_text": rt("❓ QAカード・提供情報一覧")}})
+    blocks.append({"callout": {
+        "rich_text": rt(
+            f"今日追加した質問: {len(today_new)}件（created_time基準・JST） / "
+            f"QAカード候補（全件）: {len(qa)}件 / 回答作成待ち: {len(answer_pending)}件 / "
+            f"Source確認待ち: {len(source_pending)}件"
+        ),
+        "icon": {"type": "emoji", "emoji": "❓"}, "color": "purple_background",
+    }})
+
+    for label, items, count_label in [
+        ("回答作成待ち", answer_pending, "回答作成待ち"),
+        ("Source確認待ち", source_pending, "Source確認待ち"),
+        ("掲載準備中（Story Status=Approved）", ready, "掲載準備中"),
+        ("ARuアプリへ提供済み（Story Status=Published）", delivered, "提供済み"),
+        ("掲載済み（Generated ArticleがPublished）", published, "掲載済み"),
+        ("更新が必要（Next Review超過 または Source Status=Needs Recheck）", needs_update, "更新が必要"),
+        ("Premium記事候補", premium_candidates, "Premium候補"),
+    ]:
+        children = [{"paragraph": {"rich_text": qa_card_runs(p, count_label)}} for p in items]
+        blocks.append(_toggle(f"{label} 一覧", len(items), children))
+
+    return blocks
+
+
 def build_section_blocks(env):
     token = env["NOTION_TOKEN"]
     ei_pages = query_database(token, env["EXPERIENCE_INTELLIGENCE_DB_ID"])
     ec_pages = query_database(token, env["EVENT_CALENDAR_DB_ID"])
     source_library_pages = query_database(token, env["SOURCE_LIBRARY_DB_ID"])
+    story_pages = query_database(token, env["STORY_BANK_DB_ID"])
     # Exclude known internal test fixtures from every section below (not from
     # the underlying databases themselves -- records, Status, and properties
     # are untouched; this only affects what this script renders on Dashboard).
     ei_pages = [p for p in ei_pages if not is_test_record(p)]
     ec_pages = [p for p in ec_pages if not is_test_record(p)]
+    story_pages = [p for p in story_pages if not is_test_record(p)]
 
     blocks = []
     blocks.append({"heading_2": {"rich_text": rt("ARu編集デスク｜今日の情報")}})
     blocks.append({"callout": {
         "rich_text": rt(
             "Reiが毎日確認する統合編集画面です。今回実装済みなのは🎎日本文化体験、🥗食の安心・お店情報、"
-            "未分類・詳細未確認の3項目。他の5項目は準備中（クロスDB集計ロジックが未設計のため、勝手な自動判定はしていません）。"
+            "未分類・詳細未確認、❓QAカード・提供情報一覧、🌏日本で活躍する外国人・人物とお店の5項目。"
+            "他の3項目は準備中（クロスDB集計ロジックが未設計のため、勝手な自動判定はしていません）。"
         ),
         "icon": {"type": "emoji", "emoji": "📋"}, "color": "gray_background",
     }})
@@ -590,7 +783,11 @@ def build_section_blocks(env):
 
     blocks.extend(build_culture_section(token, ei_pages, ec_pages, source_library_pages))
 
+    blocks.extend(build_people_section(token, ei_pages))
+
     blocks.extend(build_food_section(ei_pages))
+
+    blocks.extend(build_qa_section(token, story_pages))
 
     blocks.extend(build_unclassified_section(token, ei_pages))
 
