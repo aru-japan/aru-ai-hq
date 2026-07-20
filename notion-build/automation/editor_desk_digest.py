@@ -4,13 +4,32 @@ section, its own MARKER_START/END, or any of the 9 pre-existing numbered
 sections -- this section owns its own pair of markers and only ever rewrites
 what sits between them, exactly like ai_command_center.py's pattern.
 
-Scope for this run: only the two subsections that have an actual approved
-design (🎎 日本文化体験 and 🥗 食の安心・お店情報) are populated with live
-data. The other 6 headings Rei asked to reserve a slot for (今日の新着 /
-本日開催・近日開催 / 変更・中止・期限切れ / 詳細未確認 / 深い記事候補 /
-Rei確認待ち) are written as explicit "準備中" placeholders -- no cross-DB
-aggregation logic has been designed or approved for them yet, so nothing is
-guessed here.
+Scope for this run: three subsections have an actual approved design and are
+populated with live data -- 🎎 日本文化体験, 🥗 食の安心・お店情報, and
+（2026-07-20追記）未分類・詳細未確認. The remaining 5 headings Rei asked to
+reserve a slot for (今日の新着 / 本日開催・近日開催 / 変更・中止・期限切れ /
+深い記事候補 / Rei確認待ち) are written as explicit "準備中" placeholders --
+no cross-DB aggregation logic has been designed or approved for them yet, so
+nothing is guessed here.
+
+未分類・詳細未確認 (added 2026-07-20): Experience Genre と Dietary
+Accommodation Type がともに空欄のまま Status=New/Reviewing で残っている
+レコードは、以前は🎎🥗どちらの抽出条件にも該当せずどの窓からも見えなかった
+（Reiが発見した表示漏れ）。このセクションはその欠落を埋めるための実データ
+接続で、タグを推測して埋めることはしない。情報元の区分は Related Source
+Library の紐付け先タイトル/URLに含まれる既知の第三者・SNSプラットフォーム名
+から判定し、判定できない場合は "区分未確認" のまま表示する（"公式情報"と
+断定するための積極的シグナルは扱わない -- 消去法で公式だと推測しないため）。
+
+Test-record exclusion (added 2026-07-20, second pass): once 未分類・詳細
+未確認 started reflecting live data, two pre-existing internal test fixtures
+(titled "【テスト】...", created 2026-07-12, unrelated to the food/culture
+work) surfaced in the Dashboard for the first time. These are excluded from
+every section by an explicit title-prefix allowlist (TEST_TITLE_PREFIXES) --
+not deleted, not Status-changed, still fully present in Experience
+Intelligence. The match is a strict startswith() against a short, explicit
+prefix list, never a substring/keyword scan -- a normal record whose title or
+body merely contains the word "テスト" must not be caught by this.
 
 "深い記事候補" is deliberately never computed as a yes/no judgment. Rei
 corrected this explicitly: Related Research being set only means the record
@@ -46,10 +65,26 @@ PLACEHOLDER_HEADINGS = [
     "変更・中止・期限切れ",
 ]
 PLACEHOLDER_HEADINGS_AFTER = [
-    "詳細未確認",
     "深い記事候補",
     "Rei確認待ち",
 ]
+
+THIRD_PARTY_SOURCE_MARKERS = [
+    "食べログ", "tabelog", "ぐるなび", "gnavi", "retty",
+    "ホットペッパー", "hotpepper", "vegewel", "a4jp",
+    "トリップアドバイザー", "tripadvisor", "まとめ", "ガイド", "guide", "review",
+]
+SNS_SOURCE_MARKERS = ["instagram.com", "twitter.com", "x.com", "facebook.com", "tiktok.com"]
+
+# Explicit, exact-prefix allowlist of known internal test-fixture titles.
+# Deliberately NOT a substring/keyword match -- a real record whose title or
+# Description happens to contain the word "テスト" must not be excluded.
+TEST_TITLE_PREFIXES = ["【テスト】"]
+
+
+def is_test_record(page):
+    title = title_of(page) or ""
+    return any(title.startswith(prefix) for prefix in TEST_TITLE_PREFIXES)
 
 
 def log(msg):
@@ -274,16 +309,100 @@ def build_food_section(ei_pages):
     return blocks
 
 
+def classify_source_type(token, page):
+    """Reads only the linked Related Source Library page's title/URL -- no
+    schema fetch, no keyword guessing beyond well-known third-party/SNS
+    platform names. Never returns "公式情報" from a positive keyword match;
+    that classification is intentionally left to Rei via direct review,
+    since there is no reliable existing signal that proves a source is
+    official. Defaults to "区分未確認" whenever nothing matches.
+    """
+    rel = page.get("properties", {}).get("Related Source Library", {})
+    ids = [r["id"] for r in rel.get("relation", [])] if rel.get("type") == "relation" else []
+    if not ids:
+        return "区分未確認"
+    for rid in ids:
+        rp = notion_request(token, "GET", f"/pages/{rid}")
+        rtitle = ""
+        rurl = ""
+        for _, v in rp.get("properties", {}).items():
+            if v.get("type") == "title":
+                rtitle = "".join(t.get("plain_text", "") for t in v.get("title", []))
+            if v.get("type") == "url" and v.get("url"):
+                rurl = v["url"]
+        combined = (rtitle + " " + rurl).lower()
+        if any(m.lower() in combined for m in SNS_SOURCE_MARKERS):
+            return "SNS原文"
+        if any(m.lower() in combined for m in THIRD_PARTY_SOURCE_MARKERS):
+            return "第三者情報"
+    return "区分未確認"
+
+
+def build_unclassified_section(token, ei_pages):
+    unclassified = [
+        p for p in ei_pages
+        if status_name(p) in ("New", "Reviewing")
+        and not multi_select_names(p, "Experience Genre")
+        and not multi_select_names(p, "Dietary Accommodation Type")
+    ]
+
+    blocks = []
+    blocks.append({"heading_3": {"rich_text": rt("未分類・詳細未確認")}})
+    blocks.append({"callout": {
+        "rich_text": rt(
+            f"{len(unclassified)}件 -- Experience GenreとDietary Accommodation Typeがともに空欄で、"
+            "Status=New/Reviewingのレコードです。文化体験・食情報・その他のどれに分類するか確認が必要です。"
+            "タグは推測で設定していません。Reiが元情報（Source URL）を確認して分類してください。"
+        ),
+        "icon": {"type": "emoji", "emoji": "❔"}, "color": "gray_background",
+    }})
+
+    card_children = []
+    for p in unclassified:
+        title = title_of(p) or "(無題)"
+        status = status_name(p) or "-"
+        created = created_date_jst(p)
+        created_str = created.isoformat() if created else "-"
+        last_ai = p.get("properties", {}).get("Last AI Update", {}).get("date")
+        last_ai_str = last_ai["start"] if last_ai else "未確認"
+        source_url = p.get("properties", {}).get("Source URL", {}).get("url")
+        source_type = classify_source_type(token, p)
+
+        runs = [{"text": {"content": title, "link": {"url": page_url(p["id"])}}}]
+        runs.append({"text": {"content": (
+            f" ｜ Status: {status} ｜ 作成日: {created_str} ｜ 最終確認日: {last_ai_str} ｜ "
+            f"情報元の区分: {source_type} ｜ Source: "
+        )}})
+        if source_url:
+            runs.append({"text": {"content": source_url, "link": {"url": source_url}}})
+        else:
+            runs.append({"text": {"content": "未確認"}})
+        card_children.append({"paragraph": {"rich_text": runs}})
+
+    if not card_children:
+        card_children = [{"paragraph": {"rich_text": rt("該当レコードなし")}}]
+    blocks.append({"toggle": {
+        "rich_text": rt(f"未分類・詳細未確認 一覧（{len(unclassified)}件）"),
+        "children": card_children,
+    }})
+
+    return blocks
+
+
 def build_section_blocks(env):
     token = env["NOTION_TOKEN"]
     ei_pages = query_database(token, env["EXPERIENCE_INTELLIGENCE_DB_ID"])
+    # Exclude known internal test fixtures from every section below (not from
+    # Experience Intelligence itself -- records, Status, and properties are
+    # untouched; this only affects what this script renders on Dashboard).
+    ei_pages = [p for p in ei_pages if not is_test_record(p)]
 
     blocks = []
     blocks.append({"heading_2": {"rich_text": rt("ARu編集デスク｜今日の情報")}})
     blocks.append({"callout": {
         "rich_text": rt(
-            "Reiが毎日確認する統合編集画面です。今回実装済みなのは🎎日本文化体験と🥗食の安心・お店情報のみ。"
-            "他の6項目は準備中（クロスDB集計ロジックが未設計のため、勝手な自動判定はしていません）。"
+            "Reiが毎日確認する統合編集画面です。今回実装済みなのは🎎日本文化体験、🥗食の安心・お店情報、"
+            "未分類・詳細未確認の3項目。他の5項目は準備中（クロスDB集計ロジックが未設計のため、勝手な自動判定はしていません）。"
         ),
         "icon": {"type": "emoji", "emoji": "📋"}, "color": "gray_background",
     }})
@@ -295,6 +414,8 @@ def build_section_blocks(env):
     blocks.extend(build_culture_section(ei_pages))
 
     blocks.extend(build_food_section(ei_pages))
+
+    blocks.extend(build_unclassified_section(token, ei_pages))
 
     for h in PLACEHOLDER_HEADINGS_AFTER:
         blocks.append({"heading_3": {"rich_text": rt(h)}})

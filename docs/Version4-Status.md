@@ -252,4 +252,22 @@ Version 4 Phase番号とは別の独立トラックとしてRei自身が命名�
 
 ---
 
-*ARu HQ / Decode Japan — Version 4 Current Status Report — 2026-07-14（8〜9節は2026-07-16追記、10〜11節は2026-07-18追記）*
+## 12. ARu編集デスク｜今日の情報 ― 文化体験・食の安心窓、および未分類・詳細未確認の追加（2026-07-19〜2026-07-20）
+
+Version 4 / ARu Intelligenceとは別トラックとして、ARu Studio Home「🎎日本文化体験」「🥗食の安心・お店情報」の2窓と、Dashboard「📋 ARu編集デスク｜今日の情報」セクションを新規実装。新規データベースは追加せず、Experience Intelligenceへ共通プロパティ5件（Region／Experience Genre／Reservation Status／Language Support／Family Participation Status）とDietary Accommodation Type（1件）を追加。
+
+**実行結果（実データ、2026-07-20時点）**：文化体験2件、食の安心17件（新規登録16件＋既存1件）をライブ確認。全国8地域×食2件の収集・登録・URL種別監査を実施し、登録台帳（`docs/Nationwide-Registration-Ledger-2026-07-20.md` §12）へ記録済み。
+
+**発見・修正したバグ（2026-07-20）**：Experience Genre・Dietary Accommodation Typeがともに空欄のままStatus=New/Reviewingで残っていた3件（ハビービ 講道館レストラン、福の樹、すべてヴィーガン＝いずれも第三者情報のみで公式根拠未確認のため意図的にタグ未設定）が、🎎🥗いずれの窓の抽出条件（該当プロパティが非空であること）にも該当せず、Dashboard・Home経由のどの窓からも閲覧できない状態になっていた。「詳細未確認」見出しはこの時点では固定文言のみの未実装プレースホルダーだった。
+
+**修正内容**：「詳細未確認」を「未分類・詳細未確認」として実データ接続に変更（`editor_desk_digest.py`の`build_unclassified_section`）。抽出条件はStatus=New/Reviewing かつ Experience Genre空欄 かつ Dietary Accommodation Type空欄。**この条件に該当するレコードは、Dashboardの「未分類・詳細未確認」に表示される。** タイトル・Status・作成日・最終確認日（Last AI Update）・Source URL・情報元の区分・元レコードへのリンクを表示。情報元の区分はRelated Source Libraryの紐付け先タイトル/URLから、第三者・SNSの既知プラットフォーム名のみで判定し（「公式情報」と推測することはしない）、判定できない場合は「区分未確認」とする。**タグ（Experience Genre／Dietary Accommodation Type）は自動設定・推測分類せず、Reiが元情報を確認したうえで分類する。**
+
+**発見・修正した第2のバグ（2026-07-20、同日中）**：「未分類・詳細未確認」が実データ接続になった直後、無関係な内部テスト用フィクスチャ2件（タイトルが「【テスト】」で始まる、2026-07-12作成、食・文化体験の収集作業とは無関係）がDashboardに初めて表示された。これらはExperience Intelligence内に**保持したまま**（削除・Status変更・プロパティ変更はしていない）、本番Dashboardの表示対象からのみ除外した。除外は「【テスト】」という明確な接頭辞の完全一致（`str.startswith`）のみで判定しており、本文やタイトルに「テスト」という語が含まれるだけの通常レコードは除外されない。ハビービ 講道館レストラン／福の樹／すべてヴィーガンの3件は、この修正後も引き続き「未分類・詳細未確認」に表示される。
+
+回帰テスト`test_editor_desk_digest.py`を新規追加（**10件**、Notion呼び出しなしのfixtureベース）。
+
+**実行結果（修正後、2026-07-20）**：未分類・詳細未確認 **14件**（ハビービ／福の樹／すべてヴィーガンを含む、テスト2件は非表示）をライブ確認。文化体験2件・食の安心17件の内容・件数は変更なし。**運用画面表示合計：33件**。既存AI Command Center・既存9セクションは無変更。
+
+---
+
+*ARu HQ / Decode Japan — Version 4 Current Status Report — 2026-07-14（8〜9節は2026-07-16追記、10〜11節は2026-07-18追記、12節は2026-07-20追記）*

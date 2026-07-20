@@ -215,6 +215,7 @@ Research → Article → Article Review → Translation → Translation Review �
 - **ページ全文のハッシュ比較による変化検知は粗い。** 広告や「最終更新日」表示など本質的でない変化でも誤検知（false positive）しうる。JavaScriptで本文を描画するSPA型サイトは、stdlibのみのフェッチでは意味のあるテキストが取得できない可能性がある。実運用でのfalse positive発生率を見てから、ソースごとのCSSセレクタ指定等の精緻化を検討する（Phase 2候補）
 - **Select型プロパティのSortは値の重要度ではなくオプションの定義順に従う。** 「降順」はオプション定義順を逆にしたものであり、意味的な重要度の降順とは限らない（2026-07-16に発見、Priority／Urgencyで実際に逆転していた）。新しくSelect型プロパティを追加してSortに使う場合は、オプションの定義順を「重要度が低い→高い」の順にしておくこと（そうすれば「降順」が直感通り「重要度が高いものが先頭」になる）
 - Notionのrich_textは1項目あたり2000文字制限（`rich_text_chunks()`で分割対応済み）
+- **Experience Intelligenceで、Experience GenreとDietary Accommodation Typeがともに空欄でStatus=New/Reviewingのレコードは、Dashboard「ARu編集デスク｜今日の情報」の「未分類・詳細未確認」セクションに表示される。** 2026-07-20に、この条件に当てはまる3件（ハビービ 講道館レストラン、福の樹、すべてヴィーガン）が🎎文化体験・🥗食の安心のどちらの窓にも表示されず、Reiがどこからも確認できない状態になっていることを発見し、`editor_desk_digest.py`（`build_unclassified_section`）に実データ接続の抽出・表示ロジックを追加して修正した。タグ（Experience Genre／Dietary Accommodation Type）は推測で設定せず、Reiが元情報（Source URL・情報元の区分）を確認したうえで分類する運用
 - Notion Formulaの構文は不安定な場合がある（`dateBetween()`は動くが、日付プロパティ同士の直接`>`比較が失敗した例がある）
 - GitHubへのPushは、このBash実行環境では非対話認証ができず失敗する。人間が自身のターミナルで`git push`を実行する必要がある（過去、一度認証が通れば以降のPushは成功している）
 - スケジューリングの仕組みがないため、すべてのスクリプトは手動実行が前提
@@ -247,4 +248,4 @@ Research → Article → Article Review → Translation → Translation Review �
 
 ---
 
-*ARu HQ / Decode Japan — AI Handover Document v1.9 — 2026-07-18*
+*ARu HQ / Decode Japan — AI Handover Document v1.10 — 2026-07-18（既知の制約に2026-07-20の1件を追記）*
