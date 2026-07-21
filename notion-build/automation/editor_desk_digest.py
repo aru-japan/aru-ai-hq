@@ -292,13 +292,11 @@ def _toggle(label, count, children):
     return {"toggle": {"rich_text": rt(f"{label}（{count}件）"), "children": children}}
 
 
-def build_culture_section(token, ei_pages, ec_pages, source_library_pages):
-    """Cross-DB 🎎 日本文化体験 window (2026-07-20 redesign). Does not copy any
-    record into a new DB -- every card links back to its own original
-    Experience Intelligence / Event Calendar / Source Library page. Storage
-    location is unchanged: 通年 stays in Experience Intelligence, 期間限定 stays
-    in Event Calendar, undecided Web/Source finds stay in Source Library.
-    """
+def compute_culture_buckets(token, ei_pages, ec_pages, source_library_pages):
+    """Pure computation, shared by Dashboard's build_culture_section and
+    Home's consolidated digest -- the bucket logic must only ever be written
+    once. Returns plain lists (and a source_type lookup function) so callers
+    can render them however they like."""
     culture_ei = [p for p in ei_pages if is_culture_ei(p)]
     culture_ei_ids = {p["id"] for p in culture_ei}
 
@@ -348,6 +346,40 @@ def build_culture_section(token, ei_pages, ec_pages, source_library_pages):
         if p["id"] not in source_type_cache:
             source_type_cache[p["id"]] = classify_culture_source(token, p)
         return source_type_cache[p["id"]]
+
+    return {
+        "culture_ei": culture_ei, "culture_ei_ids": culture_ei_ids,
+        "period_ec": period_ec, "period_ec_ids": period_ec_ids,
+        "low_confidence": low_confidence,
+        "ended_low_confidence": ended_low_confidence,
+        "pending_low_confidence": pending_low_confidence,
+        "source_only": source_only,
+        "research_linked": research_linked,
+        "pending_ei": pending_ei, "pending_ec_period": pending_ec_period,
+        "rei_pending": rei_pending, "today_new": today_new,
+        "cached_source_type": cached_source_type,
+        "related_experience_intelligence_ids": related_experience_intelligence_ids,
+    }
+
+
+def build_culture_section(token, ei_pages, ec_pages, source_library_pages):
+    """Cross-DB 🎎 日本文化体験 window (2026-07-20 redesign). Does not copy any
+    record into a new DB -- every card links back to its own original
+    Experience Intelligence / Event Calendar / Source Library page. Storage
+    location is unchanged: 通年 stays in Experience Intelligence, 期間限定 stays
+    in Event Calendar, undecided Web/Source finds stay in Source Library.
+    """
+    bk = compute_culture_buckets(token, ei_pages, ec_pages, source_library_pages)
+    culture_ei, culture_ei_ids = bk["culture_ei"], bk["culture_ei_ids"]
+    period_ec = bk["period_ec"]
+    low_confidence = bk["low_confidence"]
+    ended_low_confidence = bk["ended_low_confidence"]
+    pending_low_confidence = bk["pending_low_confidence"]
+    source_only = bk["source_only"]
+    research_linked = bk["research_linked"]
+    pending_ei, pending_ec_period = bk["pending_ei"], bk["pending_ec_period"]
+    rei_pending, today_new = bk["rei_pending"], bk["today_new"]
+    cached_source_type = bk["cached_source_type"]
 
     blocks = []
     blocks.append({"heading_3": {"rich_text": rt("🎎 日本文化体験")}})
@@ -465,11 +497,17 @@ def person_card_runs(token, page, next_action):
     return runs
 
 
-def build_people_section(token, ei_pages):
+def compute_people_buckets(ei_pages):
     people = [p for p in ei_pages if is_person_ei(p)]
     today = datetime.now(JST).date()
     today_new = [p for p in people if created_date_jst(p) == today]
     pending = [p for p in people if status_name(p) in ("New", "Reviewing")]
+    return {"people": people, "today_new": today_new, "pending": pending}
+
+
+def build_people_section(token, ei_pages):
+    bk = compute_people_buckets(ei_pages)
+    people, today_new, pending = bk["people"], bk["today_new"], bk["pending"]
 
     blocks = []
     blocks.append({"heading_3": {"rich_text": rt("🌏 日本で活躍する外国人・人物とお店")}})
@@ -497,7 +535,7 @@ def build_people_section(token, ei_pages):
     return blocks
 
 
-def build_food_section(ei_pages):
+def compute_food_buckets(ei_pages):
     food = [p for p in ei_pages if multi_select_names(p, "Dietary Accommodation Type")]
     today = datetime.now(JST).date()
     today_new = [p for p in food if created_date_jst(p) == today]
@@ -524,6 +562,21 @@ def build_food_section(ei_pages):
     recheck = [p for p in food if needs_recheck(p)]
     research_linked = [p for p in food
                         if p.get("properties", {}).get("Related Research", {}).get("relation")]
+
+    return {
+        "food": food, "today_new": today_new, "pending": pending,
+        "halal_cert": halal_cert, "muslim_friendly": muslim_friendly, "veg_vegan": veg_vegan,
+        "avoid_pork_alcohol": avoid_pork_alcohol, "gluten_allergy": gluten_allergy,
+        "other_religious": other_religious, "recheck": recheck, "research_linked": research_linked,
+    }
+
+
+def build_food_section(ei_pages):
+    bk = compute_food_buckets(ei_pages)
+    food, today_new, pending = bk["food"], bk["today_new"], bk["pending"]
+    halal_cert, muslim_friendly, veg_vegan = bk["halal_cert"], bk["muslim_friendly"], bk["veg_vegan"]
+    avoid_pork_alcohol, gluten_allergy = bk["avoid_pork_alcohol"], bk["gluten_allergy"]
+    other_religious, recheck, research_linked = bk["other_religious"], bk["recheck"], bk["research_linked"]
 
     blocks = []
     blocks.append({"heading_3": {"rich_text": rt("🥗 食の安心・お店情報")}})
@@ -588,14 +641,14 @@ def classify_source_type(token, page):
     return "区分未確認"
 
 
-def build_unclassified_section(token, ei_pages):
+def compute_unclassified(ei_pages):
     # is_culture_ei also catches Intelligence Type=Culture records whose
     # Experience Genre is empty (体験農園みとか／中込農園／あんざい果樹園) --
     # those now belong to the 🎎 culture section (2026-07-20 fix) and must not
     # also show up here, or the same record would appear in two sections.
     # is_person_ei (Intelligence Type=User) is excluded the same way (2026-07-20
     # second addition) -- person/shop candidates belong to 🌏, not here.
-    unclassified = [
+    return [
         p for p in ei_pages
         if status_name(p) in ("New", "Reviewing")
         and not multi_select_names(p, "Experience Genre")
@@ -603,6 +656,10 @@ def build_unclassified_section(token, ei_pages):
         and not is_culture_ei(p)
         and not is_person_ei(p)
     ]
+
+
+def build_unclassified_section(token, ei_pages):
+    unclassified = compute_unclassified(ei_pages)
 
     blocks = []
     blocks.append({"heading_3": {"rich_text": rt("未分類・詳細未確認")}})
@@ -668,6 +725,17 @@ def _generated_article_ids(page):
     return [r["id"] for r in rel.get("relation", [])] if rel.get("type") == "relation" else []
 
 
+def _story_bank_research_ids(page):
+    # Story Bank's relation to Research is named differently from Experience
+    # Intelligence's "Related Research" -- using related_research_ids() here
+    # would silently always return [] (wrong property name) and this bug
+    # existed for one local dry-run before being caught: it under-counted
+    # "既存記事への導線あり" by exactly the 2 QA cards linked to Research but
+    # not yet to a Converted Article (#4, #10).
+    rel = page.get("properties", {}).get("Related to Research「記事候補」 (Related QA)", {})
+    return [r["id"] for r in rel.get("relation", [])] if rel.get("type") == "relation" else []
+
+
 def _next_review_overdue(page):
     v = page.get("properties", {}).get("Next Review", {})
     d = v.get("date")
@@ -698,7 +766,32 @@ def qa_card_runs(page, status_label):
     return runs
 
 
-def build_qa_section(token, story_pages):
+def _related_sources_ids(page):
+    rel = page.get("properties", {}).get("Related Sources", {})
+    return [r["id"] for r in rel.get("relation", [])] if rel.get("type") == "relation" else []
+
+
+def qa_next_action(page):
+    """A suggested next step only -- never an action taken or a publish
+    decision. Ordered by what actually blocks progress: an unwritten answer
+    blocks everything else, so it always wins; an unconfirmed Source is the
+    next blocker; only once both exist does "which existing article" or
+    "approve/hold" become the live question."""
+    if not _rich_text_value(page, "Short Answer").strip():
+        return "回答案を確認・作成する"
+    if select_name(page, "Source Status") in ("Unverified", "Needs Recheck"):
+        return "一次情報でSourceを確認する"
+    if _story_bank_research_ids(page) or _generated_article_ids(page):
+        return "既存記事へ誘導するか、DEEP記事候補へ送るか判断する"
+    story_status = _story_status(page)
+    if story_status == "New":
+        return "内容を確認し、承認するか修正するか判断する"
+    if story_status == "Approved":
+        return "掲載するか見送るか判断する"
+    return "状況を確認する"
+
+
+def compute_qa_buckets(token, story_pages):
     """❓ QAカード・提供情報一覧 (2026-07-20). Story Bank is the existing DB --
     no new database. Only records with a non-empty QA Question count as QA
     candidates, so the 22 existing 花火大会 (fireworks) records (none of
@@ -716,6 +809,7 @@ def build_qa_section(token, story_pages):
     delivered = [p for p in qa if _story_status(p) == "Published"]
     needs_update = [p for p in qa if _next_review_overdue(p) or select_name(p, "Source Status") == "Needs Recheck"]
     premium_candidates = [p for p in qa if _checkbox_value(p, "Premium Candidate")]
+    linked_to_research = [p for p in qa if _story_bank_research_ids(p) or _generated_article_ids(p)]
 
     published_ids = set()
     for p in qa:
@@ -726,6 +820,291 @@ def build_qa_section(token, story_pages):
                 published_ids.add(p["id"])
                 break
     published = [p for p in qa if p["id"] in published_ids]
+
+    return {
+        "qa": qa, "today_new": today_new, "answer_pending": answer_pending,
+        "source_pending": source_pending, "ready": ready, "delivered": delivered,
+        "needs_update": needs_update, "premium_candidates": premium_candidates,
+        "published": published, "linked_to_research": linked_to_research,
+    }
+
+
+QA_CARD_PAGE_ID = "3a2157f0-f15d-8139-8e8c-c5ca906141be"
+QA_DESK_MARKER_START = "❓ QAカード作業机（自動生成セクション開始 -- 以下は毎回自動更新されます。手動編集しないでください）"
+QA_DESK_MARKER_END = "❓ QAカード作業机（自動生成セクション終了）"
+
+
+def _linked_page_title(token, page_id):
+    p = notion_request(token, "GET", f"/pages/{page_id}")
+    return title_of(p) or "(無題)"
+
+
+# Classification against the ARu app's already-published QA cards, per
+# Rei's own review of 20 app screenshots (relayed via chat transcript,
+# 2026-07-21) -- NOT derived from any Notion property, and NOT a claim that
+# these Story Bank records themselves are published. Matching requires
+# human judgment (same question vs. related-but-different scope), which no
+# existing property captures, so this is a small explicit lookup rather
+# than an automated matcher. Story Status is never touched by this table --
+# it only changes what this page displays.
+QA_APP_MATCH_CANDIDATES = {
+    # Story Bank page id -> the app screenshot's question text (as transcribed)
+    "3a3157f0-f15d-81c3-88b7-e377d26d7b73": "地震が来た！どうすればいい？",
+    "3a3157f0-f15d-817d-b140-d9f9e061b396": "携帯（スマートフォン）を契約するには？",
+}
+QA_APP_RELATED_DIFFERENT = {
+    # Story Bank page id -> (app screenshot question text, why it's not the same question)
+    "3a3157f0-f15d-8156-8653-f885bb449a69": (
+        "日本に住み始めたら何をするの？",
+        "住み始めの手続き全般と、住民登録の場所は質問範囲が異なる"),
+    "3a3157f0-f15d-819d-b3df-f12426bb6862": (
+        "健康保険って何？",
+        "制度説明と、保険証がない場合の受診方法は別"),
+    "3a3157f0-f15d-8185-8cf7-e8ea66f9a9cf": (
+        "日本のゴミの分け方を知りたい。",
+        "分別方法の説明と、確認先（自治体サイト等）を尋ねる質問は異なる"),
+    "3a3157f0-f15d-81a1-8666-d797646c6d45": (
+        "保証人・礼金・敷金って何？",
+        "用語説明と、保証人がいない場合の解決方法は別"),
+    "3a3157f0-f15d-8183-8022-db3efb53110d": (
+        "病院で使う日本語は？",
+        "医療機関の探し方と、日本語フレーズは別"),
+    "3a3157f0-f15d-8134-83c4-d4cd06bda971": (
+        "子供の保育園・学校への入学はどうしたらいい？",
+        "保育園と公立学校は制度・所管・対象年齢が異なるため同一視しない"),
+    "3a3157f0-f15d-81be-a5a7-e82caece0588": (
+        "母国の運転免許は日本でそのまま使えるの？",
+        "日本で使える条件と、切替手続きは別"),
+}
+
+
+def qa_desk_toggle(token, page, app_note=None):
+    """One QA candidate = one toggle, closed by default, holding every field
+    Rei asked for so the theme desk needs no other page or database open.
+    Nothing here is fabricated: an empty Short Answer/Related Sources/Notes
+    shows as an explicit unconfirmed state, never a guessed value.
+    app_note, when given, is an extra line about the app-screenshot
+    comparison -- purely informational, never a Story Status change."""
+    question = _rich_text_value(page, "QA Question") or title_of(page) or "(質問未設定)"
+    short_answer = _rich_text_value(page, "Short Answer").strip()
+    notes = _rich_text_value(page, "Notes").strip()
+    source_status = select_name(page, "Source Status") or "未確認"
+    story_status = _story_status(page) or "-"
+    next_action = qa_next_action(page)
+
+    source_ids = _related_sources_ids(page)
+    research_ids = _story_bank_research_ids(page)
+    article_ids = _generated_article_ids(page)
+
+    published_label = "未接続"
+    if article_ids:
+        for aid in article_ids:
+            ap = notion_request(token, "GET", f"/pages/{aid}")
+            pub = ap.get("properties", {}).get("Publishing Status", {}).get("select")
+            pub_name = pub.get("name") if pub else "未確認"
+            published_label = f"{_linked_page_title(token, aid)}（Publishing Status: {pub_name}）"
+            break
+
+    title_runs = [{"text": {"content": question, "link": {"url": page_url(page["id"])}}}]
+    title_runs.append({"text": {"content": (
+        f" ｜ Story Status: {story_status} ｜ Source: {source_status} ｜ "
+        f"回答: {'あり' if short_answer else '未作成'}"
+    )}})
+
+    children = []
+
+    def bold_label(label):
+        return {"text": {"content": f"{label}: "}, "annotations": {"bold": True}}
+
+    children.append({"paragraph": {"rich_text": [bold_label("質問本文"), {"text": {"content": question}}]}})
+    children.append({"paragraph": {"rich_text": [
+        bold_label("回答案"),
+        {"text": {"content": short_answer if short_answer else "回答案未作成"}},
+    ]}})
+    children.append({"paragraph": {"rich_text": [
+        bold_label("根拠となる一次情報"),
+        {"text": {"content": notes if notes else "根拠未確認（一次情報での確認前）"}},
+    ]}})
+
+    source_runs = [bold_label("Source")]
+    if source_ids:
+        for sid in source_ids:
+            sp = notion_request(token, "GET", f"/pages/{sid}")
+            sp_props = sp.get("properties", {})
+            s_title = title_of(sp) or "(無題)"
+            s_url = sp_props.get("URL", {}).get("url")
+            if s_url:
+                source_runs.append({"text": {"content": f"{s_title}（"}})
+                source_runs.append({"text": {"content": s_url, "link": {"url": s_url}}})
+                source_runs.append({"text": {"content": "） "}})
+            else:
+                source_runs.append({"text": {"content": f"{s_title}（URL未確認） "}})
+    else:
+        source_runs.append({"text": {"content": "Source未接続（Related Sourcesが未設定）"}})
+    children.append({"paragraph": {"rich_text": source_runs}})
+
+    children.append({"paragraph": {"rich_text": [bold_label("Source確認状態"), {"text": {"content": source_status}}]}})
+
+    research_runs = [bold_label("関連する既存Research・Article")]
+    if research_ids or article_ids:
+        titles = []
+        for rid in research_ids:
+            titles.append(f"[Research] {_linked_page_title(token, rid)}")
+        for aid in article_ids:
+            titles.append(f"[Article] {_linked_page_title(token, aid)}")
+        research_runs.append({"text": {"content": "、".join(titles)}})
+    else:
+        research_runs.append({"text": {"content": "なし"}})
+    children.append({"paragraph": {"rich_text": research_runs}})
+
+    children.append({"paragraph": {"rich_text": [
+        bold_label("公開・掲載状態"),
+        {"text": {"content": f"Story Status={story_status} ｜ 接続先Article: {published_label}"}},
+    ]}})
+
+    needs_update_label = "要更新" if (_next_review_overdue(page) or source_status == "Needs Recheck") else "更新不要"
+    children.append({"paragraph": {"rich_text": [bold_label("更新が必要か"), {"text": {"content": needs_update_label}}]}})
+
+    children.append({"paragraph": {"rich_text": [
+        {"text": {"content": "▶ Reiが次に行う作業: ", "link": None}, "annotations": {"bold": True, "color": "purple"}},
+        {"text": {"content": next_action}},
+    ]}})
+    children.append({"paragraph": {"rich_text": [
+        {"text": {"content": "元レコードを開く", "link": {"url": page_url(page["id"])}}},
+    ]}})
+
+    if app_note:
+        children.append({"paragraph": {"rich_text": [
+            {"text": {"content": "📱 アプリ画面との関係: "}, "annotations": {"bold": True, "color": "blue"}},
+            {"text": {"content": app_note}},
+        ]}})
+
+    return {"toggle": {"rich_text": title_runs, "children": children}}
+
+
+def build_qa_desk_blocks(env):
+    """The QA theme desk (2026-07-20 redesign): the pink 'QAカード' callout on
+    Home still links to this same page id (unchanged) -- what changed is this
+    page's own content, from a static description + a linked-database view
+    into a live work desk. Reuses compute_qa_buckets, the same function the
+    (now-removed) Home mega-window and the untouched Dashboard both rely on --
+    one computation, three possible renderings.
+
+    2026-07-21: split into 3 sections reflecting Rei's screenshot review --
+    🔗 candidates matching an already-published app card (Story Status left
+    untouched; this is a comparison candidate, not a publication claim),
+    💡 new proposals confirmed different from any related app card, and
+    ⚠️ records this particular screenshot set couldn't confirm either way
+    (never treated as "not published").
+    """
+    token = env["NOTION_TOKEN"]
+    pages = _fetch_common_pages(env)
+    story_pages = pages["story_pages"]
+    bk = compute_qa_buckets(token, story_pages)
+    qa = bk["qa"]
+
+    match_candidates = [p for p in qa if p["id"] in QA_APP_MATCH_CANDIDATES]
+    related_different = [p for p in qa if p["id"] in QA_APP_RELATED_DIFFERENT]
+    classified_ids = set(QA_APP_MATCH_CANDIDATES) | set(QA_APP_RELATED_DIFFERENT)
+    unconfirmed_range = [p for p in qa if p["id"] not in classified_ids]
+
+    summary = (
+        f"QA候補: {len(qa)}件 / 🔗アプリ掲載済みQAとの照合候補: {len(match_candidates)}件 / "
+        f"💡これからのQA提案: {len(related_different)}件 / ⚠️アプリ掲載状況の確認待ち: {len(unconfirmed_range)}件 / "
+        f"回答作成待ち: {len(bk['answer_pending'])}件 / Source確認待ち: {len(bk['source_pending'])}件"
+    )
+
+    blocks = [{"callout": {
+        "rich_text": rt(summary),
+        "icon": {"type": "emoji", "emoji": "❓"}, "color": "purple_background",
+    }}]
+
+    blocks.append({"paragraph": {"rich_text": rt(
+        "🔗 アプリ掲載済みQAとの照合候補 -- アプリ側のQAカードは掲載済みですが、"
+        "このStory Bankレコード自体が掲載済みと確定したわけではありません。Story Statusは変更していません。",
+        bold=True,
+    )}})
+    for p in match_candidates:
+        app_text = QA_APP_MATCH_CANDIDATES[p["id"]]
+        blocks.append(qa_desk_toggle(token, p, app_note=f"アプリ側の表示文（転記）: 「{app_text}」。同一内容の照合候補。"))
+    if not match_candidates:
+        blocks.append({"paragraph": {"rich_text": rt("該当レコードなし")}})
+
+    blocks.append({"paragraph": {"rich_text": rt(
+        "💡 これからのQA提案 -- アプリに関連テーマのカードはありますが、知りたい内容が異なる新しい質問です。",
+        bold=True,
+    )}})
+    for p in related_different:
+        app_text, reason = QA_APP_RELATED_DIFFERENT[p["id"]]
+        blocks.append(qa_desk_toggle(
+            token, p, app_note=f"アプリに関連テーマのカードあり（転記: 「{app_text}」）。別質問と判断した理由: {reason}"))
+    if not related_different:
+        blocks.append({"paragraph": {"rich_text": rt("該当レコードなし")}})
+
+    blocks.append({"paragraph": {"rich_text": rt(
+        "⚠️ アプリ掲載状況の確認待ち -- 今回の画像範囲では確認できないため、未掲載とは断定しません。",
+        bold=True,
+    )}})
+    for p in unconfirmed_range:
+        blocks.append(qa_desk_toggle(token, p, app_note="今回の画像範囲では対応するアプリカードを確認できていません（未掲載と断定しない）。"))
+    if not unconfirmed_range:
+        blocks.append({"paragraph": {"rich_text": rt("該当レコードなし")}})
+
+    return blocks
+
+
+def write_to_qa_desk(env, blocks):
+    """Same marker delete-and-reinsert pattern as write_to_dashboard/
+    write_to_home, but targets the QA card page and inserts after its 3
+    existing static description paragraphs (kept, never touched) and before
+    the old linked-database block, which is left in place as a fallback raw
+    view -- not deleted, per Rei's instruction not to remove existing
+    detail-page content."""
+    token = env["NOTION_TOKEN"]
+    page_id = QA_CARD_PAGE_ID
+
+    results = _fetch_all_children(token, page_id)
+
+    start_idx = end_idx = None
+    last_paragraph_idx = None
+    for i, b in enumerate(results):
+        text = _block_plain_text(b)
+        if text == QA_DESK_MARKER_START:
+            start_idx = i
+        elif text == QA_DESK_MARKER_END:
+            end_idx = i
+        elif b["type"] == "paragraph" and start_idx is None:
+            last_paragraph_idx = i
+
+    if start_idx is not None and end_idx is not None and end_idx > start_idx:
+        log(f"Found existing QA desk markers (start={start_idx}, end={end_idx}); refreshing in place.")
+        for b in results[start_idx + 1:end_idx]:
+            notion_request(token, "DELETE", f"/blocks/{b['id']}")
+        anchor = results[start_idx]["id"]
+        for i in range(0, len(blocks), 90):
+            chunk = blocks[i:i + 90]
+            _, anchor = _append_children(token, page_id, chunk, after=anchor)
+    else:
+        if last_paragraph_idx is None:
+            raise RuntimeError("Could not find the QA page's existing description paragraphs -- refusing to guess.")
+        log("No existing QA desk markers found; inserting after the 3 static description paragraphs.")
+        start_marker = {"callout": {"rich_text": rt(QA_DESK_MARKER_START), "icon": {"type": "emoji", "emoji": "❓"}}}
+        end_marker = {"callout": {"rich_text": rt(QA_DESK_MARKER_END), "icon": {"type": "emoji", "emoji": "❓"}}}
+        anchor = results[last_paragraph_idx]["id"]
+        all_new = [start_marker] + blocks + [end_marker]
+        for i in range(0, len(all_new), 90):
+            chunk = all_new[i:i + 90]
+            _, anchor = _append_children(token, page_id, chunk, after=anchor)
+
+    return page_id
+
+
+def build_qa_section(token, story_pages):
+    bk = compute_qa_buckets(token, story_pages)
+    qa, today_new = bk["qa"], bk["today_new"]
+    answer_pending, source_pending = bk["answer_pending"], bk["source_pending"]
+    ready, delivered = bk["ready"], bk["delivered"]
+    needs_update, premium_candidates, published = bk["needs_update"], bk["premium_candidates"], bk["published"]
 
     blocks = []
     blocks.append({"heading_3": {"rich_text": rt("❓ QAカード・提供情報一覧")}})
@@ -753,18 +1132,411 @@ def build_qa_section(token, story_pages):
     return blocks
 
 
+def event_card_runs(page, status_label):
+    title = title_of(page) or "(無題)"
+    location = _rich_text_value(page, "Location") or "未確認"
+    status = status_name(page) or "-"
+    event_date = page.get("properties", {}).get("Event Date", {}).get("date")
+    date_str = event_date.get("start") if event_date else "未確認"
+    source_url = page.get("properties", {}).get("Source URL", {}).get("url")
+    runs = [{"text": {"content": title, "link": {"url": page_url(page["id"])}}}]
+    runs.append({"text": {"content": (
+        f" ｜ 状態: {status_label} ｜ 所在地: {location} ｜ 開催日: {date_str} ｜ "
+        f"確認状態: {status} ｜ 保存先: Event Calendar ｜ Source: "
+    )}})
+    runs.append({"text": {"content": source_url, "link": {"url": source_url}}} if source_url
+                 else {"text": {"content": "未確認"}})
+    return runs
+
+
+def _event_date_of(page):
+    d = page.get("properties", {}).get("Event Date", {}).get("date")
+    if not d or not d.get("start"):
+        return None
+    try:
+        return datetime.fromisoformat(d["start"].split("T")[0]).date()
+    except ValueError:
+        return None
+
+
+def compute_event_calendar_buckets(ec_pages):
+    """🎉 イベント・催し. Covers ALL Event Calendar records (not only the ones
+    already surfaced by 🎎 culture's 期間限定/低確度候補 buckets) -- this is a
+    new, independent dimension over the same DB, not a duplicate computation
+    of the culture logic."""
+    today = datetime.now(JST).date()
+
+    cancelled = [p for p in ec_pages if status_name(p) == "Cancelled"]
+    cancelled_ids = {p["id"] for p in cancelled}
+
+    def is_expired(p):
+        if status_name(p) == "Completed":
+            return True
+        d = _event_date_of(p)
+        return d is not None and d < today
+
+    expired = [p for p in ec_pages if p["id"] not in cancelled_ids and is_expired(p)]
+    expired_ids = {p["id"] for p in expired}
+
+    remaining = [p for p in ec_pages if p["id"] not in cancelled_ids and p["id"] not in expired_ids]
+    today_events = [p for p in remaining if _event_date_of(p) == today]
+    today_ids = {p["id"] for p in today_events}
+    upcoming = [p for p in remaining
+                if p["id"] not in today_ids and _event_date_of(p) is not None and _event_date_of(p) > today]
+    upcoming_ids = {p["id"] for p in upcoming}
+    unconfirmed = [p for p in remaining if p["id"] not in today_ids and p["id"] not in upcoming_ids]
+
+    created_today = [p for p in ec_pages if created_date_jst(p) == today]
+
+    return {
+        "cancelled": cancelled, "expired": expired, "today": today_events,
+        "upcoming": upcoming, "unconfirmed": unconfirmed, "today_new": created_today,
+    }
+
+
+def article_card_runs(page, status_label, db_label):
+    title = title_of(page) or "(無題)"
+    status = select_name(page, "Status") or select_name(page, "Publishing Status") or "-"
+    last_ai = page.get("properties", {}).get("Last AI Update", {}).get("date")
+    last_ai_str = last_ai["start"] if last_ai else "未確認"
+    runs = [{"text": {"content": title, "link": {"url": page_url(page["id"])}}}]
+    runs.append({"text": {"content": (
+        f" ｜ 状態: {status_label} ｜ Status: {status} ｜ 最終確認日: {last_ai_str} ｜ 保存先: {db_label}"
+    )}})
+    return runs
+
+
+def compute_articles_research_buckets(research_pages, articles_pages):
+    """📝 記事・Premium候補. Research.Status=New/Reviewing map to the
+    pre-Article-Brief stages; Articles' own Status/Review Result/Publishing
+    Status/Freshness Status (all existing exact option values, nothing
+    guessed) cover the drafting-through-published stages."""
+    brief_in_progress = [p for p in research_pages if status_name(p) == "Reviewing"]
+    ready_to_write = [p for p in research_pages if status_name(p) == "New"]
+
+    ai_draft = [p for p in articles_pages if select_name(p, "Status") == "AI Draft"]
+    human_review = [p for p in articles_pages if select_name(p, "Status") == "Human Review"]
+    needs_revision = [p for p in articles_pages if select_name(p, "Review Result") == "Needs Revision"]
+    needs_update = [p for p in articles_pages
+                    if select_name(p, "Publishing Status") == "Needs Update"
+                    or select_name(p, "Freshness Status") == "Needs Update"]
+    published = [p for p in articles_pages if select_name(p, "Publishing Status") == "Published"]
+
+    today = datetime.now(JST).date()
+    today_new = [p for p in (research_pages + articles_pages) if created_date_jst(p) == today]
+
+    return {
+        "brief_in_progress": brief_in_progress, "ready_to_write": ready_to_write,
+        "ai_draft": ai_draft, "human_review": human_review, "needs_revision": needs_revision,
+        "needs_update": needs_update, "published": published, "today_new": today_new,
+    }
+
+
+def cross_cutting_card_runs(page, db_label, reason):
+    title = title_of(page) or "(無題)"
+    status = (status_name(page) or select_name(page, "Story Status")
+              or select_name(page, "Publishing Status") or "-")
+    source_url = page.get("properties", {}).get("Source URL", {}).get("url")
+    runs = [{"text": {"content": title, "link": {"url": page_url(page["id"])}}}]
+    runs.append({"text": {"content": f" ｜ 理由: {reason} ｜ Status: {status} ｜ 保存先: {db_label} ｜ Source: "}})
+    runs.append({"text": {"content": source_url, "link": {"url": source_url}}} if source_url
+                 else {"text": {"content": "未確認"}})
+    return runs
+
+
+def build_cross_cutting_buckets(culture_bk, food_bk, people_bk, qa_bk, ec_bk, ar_bk):
+    """今日の新着 / 変更・中止・期限切れ / 掲載済み・提供済み must show each
+    record at most once (Rei's priority order: 変更中止期限切れ > Rei確認待ち >
+    本日近日開催 > 回答記事作成待ち > 今日の新着 > その他). Domain toggles
+    (QA/文化体験/イベント/人物/食/未分類/記事) are NOT deduped against this --
+    they always show their own complete list, per Rei's explicit instruction
+    that summary/cross-cutting views and full per-domain lists must not be
+    conflated. Built in priority order; each take() call skips ids already
+    claimed by a higher-priority bucket.
+    """
+    seen_ids = set()
+
+    def take(items, db_label, reason):
+        out = []
+        for p in items:
+            if p["id"] in seen_ids:
+                continue
+            seen_ids.add(p["id"])
+            out.append((p, db_label, reason))
+        return out
+
+    cancelled_expired = (
+        take(culture_bk["ended_low_confidence"], "Event Calendar", "文化・交流イベント候補の終了")
+        + take(ec_bk["cancelled"], "Event Calendar", "イベント中止")
+        + take(ec_bk["expired"], "Event Calendar", "イベント終了・期限切れ")
+        + take(food_bk["recheck"], "Experience Intelligence", "営業状況の再確認が必要")
+        + take(ar_bk["needs_update"], "Articles", "記事の更新が必要")
+    )
+
+    published_delivered = (
+        take(qa_bk["delivered"], "Story Bank", "ARuアプリへ提供済み")
+        + take(qa_bk["published"], "Story Bank", "QAカード掲載済み")
+        + take(ar_bk["published"], "Articles", "記事掲載済み")
+    )
+
+    today_candidates = (
+        take(culture_bk["today_new"], "Experience Intelligence/Event Calendar", "文化体験の新着")
+        + take(food_bk["today_new"], "Experience Intelligence", "食の安心の新着")
+        + take(people_bk["today_new"], "Experience Intelligence", "人物・お店の新着")
+        + take(qa_bk["today_new"], "Story Bank", "QAカードの新着")
+        + take(ec_bk["today_new"], "Event Calendar", "イベントの新着")
+        + take(ar_bk["today_new"], "Research/Articles", "記事・Researchの新着")
+    )
+
+    return cancelled_expired, published_delivered, today_candidates
+
+
+HOME_MARKER_START = "📋 ARu編集デスク｜すべての情報（自動生成セクション開始 -- 以下は毎回自動更新されます。手動編集しないでください）"
+HOME_MARKER_END = "📋 ARu編集デスク｜すべての情報（自動生成セクション終了）"
+
+
+def _sub_bucket(label, items, render_fn):
+    """A bold pseudo-header paragraph followed by that sub-bucket's full
+    record list -- deliberately NOT a nested toggle-within-toggle. Notion's
+    append-children API does not reliably support more than one level of
+    nested children per request, and Home is Rei's primary daily screen, so
+    this trades a little visual nesting for a write that cannot partially
+    fail. A record is never trimmed to "first N"; every sub-bucket's full
+    list is always included here."""
+    out = [{"paragraph": {"rich_text": rt(f"▪ {label}（{len(items)}件）", bold=True)}}]
+    if items:
+        out.extend({"paragraph": {"rich_text": render_fn(p)}} for p in items)
+    else:
+        out.append({"paragraph": {"rich_text": rt("該当レコードなし")}})
+    return out
+
+
+def _domain_toggle(label, count, sub_buckets):
+    """sub_buckets: list of (label, items, render_fn) -- flattened into one
+    toggle's children via _sub_bucket, so the whole domain opens as a single
+    click and shows every sub-state in full."""
+    children = []
+    for sub_label, items, render_fn in sub_buckets:
+        children.extend(_sub_bucket(sub_label, items, render_fn))
+    return _toggle(label, count, children)
+
+
+def build_home_digest_blocks(env):
+    """📋 ARu編集デスク｜すべての情報 -- the single Home consolidation window
+    (2026-07-20). Reuses the exact same compute_*_buckets functions Dashboard
+    calls (via _fetch_common_pages) -- Home and Dashboard can never disagree
+    on a count because they share the same code, not just the same data.
+    Renders as ONE callout containing all toggles as its children (never as
+    separate top-level colored callouts), per Rei's explicit instruction.
+    """
+    token = env["NOTION_TOKEN"]
+    pages = _fetch_common_pages(env)
+    ei_pages, ec_pages = pages["ei_pages"], pages["ec_pages"]
+    source_library_pages, story_pages = pages["source_library_pages"], pages["story_pages"]
+    research_pages, articles_pages = pages["research_pages"], pages["articles_pages"]
+
+    culture_bk = compute_culture_buckets(token, ei_pages, ec_pages, source_library_pages)
+    food_bk = compute_food_buckets(ei_pages)
+    people_bk = compute_people_buckets(ei_pages)
+    qa_bk = compute_qa_buckets(token, story_pages)
+    ec_bk = compute_event_calendar_buckets(ec_pages)
+    ar_bk = compute_articles_research_buckets(research_pages, articles_pages)
+    unclassified = compute_unclassified(ei_pages)
+
+    cancelled_expired, published_delivered, today_candidates = build_cross_cutting_buckets(
+        culture_bk, food_bk, people_bk, qa_bk, ec_bk, ar_bk)
+
+    total_rei_pending = (
+        len(culture_bk["rei_pending"]) + len(food_bk["pending"]) + len(people_bk["pending"])
+        + len(qa_bk["answer_pending"]) + len(unclassified)
+    )
+    total_upcoming = len(ec_bk["today"]) + len(ec_bk["upcoming"])
+
+    summary_text = (
+        f"今日の新着: {len(today_candidates)}件 / Rei確認待ち: {total_rei_pending}件 / "
+        f"本日・近日開催: {total_upcoming}件 / 更新・期限切れ: {len(cancelled_expired)}件"
+    )
+
+    def render_cross(items):
+        return [{"paragraph": {"rich_text": cross_cutting_card_runs(p, db, reason)}} for p, db, reason in items]
+
+    culture_source_type = culture_bk["cached_source_type"]
+    culture_full_list = culture_bk["culture_ei"] + culture_bk["period_ec"]
+
+    toggles = []
+    toggles.append(_toggle("▸ 今日の新着", len(today_candidates), render_cross(today_candidates)))
+
+    toggles.append(_domain_toggle(f"▸ ❓ QAカード", len(qa_bk["qa"]), [
+        ("回答作成待ち", qa_bk["answer_pending"], lambda p: qa_card_runs(p, "回答作成待ち")),
+        ("Source確認待ち", qa_bk["source_pending"], lambda p: qa_card_runs(p, "Source確認待ち")),
+        ("既存記事への導線あり", qa_bk["linked_to_research"], lambda p: qa_card_runs(p, "既存記事への導線あり")),
+        ("掲載準備中", qa_bk["ready"], lambda p: qa_card_runs(p, "掲載準備中")),
+        ("掲載済み", qa_bk["published"], lambda p: qa_card_runs(p, "掲載済み")),
+        ("更新が必要", qa_bk["needs_update"], lambda p: qa_card_runs(p, "更新が必要")),
+    ]))
+
+    toggles.append(_domain_toggle(f"▸ 🎎 日本文化体験", len(culture_full_list), [
+        ("通年・通常営業", culture_bk["culture_ei"],
+         lambda p: culture_card_runs(p, "Experience Intelligence", "常設", "情報の鮮度再確認", culture_source_type(p))),
+        ("期間限定", culture_bk["period_ec"],
+         lambda p: culture_card_runs(p, "Event Calendar", "期間限定", "開催内容確認", culture_source_type(p))),
+        ("内容確認待ち", culture_bk["pending_low_confidence"],
+         lambda p: culture_card_runs(p, "Event Calendar", "候補・要確認", "内容確認", culture_source_type(p))),
+        ("終了・過去候補", culture_bk["ended_low_confidence"],
+         lambda p: culture_card_runs(p, "Event Calendar", "終了", "アーカイブ保持のみ", culture_source_type(p))),
+        ("Rei確認待ち", culture_bk["pending_ei"] + culture_bk["pending_ec_period"] + culture_bk["pending_low_confidence"],
+         lambda p: culture_card_runs(
+             p, "Experience Intelligence" if p["id"] in culture_bk["culture_ei_ids"] else "Event Calendar",
+             "要確認", "最終確認", culture_source_type(p))),
+    ]))
+
+    toggles.append(_domain_toggle(f"▸ 🎉 イベント・催し", len(ec_pages), [
+        ("本日開催", ec_bk["today"], lambda p: event_card_runs(p, "本日開催")),
+        ("近日開催", ec_bk["upcoming"], lambda p: event_card_runs(p, "近日開催")),
+        ("変更・中止", ec_bk["cancelled"], lambda p: event_card_runs(p, "中止")),
+        ("終了・期限切れ", ec_bk["expired"], lambda p: event_card_runs(p, "終了")),
+        ("詳細未確認", ec_bk["unconfirmed"], lambda p: event_card_runs(p, "詳細未確認")),
+    ]))
+
+    toggles.append(_domain_toggle(f"▸ 🌏 日本で活躍する外国人・人物とお店", len(people_bk["people"]), [
+        ("人物・店舗", people_bk["people"], lambda p: person_card_runs(token, p, "掲載可否の判断に必要な情報を確認")),
+        ("Rei確認待ち", people_bk["pending"], lambda p: person_card_runs(token, p, "登録内容の最終確認")),
+    ]))
+
+    toggles.append(_domain_toggle(f"▸ 🥗 食の安心・お店情報", len(food_bk["food"]), [
+        ("ハラール認証", food_bk["halal_cert"], lambda p: rt(card_line(p), link=page_url(p["id"]))),
+        ("ムスリムフレンドリー", food_bk["muslim_friendly"], lambda p: rt(card_line(p), link=page_url(p["id"]))),
+        ("ベジタリアン・ヴィーガン", food_bk["veg_vegan"], lambda p: rt(card_line(p), link=page_url(p["id"]))),
+        ("その他の食事条件", food_bk["gluten_allergy"] + food_bk["other_religious"] + food_bk["avoid_pork_alcohol"],
+         lambda p: rt(card_line(p), link=page_url(p["id"]))),
+        ("営業状況の再確認", food_bk["recheck"], lambda p: rt(card_line(p), link=page_url(p["id"]))),
+    ]))
+
+    def unclassified_runs(p):
+        title = title_of(p) or "(無題)"
+        status = status_name(p) or "-"
+        source_url = p.get("properties", {}).get("Source URL", {}).get("url")
+        source_type = classify_source_type(token, p)
+        runs = [{"text": {"content": title, "link": {"url": page_url(p["id"])}}}]
+        runs.append({"text": {"content": f" ｜ Status: {status} ｜ 情報元の区分: {source_type} ｜ Source: "}})
+        runs.append({"text": {"content": source_url, "link": {"url": source_url}}} if source_url
+                     else {"text": {"content": "未確認"}})
+        return runs
+
+    toggles.append(_toggle("▸ 🔎 未分類・詳細未確認", len(unclassified),
+                            [{"paragraph": {"rich_text": unclassified_runs(p)}} for p in unclassified]))
+
+    toggles.append(_domain_toggle("▸ 📝 記事・Premium候補", 0, [
+        ("Article Brief作成中", ar_bk["brief_in_progress"], lambda p: article_card_runs(p, "Article Brief作成中", "Research")),
+        ("執筆可能", ar_bk["ready_to_write"], lambda p: article_card_runs(p, "執筆可能", "Research")),
+        ("AI Draft", ar_bk["ai_draft"], lambda p: article_card_runs(p, "AI Draft", "Articles")),
+        ("人間確認待ち", ar_bk["human_review"], lambda p: article_card_runs(p, "人間確認待ち", "Articles")),
+        ("Needs Revision", ar_bk["needs_revision"], lambda p: article_card_runs(p, "Needs Revision", "Articles")),
+        ("更新が必要", ar_bk["needs_update"], lambda p: article_card_runs(p, "更新が必要", "Articles")),
+        ("掲載済み", ar_bk["published"], lambda p: article_card_runs(p, "掲載済み", "Articles")),
+    ]))
+
+    toggles.append(_toggle("▸ 変更・中止・期限切れ", len(cancelled_expired), render_cross(cancelled_expired)))
+    toggles.append(_toggle("▸ 掲載済み・提供済み", len(published_delivered), render_cross(published_delivered)))
+
+    # Returned as (callout_shell, toggles) rather than one deeply nested
+    # object: write_to_home() creates the callout with only the summary
+    # paragraph first, then appends each toggle to it individually. Every
+    # single API call this produces nests at most one level (a toggle plus
+    # its own paragraph children) -- the same shape already proven safe
+    # throughout this project, rather than risking an unverified 3-level
+    # nested create (callout > toggle > paragraph) in one shot on Rei's
+    # primary daily screen.
+    callout_shell = {
+        "callout": {
+            "rich_text": rt("📋 ARu編集デスク｜すべての情報　-- 下のトグルを開くと、その分野の全件をここで確認できます"),
+            "icon": {"type": "emoji", "emoji": "📋"},
+            "color": "gray_background",
+            "children": [{"paragraph": {"rich_text": rt(summary_text)}}],
+        }
+    }
+    return callout_shell, toggles
+
+
+# ARu Studio Home page id. Not in notion-build/.env (only Dashboard/Editor
+# Home/AI Command Center page ids live there) -- kept as an explicit constant
+# here, same treatment as Dashboard's TOP_ANCHOR_BLOCK_ID below.
+ARU_STUDIO_HOME_PAGE_ID = "3a2157f0-f15d-816f-a87b-e41634d860e3"
+
+
+def write_to_home(env, callout_shell, toggles):
+    """Same delete-and-reinsert-in-place pattern as write_to_dashboard, but
+    targets ARu Studio Home and inserts (on first run) directly after the
+    '今日使う窓' heading -- before every existing callout, per Rei's
+    instruction that the consolidated window comes first.
+
+    Staged construction: create the marker pair + the callout shell (with
+    only its summary paragraph) in one call, then append each toggle
+    individually to the callout's own block id. No single API call ever
+    nests more than one level deep (a toggle plus its own paragraph
+    children).
+    """
+    token = env["NOTION_TOKEN"]
+    page_id = ARU_STUDIO_HOME_PAGE_ID
+
+    results = _fetch_all_children(token, page_id)
+
+    start_idx = end_idx = None
+    today_kado_heading_idx = None
+    for i, b in enumerate(results):
+        text = _block_plain_text(b)
+        if text == HOME_MARKER_START:
+            start_idx = i
+        elif text == HOME_MARKER_END:
+            end_idx = i
+        elif text == "今日使う窓" and b["type"] == "heading_2":
+            today_kado_heading_idx = i
+
+    if start_idx is not None and end_idx is not None and end_idx > start_idx:
+        log(f"Found existing Home markers (start={start_idx}, end={end_idx}); refreshing in place.")
+        for b in results[start_idx + 1:end_idx]:
+            notion_request(token, "DELETE", f"/blocks/{b['id']}")
+        anchor = results[start_idx]["id"]
+        created, anchor = _append_children(token, page_id, [callout_shell], after=anchor)
+    else:
+        if today_kado_heading_idx is None:
+            raise RuntimeError("Could not find '今日使う窓' heading on Home -- refusing to guess an insertion point.")
+        log("No existing Home markers found; inserting right after the '今日使う窓' heading.")
+        start_marker = {"callout": {"rich_text": rt(HOME_MARKER_START), "icon": {"type": "emoji", "emoji": "📋"}}}
+        end_marker = {"callout": {"rich_text": rt(HOME_MARKER_END), "icon": {"type": "emoji", "emoji": "📋"}}}
+        anchor = results[today_kado_heading_idx]["id"]
+        created, anchor = _append_children(token, page_id, [start_marker, callout_shell, end_marker], after=anchor)
+
+    callout_id = created[0]["id"] if start_idx is not None else created[1]["id"]
+
+    for tog in toggles:
+        notion_request(token, "PATCH", f"/blocks/{callout_id}/children", {"children": [tog]})
+
+    return page_id, callout_id
+
+
+def _fetch_common_pages(env):
+    """Single shared fetch+test-exclusion point for every DB the digest reads,
+    used identically by Dashboard's build_section_blocks and Home's
+    build_home_digest_blocks -- so the two surfaces can never compute
+    different numbers for the same underlying data (2026-07-20)."""
+    token = env["NOTION_TOKEN"]
+    raw = {
+        "ei_pages": query_database(token, env["EXPERIENCE_INTELLIGENCE_DB_ID"]),
+        "ec_pages": query_database(token, env["EVENT_CALENDAR_DB_ID"]),
+        "source_library_pages": query_database(token, env["SOURCE_LIBRARY_DB_ID"]),
+        "story_pages": query_database(token, env["STORY_BANK_DB_ID"]),
+        "research_pages": query_database(token, env["RESEARCH_DB_ID"]),
+        "articles_pages": query_database(token, env["ARTICLES_DB_ID"]),
+    }
+    return {k: [p for p in v if not is_test_record(p)] for k, v in raw.items()}
+
+
 def build_section_blocks(env):
     token = env["NOTION_TOKEN"]
-    ei_pages = query_database(token, env["EXPERIENCE_INTELLIGENCE_DB_ID"])
-    ec_pages = query_database(token, env["EVENT_CALENDAR_DB_ID"])
-    source_library_pages = query_database(token, env["SOURCE_LIBRARY_DB_ID"])
-    story_pages = query_database(token, env["STORY_BANK_DB_ID"])
-    # Exclude known internal test fixtures from every section below (not from
-    # the underlying databases themselves -- records, Status, and properties
-    # are untouched; this only affects what this script renders on Dashboard).
-    ei_pages = [p for p in ei_pages if not is_test_record(p)]
-    ec_pages = [p for p in ec_pages if not is_test_record(p)]
-    story_pages = [p for p in story_pages if not is_test_record(p)]
+    pages = _fetch_common_pages(env)
+    ei_pages, ec_pages = pages["ei_pages"], pages["ec_pages"]
+    source_library_pages, story_pages = pages["source_library_pages"], pages["story_pages"]
 
     blocks = []
     blocks.append({"heading_2": {"rich_text": rt("ARu編集デスク｜今日の情報")}})
@@ -894,5 +1666,20 @@ def main():
     return culture_heading_block_id
 
 
+def main_home():
+    """Writes ONLY the new Home consolidated window -- never touches
+    Dashboard, and (per this run) never touches any existing Home callout
+    either; it only inserts/refreshes the content between HOME_MARKER_START
+    and HOME_MARKER_END."""
+    env = load_env(ENV_PATH)
+    callout_shell, toggles = build_home_digest_blocks(env)
+    page_id, callout_id = write_to_home(env, callout_shell, toggles)
+    log(f"Done. Home page: {page_id}, callout block id: {callout_id}")
+    return page_id, callout_id
+
+
 if __name__ == "__main__":
-    main()
+    if len(sys.argv) > 1 and sys.argv[1] == "home":
+        main_home()
+    else:
+        main()

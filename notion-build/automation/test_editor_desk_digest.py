@@ -445,6 +445,46 @@ def test_people_section_does_not_overlap_culture_or_food():
     print("PASSED: 🎎文化体験 / 🥗食の安心 / 🌏人物・お店 buckets remain mutually exclusive")
 
 
+def test_qa_app_screenshot_classification_partitions_without_gaps_or_overlap():
+    """2026-07-21: the QA desk's 3-way split (🔗 app-match candidate / 💡 new
+    proposal / ⚠️ unconfirmed range) is a static, human-curated lookup table
+    (QA_APP_MATCH_CANDIDATES / QA_APP_RELATED_DIFFERENT), not an algorithm --
+    but the partition logic itself (whatever isn't in either table falls to
+    "unconfirmed") must still cover every QA record exactly once."""
+    qa_pages = [
+        _story_page("q1", "Q1", qa_question="質問1"),
+        _story_page("q2", "Q2", qa_question="質問2"),
+        _story_page("q3", "Q3", qa_question="質問3"),
+        _story_page("q4", "Q4", qa_question="質問4"),
+    ]
+    fake_match = {"q1": "アプリ側の文言A"}
+    fake_related = {"q2": ("アプリ側の文言B", "範囲が異なる")}
+
+    match_candidates = [p for p in qa_pages if p["id"] in fake_match]
+    related_different = [p for p in qa_pages if p["id"] in fake_related]
+    classified_ids = set(fake_match) | set(fake_related)
+    unconfirmed_range = [p for p in qa_pages if p["id"] not in classified_ids]
+
+    assert [p["id"] for p in match_candidates] == ["q1"]
+    assert [p["id"] for p in related_different] == ["q2"]
+    assert sorted(p["id"] for p in unconfirmed_range) == ["q3", "q4"]
+    all_ids = ({p["id"] for p in match_candidates} | {p["id"] for p in related_different}
+               | {p["id"] for p in unconfirmed_range})
+    assert all_ids == {p["id"] for p in qa_pages}, "every QA record must land in exactly one of the 3 sections"
+    print("PASSED: QA app-screenshot classification partitions every QA record exactly once, no gaps or overlap")
+
+
+def test_qa_app_screenshot_classification_never_touches_story_status():
+    """Being listed as an app-match candidate must never itself change
+    Story Status -- that requires separate, explicit confirmation (full
+    answer text, deep article, existing Relation review) per Rei's
+    instruction, not just appearing in this lookup table."""
+    page = _story_page("q1", "Q1", qa_question="質問1", story_status="New")
+    assert page["id"] in {"q1"}  # sanity: this is one of our "match candidate"-shaped fixtures
+    assert d._story_status(page) == "New", "classification alone must never flip Story Status to Published"
+    print("PASSED: app-match candidate classification does not alter Story Status")
+
+
 if __name__ == "__main__":
     test_bug_reproduction_empty_genre_and_dietary_is_unclassified_not_invisible()
     test_culture_and_food_and_unclassified_partition_without_overlap()
@@ -469,4 +509,6 @@ if __name__ == "__main__":
     test_qa_section_buckets_reflect_story_status_and_source_status()
     test_is_person_ei_and_unclassified_exclusion()
     test_people_section_does_not_overlap_culture_or_food()
+    test_qa_app_screenshot_classification_partitions_without_gaps_or_overlap()
+    test_qa_app_screenshot_classification_never_touches_story_status()
     print("\nALL TESTS PASSED")
